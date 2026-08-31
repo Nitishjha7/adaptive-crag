@@ -20,8 +20,17 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 - ✅ `dev.ps1` — Docker dev loop (is machine pe local Python installed nahi hai)
 - ✅ **Verified:** ingestion chali (7 docs → 22 chunks persisted); retrieval sahi chunks laati hai;
   graph compile hota hai, node order + `logs` reducer sahi merge karte hain
-- 🟡 **Pending:** asli Groq call — `GROQ_API_KEY` chahiye. Tab tak `generate` mocked LLM se verify hua
-- ❌ Phase 3 — grading + conditional edge + transform + web fallback (yahi asli USP hai)
+- ✅ **Phase 3 (asli USP)** — `app/nodes/grade_documents.py` (binary grader + defensive
+  `parse_verdict`), `app/nodes/transform_query.py`, `app/tools/tavily_search.py`,
+  `app/nodes/web_search_fallback.py`, aur `build_graph.py` me `decide_to_generate`
+  conditional edge
+- ✅ **Verified (mocked LLM + mocked Tavily):** happy path `retrieve → grade:yes → generate`
+  (`source=vector_db`); correction path `retrieve → grade:no → transform → web → generate`
+  (`source=web_search`, local docs **replace** hue — merge nahi); Tavily failure pe graph
+  crash nahi karta, `generate` saaf bolta hai ki context nahi mila; `parse_verdict` ke 10 cases
+- 🟡 **Pending — sabse zaroori:** asli Groq + Tavily call. `GROQ_API_KEY` aur `TAVILY_API_KEY`
+  chahiye. **Ab tak koi real LLM ya search call nahi hui** — sab mocks pe verify hua hai.
+  Jab tak ye nahi hota, grader ki accuracy ke baare me kuch bhi claim nahi karna
 - ❌ Phase 4–7 — guardrails, FastAPI, frontend, docker-compose
 - ❌ `docker-compose.yml` abhi bhi khaali (Phase 7)
 
