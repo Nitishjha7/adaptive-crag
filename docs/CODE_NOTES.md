@@ -3,8 +3,8 @@
 Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad me (ya
 interview me) yaad rahe ki har cheez kyun li gayi.
 
-**Legend:** ✅ = likha ja chuka · ⬜ = abhi khaali (planned intent).
-Phase 1–5 ✅ ho chuke; Phase 6 (frontend) + 7 (compose) ⬜.
+**Legend:** ✅ = likha ja chuka.
+Phase 1–7 ✅ ho chuke. Deployment aur eval harness abhi baaki.
 
 ---
 
@@ -104,7 +104,8 @@ Code **bind-mount** hota hai (`app/`, `data/`, `ingest.py`), isliye edit ke baad
 karna padta — image sirf dependencies deti hai. `.env` `--env-file` se inject hoti hai, image
 me bake nahi hoti.
 
-Phase 7 me proper `docker-compose.yml` isko replace kar dega.
+`docker compose up` ab poora stack chalata hai; `dev.ps1` backend-only dev loop ke liye reh
+gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 
 ---
 
@@ -335,7 +336,9 @@ wo LLM ping karta, to ek rate limit hi container ko unhealthy mark karwa deta au
 restart karta rehta. Isliye sirf index count + config echo — including `groq_key_set`, jo
 setup debug karne me sabse pehle kaam aata hai.
 
-CORS: dev me `allow_origins=["*"]`, Phase 7 me deploy pe frontend origin tak restrict karna
+CORS: dev me `allow_origins=["*"]`. Compose me frontend Nginx se same-origin proxy karta hai,
+to wahan zaroorat nahi padti — par **deploy pe (Vercel + Render alag domains) ise frontend
+origin tak restrict karna hai**
 hai — code me TODO pada hai.
 
 **Verified (asli HTTP requests, container me):** `/health` → `{"status":"ok",
@@ -354,27 +357,50 @@ hai — code me TODO pada hai.
 
 ---
 
-## frontend/ (planned — React + Vite + Tailwind)
+## frontend/ ✅ — React + Vite + Tailwind
 
 | File | Kaam |
 |---|---|
-| `components/ChatBox.jsx` | Query input + message list |
+| `src/App.jsx` | Sab compose karta hai + `fetch("/api/query")` |
+| `components/ChatBox.jsx` | Query input + 4 fixed demo query buttons |
 | `components/SourceBadge.jsx` | "Local Vector DB" (green) / "Live Web Fallback" (blue) pill |
-| `components/TraceViewer.jsx` | `logs[]` ko node-by-node timeline me render — sabse impressive part, explainability dikhata hai |
-| `components/RelevancePill.jsx` | Grading result (`yes`/`no`) transparently |
-| `pages/Home.jsx` | Sab compose |
-| `vite.config.js` | `/api` proxy to backend in dev |
+| `components/TraceViewer.jsx` | `logs[]` ko node-by-node timeline me render — sabse impressive part |
+| `components/RelevancePill.jsx` | Grader ka verdict (`yes`/`no`) transparently |
+| `vite.config.js` | dev me `/api` proxy backend pe |
+| `nginx.conf` | prod me wahi `/api` proxy + SPA fallback |
+
+**App code me hamesha relative `/api/query` kyun:** dev me Vite proxy karta hai, production
+me Nginx. Backend URL kahin hardcode nahi hai, isliye deploy pe kuch rebuild nahi karna padta.
+
+**Demo queries hardcoded kyun:** ye `backend/data/README.md` wali queries hain jinka expected
+route pata hai. Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga — wahi
+galti demo todti hai.
+
+**`TraceViewer` me correction-path nodes highlight kyun:** `transform_query` aur
+`web_search_fallback` alag rang me hain, kyunki wahi CRAG ka USP hai. Ek nazar me dikh jaata
+hai ki system ne khud correct kiya.
+
+**Multi-stage Dockerfile:** node se build, phir sirf `dist/` Nginx image me. Node runtime
+ship karne ki zaroorat nahi — build ke baad sirf static files bachti hain.
 
 ---
 
-## docker-compose.yml (planned services)
+## docker-compose.yml ✅
 
-| Service | Image | Kaam |
-|---|---|---|
-| `backend` | build `./backend` | FastAPI + LangGraph, `vectorstore/` volume mounted |
-| `frontend` | build `./frontend` | React build served by Nginx, `/api/` proxy |
+| Service | Kaam |
+|---|---|
+| `backend` | FastAPI + LangGraph, `vectorstore/` volume mounted, `/health` healthcheck |
+| `frontend` | React build Nginx se serve, `/api/` backend pe proxy |
 
 Chroma embedded hai (alag service nahi) — persistence sirf ek mounted volume.
+
+**Ek real bug jo yahan mila:** `depends_on` pehle `condition: service_started` tha. Usse
+nginx uvicorn ke bind karne se **pehle** up ho jaata tha, aur `docker compose up` ke turant
+baad pehli query pe **502 Bad Gateway** aata tha. Fix: `condition: service_healthy`. `/health`
+koi LLM call nahi karta, isliye wo check sasta aur bharosemand hai.
+
+**Ports 3001/8001 kyun, 3000/8000 nahi:** is machine pe wo doosre projects ke containers le
+rakhe hain. `.env` me `FRONTEND_PORT` / `BACKEND_PORT` se override ho jaate hain.
 
 ---
 

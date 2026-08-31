@@ -381,21 +381,30 @@ skill-area story.
 Judges/interviewers should see the **decision-making live** — grading → routing → fallback
 → validation — not just a chat box.
 
+**Setup:** `docker compose up`, then <http://localhost:3001>. The four demo queries are
+buttons in the UI, so you never have to type under pressure — click and talk.
+
 ### Scenario 1 — Happy Path (local DB sufficient)
-Pre-ingest a small controlled doc set (5–10 docs). Ask a question answerable from them.
-Flow: `retrieve` → `grade: YES` → `generate` → **"Source: Local Vector DB"**.
+Click *"Why does chunk overlap matter?"*
+Flow: `retrieve` → `grade: YES` → `generate` → badge reads **Local Vector DB**.
 **Talking point:** "Local knowledge is enough, so no web call — fast and cheap."
 
 ### Scenario 2 — Correction Path (the real USP)
-Ask a question the local docs deliberately don't cover (leave a gap in the dataset).
-Flow: `grade: NO` → `transform_query` (show the rewritten query) → `web_search_fallback`
-→ `generate` → **"Source: Web Fallback"**.
+Click *"What is the Model Context Protocol?"* — the corpus deliberately never mentions MCP.
+Flow: `grade: NO` → `transform_query` (the rewritten query appears in its own panel) →
+`web_search_fallback` → `generate` → badge reads **Live Web Fallback**.
 **Talking point:** "The system decided *on its own* not to trust local context and corrected
 itself — no user input."
 
+Point at the trace while it runs. The two correction nodes are highlighted in blue, so the
+moment the system changed course is visible without explaining it.
+
 ### Scenario 3 — Guardrail Catch (if time)
-A tricky/ambiguous query with hallucination risk; show the validation layer checking
-(or flagging) the output.
+Honest framing: on the demo corpus every answer has come back grounded, so there is no
+reliable way to *trigger* a catch on demand. Instead, show what the layer does — open
+`backend/app/guardrails/validators.py`, explain that an ungrounded answer is flagged rather
+than hidden while PII is redacted, and point at the four tests in
+`backend/tests/test_validation.py` that cover it.
 
 ### What to highlight in the UI
 - **Source badge** on every answer (Local DB vs Web Fallback)

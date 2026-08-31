@@ -27,7 +27,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 15s
     restart: unless-stopped
 
   frontend:
@@ -35,8 +35,10 @@ services:
     ports:
       - "${FRONTEND_PORT:-3001}:80"
     depends_on:
-      # Sirf "started", "healthy" nahi — frontend static files serve karta hai
-      # aur backend down ho to bhi load hona chahiye (error UI dikhata hai).
+      # `service_healthy`, `service_started` nahi. Pehle started tha, aur usse
+      # ek asli bug aaya: nginx uvicorn ke bind karne se pehle up ho jaata tha,
+      # to `docker compose up` ke turant baad pehli query pe 502 aata tha.
+      # /health koi LLM call nahi karta, isliye ye check sasta aur bharosemand hai.
       backend:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped

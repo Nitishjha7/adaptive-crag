@@ -56,12 +56,12 @@ question.
                            |
        +-------------------+-------------------+
        v                                       v
-[ ChromaDB / FAISS ]                   [ Tavily / DuckDuckGo ]
+[ ChromaDB ]                           [ DuckDuckGo / Tavily ]
   local document embeddings              live web search snippets
   (cosine similarity, top-k)             (only on fallback)
                            |
                            v
-[ Guardrails AI ]  hallucination / PII / toxicity validation
+[ Output validation ]  LLM groundedness check + regex PII redaction
 ```
 
 ### Component matrix
@@ -270,19 +270,32 @@ def run(state: dict) -> dict:
 ### D. Web search fallback — `backend/app/nodes/web_search_fallback.py`
 
 ```python
-from app.tools.tavily_search import tavily_search
+from app.tools.web_search import web_search   # provider switch, not a specific vendor
 
 def run(state: dict) -> dict:
     query = state.get("transformed_query") or state["question"]
-    snippets = tavily_search(query, max_results=4)   # -> List[str]
+    try:
+        snippets = web_search(query, max_results=4)   # -> List[str]
+    except Exception as exc:
+        # Search failure is recoverable: `generate` handles empty documents and says
+        # plainly that no context was found. Raising here would 500 the request.
+        return {
+            "documents": [],
+            "source_type": "web_search",
+            "logs": [f"web_search_fallback -> FAILED ({type(exc).__name__}: {exc})"],
+        }
     return {
-        "documents": snippets,          # replaces local docs
+        "documents": snippets,          # replaces local docs, does not merge
         "source_type": "web_search",
-        "logs": [f"web_search_fallback -> {len(snippets)} snippets"],
+        "logs": [f"web_search_fallback -> {len(snippets)} snippets for {query!r}"],
     }
 ```
 
-### E. Guardrails validation — `backend/app/nodes/validate_guardrails.py`
+### E. Output validation — `backend/app/nodes/validate_guardrails.py`
+
+`validate_answer` runs a temperature-0 groundedness check ("is every claim supported by
+this context?") and regex PII redaction. An ungrounded answer is **flagged, not blocked**;
+PII **is** redacted. The groundedness check fails open — see [CODE_NOTES.md](CODE_NOTES.md).
 
 ```python
 from app.guardrails.validators import validate_answer
@@ -347,47 +360,52 @@ async def health():
 
 ---
 
-## 7. Target Project File Structure
+## 7. Project File Structure
 
 ```
 adaptive-crag/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── config.py                 # settings, LLM + embedding factory
+│   │   ├── config.py                  # Settings + LLM / embedding / vectorstore factories
 │   │   ├── graph/
-│   │   │   ├── state.py               # CRAGState (also re-exported from schemas)
-│   │   │   └── build_graph.py         # StateGraph wiring + conditional edges
+│   │   │   ├── state.py               # re-export of CRAGState
+│   │   │   └── build_graph.py         # StateGraph wiring + conditional edge
 │   │   ├── nodes/
 │   │   │   ├── retrieve.py
-│   │   │   ├── grade_documents.py
+│   │   │   ├── grade_documents.py     # binary grader + defensive parse_verdict
 │   │   │   ├── transform_query.py
 │   │   │   ├── web_search_fallback.py
 │   │   │   ├── generate.py
 │   │   │   └── validate_guardrails.py
 │   │   ├── tools/
-│   │   │   ├── tavily_search.py
-│   │   │   └── vector_search.py
-│   │   ├── schemas/
-│   │   │   └── crag_state.py
-│   │   └── guardrails/
-│   │       └── validators.py
+│   │   │   ├── vector_search.py
+│   │   │   ├── web_search.py          # provider switch (SEARCH_PROVIDER)
+│   │   │   ├── duckduckgo_search.py   # default — no API key
+│   │   │   └── tavily_search.py       # optional upgrade
+│   │   ├── schemas/crag_state.py      # CRAGState (canonical definition)
+│   │   ├── guardrails/validators.py   # groundedness + PII
+│   │   └── __main__.py                # `python -m app "question"` CLI
+│   ├── data/                          # 7-doc controlled corpus with a deliberate gap
+│   ├── tests/                         # 27 tests — routing, grading, validation, API
 │   ├── vectorstore/                   # persisted Chroma index (gitignored)
+│   ├── ingest.py                      # docs -> chunks -> embeddings -> Chroma
 │   ├── main.py                        # FastAPI app
-│   ├── Dockerfile · requirements.txt
+│   └── Dockerfile · requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── components/{ChatBox,SourceBadge,TraceViewer,RelevancePill}.jsx
-│   │   ├── pages/{Home}.jsx
-│   │   ├── App.jsx · main.jsx
-│   ├── package.json · tailwind.config.js · vite.config.js
-│   ├── Dockerfile
+│   │   └── App.jsx · main.jsx · index.css
+│   ├── package.json · tailwind.config.js · vite.config.js · postcss.config.js
+│   ├── nginx.conf                     # SPA fallback + /api/ proxy to backend
+│   └── Dockerfile                     # multi-stage: node build -> nginx serve
 ├── docs/
-├── docker-compose.yml · .gitignore · .env.example · README.md
+├── dev.ps1                            # backend-only Docker dev loop
+└── docker-compose.yml · .gitignore · .env.example · README.md
 ```
 
-> Note: the current repo scaffold is a subset of the above; files are filled in phase by
-> phase per [ROADMAP.md](ROADMAP.md).
+> Two differences from the original plan: there is no `pages/Home.jsx` (the app is small
+> enough that `App.jsx` composes it directly), and `guardrails/validators.py` is a custom
+> implementation rather than Guardrails AI — see [CODE_NOTES.md](CODE_NOTES.md) for why.
 
 ---
 
@@ -395,12 +413,14 @@ adaptive-crag/
 
 Multi-service Docker Compose:
 
-- **backend** — `python:3.11-slim`, FastAPI + Uvicorn, LangGraph, Guardrails AI, Chroma
+- **backend** — `python:3.11-slim`, FastAPI + Uvicorn, LangGraph, Chroma
   persistence volume mounted at `backend/vectorstore`.
 - **frontend** — multi-stage Node build served by Nginx with an `/api/` reverse proxy to
   the backend.
 
-Environment injection via a root `.env` file supplying `GROQ_API_KEY` and `TAVILY_API_KEY`.
+Environment injection via a root `.env` file. Only `GROQ_API_KEY` is required — search
+defaults to DuckDuckGo, which needs no key; `TAVILY_API_KEY` is needed only when
+`SEARCH_PROVIDER=tavily`.
 Single command: `docker compose up --build`.
 
 ---
@@ -412,5 +432,5 @@ Single command: `docker compose up --build`.
 | Phase 8 | Reranking step before grading | Cross-encoder rerank of top-k so the grader sees the best chunks first |
 | Phase 9 | Multi-hop query decomposition | Break compound questions into sub-queries, retrieve per sub-query |
 | Phase 10 | Streaming token output | Stream `generate` tokens to the frontend over SSE / WebSocket |
-| Phase 11 | Hallucination-grade retry loop | If guardrails fail, loop back to `transform_query` instead of returning |
+| Phase 11 | Hallucination-grade retry loop | If validation fails, loop back to `transform_query` instead of returning |
 | Phase 12 | Evaluation harness | Measure grading accuracy, fallback precision, groundedness on a fixed set |

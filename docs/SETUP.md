@@ -3,6 +3,11 @@
 Ye document project ko scratch se set up karne ke sare steps cover karta hai — git init se
 lekar GitHub pe push karne tak. Jo commands actually chali thi wahi yahan documented hai.
 
+> **Sections 1–9 historical record hai** — ye tab chale the jab repo Linux pe `~/Music` me
+> banaya gaya tha. Ab project `d:\nitish new\agentic_ai\adaptive-crag` (Windows) pe hai.
+> Inko dobara chalane ki zaroorat nahi; project chalane ke liye seedha
+> [Local run](#local-run) pe jao.
+
 ## 1. Folder banao aur git init karo
 
 ```bash
@@ -152,23 +157,55 @@ feat(graph):       define CRAGState schema and langgraph stategraph skeleton
 feat(nodes):       implement retrieve and generate nodes
 feat(grading):     add llm binary relevance grader with conditional edge
 feat(transform):   rewrite query into search-optimized keywords
-feat(websearch):   integrate tavily fallback, swap docs and source_type
-feat(guardrails):  add guardrails-ai hallucination/pii/toxicity validation
+feat(websearch):   add duckduckgo fallback behind a provider switch, swap docs and source_type
+feat(guardrails):  add groundedness + pii validation node
 feat(api):         expose POST /api/query with step execution logs
 feat(frontend):    react + vite + tailwind chat ui with source badges and trace
 ```
 
 ---
 
-## Local run (jab code ready ho)
+## Local run
+
+**Sirf `GROQ_API_KEY` chahiye.** Web search default DuckDuckGo hai — koi key nahi maangta.
 
 ```bash
-cp .env.example .env      # fill GROQ_API_KEY, TAVILY_API_KEY
+cp .env.example .env      # GROQ_API_KEY bharo
 docker compose up --build
 ```
 
-Containers: `backend` (FastAPI + LangGraph), `chroma` ya persisted volume (vector DB),
-`frontend` (React via Nginx, `/api/` proxy).
+- Frontend → <http://localhost:3001>
+- Backend Swagger → <http://localhost:8001/docs>
+
+Ports 3001/8001 hain 3000/8000 nahi — is machine pe wo doosre projects ke containers le
+rakhe hain. `.env` me `FRONTEND_PORT` / `BACKEND_PORT` se badal sakte ho.
+
+Containers: `backend` (FastAPI + LangGraph + embedded Chroma, `vectorstore/` volume mounted),
+`frontend` (React build Nginx se serve, `/api/` proxy). **Chroma alag service nahi hai** —
+embedded mode me chalta hai, persistence ke liye bas ek mounted volume.
+
+### Vectorstore khaali ho to
+
+```powershell
+.\dev.ps1 ingest          # backend/data/ ko Chroma me embed karta hai
+.\dev.ps1 ingest -Reset   # wipe karke dobara
+```
+
+### Backend-only dev loop
+
+`docker compose` se tez hai kyunki code bind-mount hota hai — edit ke baad rebuild nahi:
+
+```powershell
+.\dev.ps1 build              # sirf jab requirements.txt badle
+.\dev.ps1 ask "why does chunk overlap matter?"
+.\dev.ps1 test               # 27 tests
+.\dev.ps1 serve -Port 8042   # akela FastAPI
+```
+
+> **Note:** is machine pe local Python installed nahi hai (sirf WindowsApps stub). Isliye
+> har cheez Docker ke andar chalti hai — `dev.ps1` wahi wrap karta hai. Agar tu local Python
+> install kar le, to `pip install -r backend/requirements.txt` ke baad seedha
+> `python -m app "..."` aur `pytest` chala sakta hai.
 
 ## Deployment Plan (free tier)
 
@@ -177,10 +214,12 @@ Containers: `backend` (FastAPI + LangGraph), `chroma` ya persisted volume (vecto
 | Backend (FastAPI) | [Render](https://render.com) / [Railway](https://railway.app) | Docker se deploy, free tier |
 | Vector DB | Chroma persistent volume ya [Chroma Cloud](https://www.trychroma.com) | Local persistence kaafi hai demo ke liye |
 | LLM | [Groq](https://console.groq.com) | Free tier, bahut fast inference |
-| Web search | [Tavily](https://tavily.com) | Free tier 1000 searches/month |
+| Web search | DuckDuckGo (default) — koi key nahi. [Tavily](https://tavily.com) optional | Signup ke bina chalta hai; Tavily behtar snippets deta hai |
 | Frontend | [Vercel](https://vercel.com) / [Netlify](https://netlify.com) | Free static, GitHub auto-deploy |
 
 **Gotchas:**
 - Render free tier sleep hota hai — demo se pehle URL warm kar lena.
-- Groq rate limits — demo ke liye chhota controlled dataset use karo.
-- `.env` kabhi commit mat karna — sirf `.env.example`.
+- Groq rate limits — demo ke liye fixed queries use karo (`backend/data/README.md`).
+- **`.env` kabhi commit mat karna — aur `.env.example` me kabhi asli key mat daalna.** Wo
+  file commit hoti hai. Ek baar aisa ho chuka hai aur key GitHub pe chali gayi thi; usko
+  console se revoke karke nayi banani padi.

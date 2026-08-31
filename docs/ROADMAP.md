@@ -8,7 +8,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-**Phase 1–5 ✅ (asli run verified) · Phase 6 (frontend) + 7 (compose) ❌**
+**Phase 1–7 ✅ — poora stack `docker compose up` se chalta hai. Eval harness abhi baaki.**
 
 - ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
 - ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /
@@ -52,8 +52,12 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
   set hai — koi accuracy percentage claim karne layak data abhi nahi hai
 - ✅ **Test suite** — `backend/tests/`, 27 tests, `.\dev.ps1 test`. Dono routes, docs-replace
   invariant, search failure, guardrails ke saare case, aur API shape covered
-- ❌ Phase 6 — frontend demo UI
-- ❌ Phase 7 — `docker-compose.yml` (abhi bhi khaali) + deployment
+- ✅ **Phase 6** — React + Vite + Tailwind UI: `ChatBox` (fixed demo queries ke saath),
+  `SourceBadge`, `RelevancePill`, `TraceViewer` (node-by-node timeline). App code me hamesha
+  relative `/api/...` — dev me Vite proxy, prod me Nginx, koi hardcoded backend URL nahi
+- ✅ **Phase 7** — `docker-compose.yml`: backend + frontend, Chroma volume, healthcheck,
+  Nginx `/api/` proxy. Verified: `docker compose up` ke turant baad pehli query kaam karti hai
+- ❌ Deployment (Render + Vercel) — abhi nahi hua
 
 ---
 
@@ -136,13 +140,14 @@ concrete numbers (measured grading accuracy, fallback precision) add karte rehna
 | Backend (FastAPI) | [Render](https://render.com) / [Railway](https://railway.app) | Docker deploy, free tier |
 | Vector DB | Chroma persistent volume / [Chroma Cloud](https://www.trychroma.com) | Local persistence kaafi hai |
 | LLM | [Groq](https://console.groq.com) | Free, very fast inference |
-| Web search | [Tavily](https://tavily.com) | Free tier ~1000 searches/month |
+| Web search | DuckDuckGo (default) — koi key nahi. [Tavily](https://tavily.com) optional | Signup ke bina chalta hai |
 | Frontend | [Vercel](https://vercel.com) / [Netlify](https://netlify.com) | Free static, GitHub auto-deploy |
 
 **Gotchas:**
 - Render free tier sleep hota hai — demo se pehle URL warm kar lena.
-- Groq / Tavily rate limits — demo ke liye fixed queries.
-- `.env` kabhi commit mat karna — sirf `.env.example`.
+- Groq rate limits — demo ke liye fixed queries (`backend/data/README.md`).
+- **`.env` kabhi commit mat karna — aur `.env.example` me kabhi asli key mat daalna.** Wo
+  file commit hoti hai.
 - Embedding model pehli baar download hota hai — Docker layer me cache.
 
 ---

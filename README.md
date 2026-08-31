@@ -23,9 +23,10 @@ cost and latency of a web call on every query.
 > | Phase 3 — grading, conditional edge, query transform, web fallback | ✅ both routes verified live |
 > | Phase 4 — groundedness + PII validation | ✅ |
 > | Phase 5 — FastAPI `/api/query` + `/health` | ✅ |
+> | Phase 6 — React UI (chat, source badge, relevance pill, trace viewer) | ✅ |
+> | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Test suite — 27 tests (`.\dev.ps1 test`) | ✅ |
-> | Phase 6 — frontend demo UI | ❌ not written (CLI and Swagger only) |
-> | Phase 7 — `docker-compose.yml` | ❌ still empty |
+> | Deployment (Render + Vercel) | ❌ not done |
 > | Evaluation harness | ❌ **no accuracy has been measured** |
 >
 > Routing was correct on all five demo queries, but that is a small controlled set, not a
@@ -74,21 +75,34 @@ docs/       Setup guide, technical spec, build plan, roadmap, code notes, interv
 
 See [docs/SETUP.md](docs/SETUP.md) for the full git/repo setup steps that were actually run.
 
-`docker-compose.yml` is still empty (Phase 7). Until then, use `dev.ps1`, which runs
-everything in the backend container with the source bind-mounted:
-
-```powershell
-copy .env.example .env    # fill in GROQ_API_KEY; TAVILY_API_KEY is optional
-.\dev.ps1 build           # build the image (only needed when requirements change)
-.\dev.ps1 ingest          # embed backend/data/ into Chroma
-.\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 serve           # FastAPI on http://localhost:8000/docs
-```
-
 Only `GROQ_API_KEY` is required — web search defaults to DuckDuckGo, which needs no key.
 
-Backend: `POST /api/query` → answer + `source_type` + `relevance_score` + step execution
-logs. Frontend (Phase 6, not built) will show source badges and the LangGraph trace.
+```bash
+cp .env.example .env       # fill in GROQ_API_KEY
+docker compose up --build
+```
+
+- Frontend → <http://localhost:3001>
+- Backend docs → <http://localhost:8001/docs>
+
+Ports are 3001/8001 rather than 3000/8000 because other projects on this machine hold
+those; override with `FRONTEND_PORT` / `BACKEND_PORT` in `.env`.
+
+**First run:** the Chroma index is built into the image at `backend/vectorstore`, but if
+it's empty, populate it with `.\dev.ps1 ingest`.
+
+### Backend-only dev loop
+
+`dev.ps1` runs everything in the backend container with the source bind-mounted, so edits
+don't need a rebuild:
+
+```powershell
+.\dev.ps1 build              # only when requirements.txt changes
+.\dev.ps1 ingest [-Reset]    # embed backend/data/ into Chroma
+.\dev.ps1 ask "why does chunk overlap matter?"
+.\dev.ps1 test               # 27 tests
+.\dev.ps1 serve -Port 8042   # FastAPI alone
+```
 
 ## Build Plan
 
