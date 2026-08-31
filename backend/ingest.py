@@ -70,8 +70,11 @@ def main() -> int:
         return 1
 
     if args.reset and store_dir.exists():
-        print(f"[ingest] --reset -> wiping {store_dir}")
-        shutil.rmtree(store_dir)
+        # Directory khud nahi hatate — Docker me ye ek mount point hai aur usko
+        # rmtree karne pe "Device or resource busy" aata hai. Contents clear karo.
+        print(f"[ingest] --reset -> clearing {store_dir}")
+        for child in store_dir.iterdir():
+            shutil.rmtree(child) if child.is_dir() else child.unlink()
 
     # get_vectorstore() lru_cache'd hai, isliye reset ke baad hi import karo
     from app.config import get_vectorstore
