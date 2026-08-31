@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     # --- retrieval ---------------------------------------------------------
     VECTOR_DB: str = "chroma"
+    # "duckduckgo" (koi key nahi chahiye) ya "tavily" (behtar snippets, signup chahiye)
+    SEARCH_PROVIDER: str = "duckduckgo"
     COLLECTION_NAME: str = "crag_docs"
     TOP_K: int = 4
     CHUNK_SIZE: int = 800

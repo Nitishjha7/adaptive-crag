@@ -1,3 +1,3 @@
 """Adaptive CRAG backend package."""
 
-__version__ = "0.3.0"  # Phase 3 — grading + conditional web fallback
+__version__ = "0.4.0"  # Phase 4 — groundedness + PII validation

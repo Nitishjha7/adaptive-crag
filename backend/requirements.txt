@@ -15,6 +15,9 @@ langchain-text-splitters>=0.3.5
 fastembed>=0.5.0
 
 # --- Web search fallback (Phase 3) ---------------------------------------
+# Default provider: koi API key nahi chahiye
+ddgs>=9.0.0
+# Optional upgrade: behtar snippets, par signup chahiye (SEARCH_PROVIDER=tavily)
 tavily-python>=0.5.0
 
 # --- API layer (Phase 5) -------------------------------------------------

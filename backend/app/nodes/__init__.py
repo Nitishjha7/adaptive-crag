@@ -1,7 +1,7 @@
 """Graph nodes. Har module ek `run(state) -> dict` expose karta hai.
 
-Phase 3 tak wired: retrieve, grade_documents, transform_query,
-web_search_fallback, generate. `validate_guardrails` Phase 4 me aayega.
+Wired: retrieve, grade_documents, transform_query,
+web_search_fallback, generate, validate_guardrails — poora graph wired hai.
 """
 
 from app.nodes import (
@@ -9,6 +9,7 @@ from app.nodes import (
     grade_documents,
     retrieve,
     transform_query,
+    validate_guardrails,
     web_search_fallback,
 )
 
@@ -18,4 +19,5 @@ __all__ = [
     "transform_query",
     "web_search_fallback",
     "generate",
+    "validate_guardrails",
 ]

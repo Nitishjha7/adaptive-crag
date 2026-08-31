@@ -1,13 +1,13 @@
 """LangGraph StateGraph wiring.
 
-Phase 3 shape:
+Phase 4 shape (poora graph):
 
     START -> retrieve -> grade_documents -> [conditional]
                                              |-- "yes" --> generate
                                              \-- "no"  --> transform_query
                                                             -> web_search_fallback
                                                             -> generate
-             generate -> END        (Phase 4 me: -> validate_guardrails -> END)
+             generate -> validate_guardrails -> END
 
 **Chain kyun nahi, graph kyun:** yahan wo saaf dikhta hai. `grade_documents` ke
 baad kaunsa node chalega ye compile time pe fixed nahi — runtime pe state padh ke
@@ -21,6 +21,7 @@ from app.nodes import (
     grade_documents,
     retrieve,
     transform_query,
+    validate_guardrails,
     web_search_fallback,
 )
 from app.schemas.crag_state import CRAGState
@@ -49,6 +50,7 @@ def build_crag_graph():
     g.add_node("transform_query", transform_query.run)
     g.add_node("web_search_fallback", web_search_fallback.run)
     g.add_node("generate", generate.run)
+    g.add_node("validate_guardrails", validate_guardrails.run)
 
     g.add_edge(START, "retrieve")
     g.add_edge("retrieve", "grade_documents")
@@ -65,8 +67,7 @@ def build_crag_graph():
 
     # Dono branches yahin merge hote hain — do alag generate nodes nahi, kyunki
     # `generate` sirf state["documents"] padhta hai, source se farak nahi padta.
-    g.add_edge("generate", END)
-
-    # TODO(Phase 4): generate -> validate_guardrails -> END
+    g.add_edge("generate", "validate_guardrails")
+    g.add_edge("validate_guardrails", END)
 
     return g.compile()

@@ -10,7 +10,7 @@ jaata. Grading call wahi keemat hai jo common path ko fast rakhne ke liye di jaa
 
 from app.config import get_settings
 from app.schemas.crag_state import CRAGState
-from app.tools.tavily_search import tavily_search
+from app.tools.web_search import web_search
 
 
 def run(state: CRAGState) -> dict:
@@ -19,7 +19,7 @@ def run(state: CRAGState) -> dict:
     max_results = get_settings().TOP_K
 
     try:
-        snippets = tavily_search(query, max_results=max_results)
+        snippets = web_search(query, max_results=max_results)
     except Exception as exc:  # noqa: BLE001 — deliberately broad, neeche dekh
         # Search fail hona (rate limit, network, missing key) recoverable hai:
         # `generate` khaali documents pe saaf "context nahi mila" bolta hai.
