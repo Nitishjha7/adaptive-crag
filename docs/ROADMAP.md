@@ -8,7 +8,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-**Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4–7 ❌ · real API run pending**
+**Phase 1–5 ✅ (asli run verified) · Phase 6 (frontend) + 7 (compose) ❌**
 
 - ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
 - ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /
@@ -28,11 +28,32 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
   (`source=vector_db`); correction path `retrieve → grade:no → transform → web → generate`
   (`source=web_search`, local docs **replace** hue — merge nahi); Tavily failure pe graph
   crash nahi karta, `generate` saaf bolta hai ki context nahi mila; `parse_verdict` ke 10 cases
-- 🟡 **Pending — sabse zaroori:** asli Groq + Tavily call. `GROQ_API_KEY` aur `TAVILY_API_KEY`
-  chahiye. **Ab tak koi real LLM ya search call nahi hui** — sab mocks pe verify hua hai.
-  Jab tak ye nahi hota, grader ki accuracy ke baare me kuch bhi claim nahi karna
-- ❌ Phase 4–7 — guardrails, FastAPI, frontend, docker-compose
-- ❌ `docker-compose.yml` abhi bhi khaali (Phase 7)
+- ✅ **Search provider abstraction** — `app/tools/web_search.py` + `duckduckgo_search.py`.
+  **Default DuckDuckGo, koi API key nahi chahiye.** Tavily ab optional upgrade hai
+  (`SEARCH_PROVIDER=tavily`)
+- ✅ **Phase 4** — `app/guardrails/validators.py` (LLM groundedness + regex PII) +
+  `app/nodes/validate_guardrails.py`. **`guardrails-ai` library nahi li** — ROADMAP me jo
+  fallback plan likha tha wahi liya (zero dependency, same interview point)
+- ✅ **Phase 5** — `main.py`: `POST /api/query` (answer + source_type + relevance_score +
+  transformed_query + logs + elapsed_ms), `GET /health`, CORS, `run_in_threadpool`
+- ✅ **Verified:** correction path pe **asli DuckDuckGo search** chali (real MCP snippets aaye,
+  bina kisi key ke); guardrails ke chaaron case (clean / ungrounded→flag / PII→redact /
+  check-down→fail-open); API pe asli HTTP requests — `/health` ok, khaali question `422`,
+  bina key ke query `500` saaf error message ke saath
+- ✅ **ASLI END-TO-END RUN HO GAYA** — Groq (`openai/gpt-oss-120b`) + live DuckDuckGo.
+  `data/README.md` ki **paanchon fixed demo queries sahi route leti hain** (3 local, 2 web).
+  Happy path: `grade:yes → generate`, `source=vector_db`. Correction path: `grade:no →
+  transform → web → generate`, `source=web_search`, asli MCP snippets. Guardrails dono pe
+  `pass=True (clean)`
+- ⚠️ **Model badalna pada:** `llama-3.3-70b-versatile` is Groq account pe available nahi hai
+  (404 `model_not_found`). `/v1/models` list karke `openai/gpt-oss-120b` pe switch kiya —
+  yahi wo cheez hai jo mocks kabhi nahi pakadte
+- 🟡 **Abhi bhi pending:** eval harness. Routing 5/5 sahi aayi, par ye ek chhota controlled
+  set hai — koi accuracy percentage claim karne layak data abhi nahi hai
+- ✅ **Test suite** — `backend/tests/`, 27 tests, `.\dev.ps1 test`. Dono routes, docs-replace
+  invariant, search failure, guardrails ke saare case, aur API shape covered
+- ❌ Phase 6 — frontend demo UI
+- ❌ Phase 7 — `docker-compose.yml` (abhi bhi khaali) + deployment
 
 ---
 
@@ -62,10 +83,13 @@ runtime pe decide ki kaunsa path lena hai. State object pura execution trace mai
 **Interview point:** "web search hamesha kyun nahi" — cost + latency; local hit fast hai,
 fallback sirf zaroorat pe. Yahi "Adaptive" ka matlab hai.
 
-### Phase 4 — Guardrails Output Validation
-`validators.py` — Guardrails AI se groundedness / PII / toxicity check. `validate_guardrails`
-node final answer scan karta hai before return. Agar Guardrails AI heavy lage toh custom
-LLM groundedness check fallback.
+### Phase 4 — Output Validation ✅
+`validators.py` — **custom** LLM groundedness check + regex PII redaction. `validate_guardrails`
+node final answer scan karta hai before return.
+
+**Jo plan tha vs jo hua:** Guardrails AI library plan me thi, li nahi gayi — hub download +
+version pinning time-sink tha. ROADMAP me jo fallback plan likha tha (simple LLM groundedness
+check) wahi liya gaya. Zero extra dependency, same interview point.
 
 **Interview point:** "guardrails kyun" — LLM apni training knowledge se kuch add na kare;
 answer sirf verified context se grounded ho.

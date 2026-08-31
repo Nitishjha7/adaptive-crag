@@ -5,6 +5,8 @@
 #   .\dev.ps1 ingest             # docs -> chroma (incremental)
 #   .\dev.ps1 ingest -Reset      # wipe karke dobara build
 #   .\dev.ps1 ask "why does chunk overlap matter?"
+#   .\dev.ps1 test               # pytest suite
+#   .\dev.ps1 serve [-Port 8042] # FastAPI -> http://localhost:PORT/docs
 #   .\dev.ps1 shell              # container ke andar bash
 #
 # Phase 7 me proper docker-compose.yml aayega; ye tab tak ka scaffolding hai.
@@ -12,7 +14,8 @@
 param(
     [Parameter(Position = 0)][string]$Command = "ask",
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest,
-    [switch]$Reset
+    [switch]$Reset,
+    [int]$Port = 8000
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +31,8 @@ $Mounts = @(
     "-v", "${Backend}\data:/app/data",
     "-v", "${Backend}\vectorstore:/app/vectorstore",
     "-v", "${Backend}\ingest.py:/app/ingest.py",
-    "-v", "${Backend}\main.py:/app/main.py"
+    "-v", "${Backend}\main.py:/app/main.py",
+    "-v", "${Backend}\tests:/app/tests"
 )
 
 # .env repo root se - secrets image me bake nahi hote
@@ -48,6 +52,15 @@ switch ($Command) {
         $question = ($Rest -join " ")
         docker run --rm @Mounts @EnvArgs $Image python -m app $question
     }
+    "serve" {
+        # Is machine pe 8000 aksar doosre projects ke containers le lete hain,
+        # isliye port override kar sakte hain: .\dev.ps1 serve -Port 8042
+        Write-Host "[dev] http://localhost:$Port/docs" -ForegroundColor Cyan
+        docker run --rm -p "${Port}:8000" @Mounts @EnvArgs $Image uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    }
+    "test" {
+        docker run --rm @Mounts @EnvArgs $Image python -m pytest tests/ -q
+    }
     "shell"  { docker run --rm -it @Mounts @EnvArgs $Image bash }
-    default  { Write-Host "unknown command: $Command  (build | ingest | ask | shell)" }
+    default  { Write-Host "unknown command: $Command  (build | ingest | ask | test | serve | shell)" }
 }

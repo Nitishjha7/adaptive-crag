@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # --- models ------------------------------------------------------------
     # Grading aur generation dono isi model se. Chhota grading call latency-
     # sensitive hai, isliye Groq (bahut fast inference).
-    LLM_MODEL: str = "llama-3.3-70b-versatile"
+    LLM_MODEL: str = "openai/gpt-oss-120b"
     # FastEmbed ka default — chhota, ONNX, offline chalta hai, API key nahi chahiye.
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
 

@@ -1,4 +1,4 @@
-"""LangGraph StateGraph wiring.
+r"""LangGraph StateGraph wiring.
 
 Phase 4 shape (poora graph):
 

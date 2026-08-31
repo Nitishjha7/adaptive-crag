@@ -1,24 +1,31 @@
 # Adaptive CRAG — Complete Interview Prep Documentation
 **Adaptive Corrective RAG with Web Search Fallback**
 
-*Author: Nitish | Stack: LangGraph + LangChain + FastAPI + ChromaDB + Tavily + Guardrails AI + React*
+*Author: Nitish | Stack: LangGraph + LangChain + Groq + FastAPI + ChromaDB + DuckDuckGo/Tavily + React*
 
 ---
 
-> ## ⚠️ Padhne se pehle — ye abhi bana nahi hai
+> ## ⚠️ Padhne se pehle — abhi kya sach hai
 >
-> `backend/` ki saari files khaali hain. Ye doc **intended** system ka hai, chal
-> rahe code ka nahi. Interview me ise "banaya hai" bol dena aur interviewer ka
-> GitHub khol lena — sabse bada credibility risk hai, aur wo tumhare
-> **Self-Healing SQL Agent** pe bhi shak daal dega, jo actually bana hua hai.
+> **Backend poora bana hua hai aur asli me chal chuka hai** (Phase 1–5): ingestion,
+> graph, grading, conditional routing, web fallback, groundedness + PII validation,
+> FastAPI. Frontend (Phase 6) aur docker-compose (Phase 7) abhi nahi hai.
 >
-> **Jab tak implementation nahi hoti, aise bolo:**
-> *"CRAG design kar chuka hoon — retrieval grading with conditional web fallback.
-> Architecture aur trade-offs pe detail me baat kar sakta hoon; implementation abhi
-> chal rahi hai."*
+> **Asli run ho chuka hai** — Groq (`openai/gpt-oss-120b`) + live DuckDuckGo search pe.
+> Dono routes chale, `backend/data/README.md` wali **paanchon fixed demo queries sahi
+> route leti hain** (3 local, 2 web).
 >
-> Ye honest bhi hai aur architectural thinking bhi dikhata hai. Build order
-> [ROADMAP.md](ROADMAP.md) me hai. Implementation ke baad ye banner hata dena.
+> **Iska interview pe seedha asar:**
+> - ✅ Bol sakta hai: *"maine CRAG loop implement kiya aur chala ke dekha — grading node,
+>   conditional routing, live web fallback, groundedness validation, FastAPI ke peeche."*
+> - ✅ Bol sakta hai ki controlled demo set pe routing sahi aata hai — **par saaf bolna ki
+>   ye 5 queries ka chhota controlled set hai**, koi benchmark nahi.
+> - ❌ **Mat bolna:** koi bhi accuracy percentage, ya "X% fallback precision". Wo abhi
+>   measure nahi hua — eval harness (ROADMAP section A) abhi banna baaki hai.
+> - ❌ Frontend / live UI demo ka zikr mat karna jab tak Phase 6 nahi banta. Abhi sirf
+>   CLI aur Swagger hai.
+>
+> Build order [ROADMAP.md](ROADMAP.md) me hai.
 
 ---
 
@@ -47,8 +54,8 @@
 > LLM still hallucinates an answer out of them. My system adds a grading step: an LLM checks
 > whether the retrieved context is actually relevant. If it is, it answers directly. If it's
 > not, the agent rewrites the query, runs a live web search to get fresh context, and answers
-> from that instead. Every answer goes through a guardrails layer for hallucination and PII
-> checks before it's returned."
+> from that instead. Every answer then goes through a validation layer that checks it is
+> actually grounded in that context, before it is returned."
 
 Ek line me: *"RAG jo apni khud ki galti pakadta hai aur khud fix karta hai — bina hamesha
 web search pe depend kiye, sirf jab zaroorat ho tab."*
@@ -102,11 +109,11 @@ fails and can architect the fix.
 4. **Outcome A — relevant (`yes`):** straight to `generate`, answer from local context,
    badge = **Local Vector DB**.
 5. **Outcome B — not relevant (`no`):** `transform_query` rewrites the question into
-   search-optimized keywords → `web_search_fallback` runs a Tavily search and replaces the
+   search-optimized keywords → `web_search_fallback` runs a web search and replaces the
    documents with fresh web snippets → `generate` answers from those, badge = **Web Fallback**.
 6. **`generate`** — synthesizes an answer grounded strictly in whatever context survived.
-7. **`validate_guardrails`** — checks the answer for hallucination (is it actually supported
-   by the context?), PII leakage, and toxicity before returning.
+7. **`validate_guardrails`** — an independent LLM check that every claim is actually supported
+   by the context, plus regex PII redaction, before returning.
 8. Response carries the answer, the `source_type`, the relevance score, and a full
    node-by-node execution log.
 
@@ -134,16 +141,16 @@ LangGraph StateGraph  (CRAGState threaded through every node)
                     |
        +------------+------------+
        v                         v
-  ChromaDB / FAISS          Tavily / DuckDuckGo
+  ChromaDB / FAISS          DuckDuckGo / Tavily
   (local embeddings)        (live web, fallback only)
                     |
                     v
-              Guardrails AI  (hallucination / PII / toxicity)
+     Output validation  (LLM groundedness check + regex PII redaction)
 ```
 
 **Why this matters in an interview:** it shows I can separate concerns across an
 orchestration layer (LangGraph), a retrieval layer (vector DB), an external-tool layer
-(web search), and a validation layer (Guardrails) — and wire them with *conditional* control
+(web search), and a validation layer — and wire them with *conditional* control
 flow, not a linear pipeline.
 
 ---
@@ -170,10 +177,23 @@ User questions are conversational; search engines want keywords. A rewrite node 
 "can you help me understand how X works in the new version" into a tight keyword query
 before the web search.
 
-### 6.4 Guardrails Validation Layer
-The final answer is scanned for groundedness (is every claim supported by the context?),
-PII leakage, and toxic content before it's returned — so the LLM can't quietly inject
-its own training knowledge.
+### 6.4 Output Validation Layer
+The final answer gets an **independent** groundedness check — a separate temperature-0 LLM
+call asking "is every claim here supported by this context?" — plus regex-based PII
+redaction, before it's returned.
+
+**Why a second check when the `generate` prompt already says "only from the context":**
+a prompt is a request, not a guarantee. The model can quietly fold in training knowledge.
+The validation node is a second, independent look at the answer.
+
+**Two decisions worth defending here:**
+- **Ungrounded answers are flagged, not blocked.** A warning is prepended; the answer is
+  still shown. Seeing a hallucination *get caught* is more convincing than seeing it vanish,
+  and "this may be wrong" beats a blank screen for the user. **PII is different** — that gets
+  redacted, because flagging a leak is still a leak.
+- **The groundedness check fails open.** If the check itself errors (network, rate limit),
+  the answer is not blocked — it was built from already-verified context. Failing closed
+  would let one flaky call turn the whole system into "I can't tell you anything."
 
 ### 6.5 Full Execution Trace
 Every node appends to a `logs` list threaded through the state. The frontend renders this
@@ -191,6 +211,9 @@ transform → web search → generate → validate. Explainability, not a black 
 | Replace local docs on fallback (not merge) | Docs already graded "no" — keeping them dilutes context and re-introduces hallucination risk | Lose any partially-useful local chunk |
 | Both branches merge back into one `generate` | DRY; `generate` only reads `state["documents"]`, doesn't care about source | None meaningful |
 | Binary grader (`yes`/`no`), not a 0–1 score | Simple, deterministic routing; easy to explain | Coarser — no "partially relevant" handling in v1 |
+| Custom groundedness check, not the Guardrails AI library | The hub-download + version-pinning setup was the biggest time sink in the plan, and the thing that matters is understanding *why* the output needs verifying — two small checks do that with zero extra dependency | No off-the-shelf toxicity/competitor validators; can't claim the library on a CV |
+| PII by regex, not by LLM | PII detection should be deterministic and instant | Misses unusual formats a model might catch |
+| DuckDuckGo as the default search provider, Tavily behind a config switch | Runs with zero signup, so the project works on day one; the tool layer is abstracted so swapping is one env var | Thinner snippets and undocumented throttling vs a paid API |
 
 ---
 
@@ -206,9 +229,11 @@ an evaluation harness measures grader accuracy on a fixed labelled set, and a re
 before grading gives it better chunks to judge.
 
 ### Limitation 2 — Web fallback quality depends on the search API
-Tavily can return thin or off-topic snippets for niche queries.
-**Mitigation:** `max_results` tuning, and the guardrails layer still runs on web-sourced
-answers — an ungrounded answer from bad web context gets flagged the same way.
+DuckDuckGo (default) returns thinner snippets than a paid search API and can throttle without
+warning; Tavily returns cleaner text but needs a key.
+**Mitigation:** `max_results` tuning, the provider is swappable via one env var, and the
+validation layer still runs on web-sourced answers — an ungrounded answer from bad web
+context gets flagged the same way.
 
 ### Limitation 3 — No multi-hop reasoning
 A compound question ("compare X's v2 pricing to v1") gets one retrieval pass, not decomposed
@@ -276,8 +301,8 @@ is deterministic and explainable.
 
 **Q: What stops the LLM from answering from its own training knowledge instead of the context?**
 A: Two things. The `generate` prompt says "answer only from the provided context, say so if
-it's insufficient." Then the guardrails layer runs a groundedness check — is every claim in
-the answer actually supported by the context? — and flags the answer if not.
+it's insufficient." Then a separate validation node runs an independent groundedness check —
+is every claim in the answer supported by the context? — and flags the answer if not.
 
 **Q: Why replace the local documents on fallback instead of merging them with web results?**
 A: The local docs were just graded "not relevant." Keeping them in the context window
@@ -286,13 +311,33 @@ remove. Clean swap is safer.
 
 **Q: How do you handle the grader being wrong?**
 A: I accept it's a failure mode and measure it — an eval harness scores grader accuracy on
-a labelled set. A false "yes" is the dangerous one; the guardrails layer is the second net.
+a labelled set. A false "yes" is the dangerous one; the validation layer is the second net.
 A false "no" just costs a web call. Roadmap has a reranking step to give the grader better
 input.
 
+**Q: Why did you write your own validation instead of using a guardrails library?**
+A: I started with Guardrails AI in the plan. In practice its hub-based validator downloads
+and version pinning were going to be the single biggest time sink in the build, and what I
+actually needed was two things: is this answer supported by the context, and does it leak
+PII. The first is one temperature-0 LLM call, the second is a handful of regexes. Both are
+about twenty lines and add no dependency. I'd reach for the library if I needed its
+off-the-shelf validators — competitor mentions, jailbreak detection — but for groundedness
+the library was overhead, not leverage.
+
+**Q: Why is PII a regex and not another LLM call?**
+A: PII detection should be deterministic — the same input must always produce the same
+result — and it should be instant. An LLM call there adds latency and variance for no real
+gain. The trade-off is that unusual formats slip through, which I'd accept for this scope.
+
+**Q: What happens if the groundedness check itself fails?**
+A: It fails open — the answer goes out unflagged, with a note in the trace. It was already
+built from verified context, so blocking it on an infrastructure error would be the wrong
+call. Failing closed would let a single flaky network call turn the whole system into "I
+can't tell you anything."
+
 **Q: How would you deploy this?**
 A: FastAPI backend in a Docker container on Render, Chroma persisted to a mounted volume,
-React frontend on Vercel with an `/api` proxy. Groq for the LLM, Tavily for search, both
+React frontend on Vercel with an `/api` proxy. Groq for the LLM, DuckDuckGo (or Tavily) for search,
 via env-injected keys.
 
 **Q: How does this scale?**
@@ -349,7 +394,7 @@ Flow: `grade: NO` → `transform_query` (show the rewritten query) → `web_sear
 itself — no user input."
 
 ### Scenario 3 — Guardrail Catch (if time)
-A tricky/ambiguous query with hallucination risk; show the guardrails layer validating
+A tricky/ambiguous query with hallucination risk; show the validation layer checking
 (or flagging) the output.
 
 ### What to highlight in the UI
@@ -366,8 +411,8 @@ Use a small controlled dataset and fixed demo queries so the fallback triggers p
 ## 13. One-Liner for Resume/LinkedIn
 
 > "Built Adaptive CRAG — a LangGraph agentic RAG system that self-grades retrieved context,
-> rewrites queries, and falls back to live web search (Tavily) when local documents are
-> insufficient, with a Guardrails AI validation layer — eliminating hallucinations from
+> rewrites queries, and falls back to live web search when local documents are
+> insufficient, with a groundedness-validation layer — eliminating hallucinations from
 > stale or irrelevant vector-store hits."
 
 ---

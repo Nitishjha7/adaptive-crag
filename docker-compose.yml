@@ -1,0 +1,42 @@
+# Adaptive CRAG — backend + frontend.
+#
+#   copy .env.example .env    <- GROQ_API_KEY bharo
+#   docker compose up --build
+#
+# Frontend: http://localhost:3001   (Nginx, /api/ backend pe proxy karta hai)
+# Backend:  http://localhost:8001/docs
+#
+# Ports 3001/8001 hain, 3000/8000 nahi — is machine pe wo doosre projects ke
+# containers le rakhe hain. `.env` me FRONTEND_PORT / BACKEND_PORT se badal sakte ho.
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    env_file:
+      - .env
+    volumes:
+      # Chroma index persist — warna har container start pe poora corpus
+      # dobara embed hota, jo slow aur bewajah hai.
+      - ./backend/vectorstore:/app/vectorstore
+    healthcheck:
+      # /health jaan-boojh ke koi LLM call nahi karta, isliye ye sasta hai aur
+      # rate limit kabhi container ko unhealthy mark nahi karwata.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-3001}:80"
+    depends_on:
+      # Sirf "started", "healthy" nahi — frontend static files serve karta hai
+      # aur backend down ho to bhi load hona chahiye (error UI dikhata hai).
+      backend:
+        condition: service_started
+    restart: unless-stopped

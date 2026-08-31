@@ -69,11 +69,11 @@ question.
 | Component | Technology | Primary role |
 |---|---|---|
 | Agent orchestration | LangGraph StateGraph | Conditional branching, corrective loop, state threading |
-| Grading / synthesis LLM | Groq (Llama 3.x) via LangChain | Binary relevance grading, query rewrite, answer generation |
+| Grading / synthesis LLM | Groq (`openai/gpt-oss-120b`) via LangChain | Binary relevance grading, query rewrite, answer generation |
 | Embeddings | FastEmbed / HuggingFace | Local document + query vectorization |
 | Local knowledge base | ChromaDB / FAISS | Vector storage, cosine top-k similarity search |
-| Web search tool | Tavily Search API / DuckDuckGo | Fallback context when local docs graded irrelevant |
-| Output validation | Guardrails AI | Hallucination / PII / toxicity checks on final answer |
+| Web search tool | DuckDuckGo (default, no key) / Tavily (optional) | Fallback context when local docs graded irrelevant |
+| Output validation | Custom LLM groundedness check + regex PII | Catches ungrounded claims and redacts PII from the final answer |
 | Backend | FastAPI + Uvicorn | REST endpoint, retrieval scores, step execution logs |
 | Frontend | React + Vite + Tailwind CSS | Chat, source badges, relevance indicators, trace |
 | Containerization | Docker & Docker Compose | Backend + vector DB + frontend orchestration |

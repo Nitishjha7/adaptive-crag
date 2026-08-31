@@ -9,24 +9,28 @@ a grading node decides whether the retrieved chunks actually answer the question
 falls back to the web when they don't — so you get grounded answers without paying the
 cost and latency of a web call on every query.
 
-> ## ⚠️ Status: core graph built, API keys pending
+> ## Status: backend working end-to-end; no UI yet
 >
-> The corrective loop is implemented and its routing is verified. The API layer and
-> frontend are not written yet, and no run against the real Groq/Tavily APIs has
-> happened — there are no keys on this machine, so every LLM and search call so far
-> has been exercised against mocks.
+> The corrective loop and the API are implemented and **verified against the real Groq
+> API and live DuckDuckGo search**. All five fixed demo queries in
+> [backend/data/README.md](backend/data/README.md) take the route they are supposed to
+> (3 local, 2 web fallback).
 >
 > | Piece | State |
 > |---|---|
-> | Docs (README, spec, build plan, roadmap, interview notes) | ✅ complete |
-> | Phase 1 — Chroma ingestion, config, controlled corpus | ✅ built & run (7 docs → 22 chunks) |
-> | Phase 2 — `CRAGState`, LangGraph skeleton | ✅ built & verified |
-> | Phase 3 — grading, conditional edge, query transform, web fallback | ✅ built, routing verified with mocked LLM/search |
-> | Real end-to-end run against Groq + Tavily | ❌ needs `GROQ_API_KEY`, `TAVILY_API_KEY` |
-> | Phase 4–7 — guardrails, FastAPI, frontend, compose | ❌ not written |
+> | Phase 1 — Chroma ingestion, config, controlled corpus | ✅ 7 docs → 22 chunks |
+> | Phase 2 — `CRAGState`, LangGraph skeleton | ✅ |
+> | Phase 3 — grading, conditional edge, query transform, web fallback | ✅ both routes verified live |
+> | Phase 4 — groundedness + PII validation | ✅ |
+> | Phase 5 — FastAPI `/api/query` + `/health` | ✅ |
+> | Test suite — 27 tests (`.\dev.ps1 test`) | ✅ |
+> | Phase 6 — frontend demo UI | ❌ not written (CLI and Swagger only) |
+> | Phase 7 — `docker-compose.yml` | ❌ still empty |
+> | Evaluation harness | ❌ **no accuracy has been measured** |
 >
-> Build order is in [docs/ROADMAP.md](docs/ROADMAP.md). Until a real run lands, describe
-> this as *built and being validated* — not as a working demo you have run.
+> Routing was correct on all five demo queries, but that is a small controlled set, not a
+> benchmark — don't quote an accuracy figure until the eval harness in
+> [docs/ROADMAP.md](docs/ROADMAP.md) exists.
 
 ## Tech Stack
 
@@ -35,8 +39,8 @@ cost and latency of a web call on every query.
 | Agent orchestration | LangGraph (StateGraph) — conditional branching, corrective loops |
 | LLM & embeddings | LangChain + Groq / FastEmbed / HuggingFace |
 | Local knowledge base | ChromaDB / FAISS (cosine similarity) |
-| Web search fallback | Tavily Search API / DuckDuckGo Search |
-| Output validation | Guardrails AI (hallucination / PII / toxicity) |
+| Web search fallback | DuckDuckGo (default, no key) / Tavily (optional, `SEARCH_PROVIDER=tavily`) |
+| Output validation | Custom LLM groundedness check + regex PII redaction |
 | Backend | FastAPI (async ASGI) |
 | Frontend | React + Vite + Tailwind CSS |
 | Containerization | Docker & Docker Compose |
@@ -48,10 +52,10 @@ cost and latency of a web call on every query.
    relevant/sufficient (`"yes"` / `"no"`).
 3. **Relevant →** straight to `generate`.
 4. **Not relevant →** `transform_query` rewrites the question into search-optimized
-   keywords → `web_search_fallback` (Tavily) pulls fresh snippets → `generate`.
+   keywords → `web_search_fallback` pulls fresh snippets → `generate`.
 5. **`generate`** — synthesizes an answer grounded strictly in the verified context.
-6. **`validate_guardrails`** — final scan for hallucination, PII leakage, and toxic
-   content before the answer is returned, with a source badge (Local DB vs Web Fallback).
+6. **`validate_guardrails`** — final scan: an independent LLM groundedness check plus PII
+   redaction, before the answer is returned with a source badge (Local DB vs Web Fallback).
 
 See [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) for the full architecture, state
 schema, node contracts, and reference implementation. See
@@ -70,14 +74,21 @@ docs/       Setup guide, technical spec, build plan, roadmap, code notes, interv
 
 See [docs/SETUP.md](docs/SETUP.md) for the full git/repo setup steps that were actually run.
 
-```bash
-cp .env.example .env   # fill in GROQ_API_KEY and TAVILY_API_KEY
-docker compose up --build
+`docker-compose.yml` is still empty (Phase 7). Until then, use `dev.ps1`, which runs
+everything in the backend container with the source bind-mounted:
+
+```powershell
+copy .env.example .env    # fill in GROQ_API_KEY; TAVILY_API_KEY is optional
+.\dev.ps1 build           # build the image (only needed when requirements change)
+.\dev.ps1 ingest          # embed backend/data/ into Chroma
+.\dev.ps1 ask "why does chunk overlap matter?"
+.\dev.ps1 serve           # FastAPI on http://localhost:8000/docs
 ```
 
-Backend: `POST /api/query` → answer + `source_type` + step execution logs.
-Frontend: served via Nginx, shows source badges (Local DB vs Web Fallback) and the
-LangGraph execution trace.
+Only `GROQ_API_KEY` is required — web search defaults to DuckDuckGo, which needs no key.
+
+Backend: `POST /api/query` → answer + `source_type` + `relevance_score` + step execution
+logs. Frontend (Phase 6, not built) will show source badges and the LangGraph trace.
 
 ## Build Plan
 
@@ -89,8 +100,8 @@ See [docs/ROADMAP.md](docs/ROADMAP.md). Short version:
 
 - **Phase 1** — Vector store ingestion + Chroma persistence + config
 - **Phase 2** — LangGraph skeleton: `CRAGState`, nodes, conditional edges
-- **Phase 3** — Grading + `transform_query` + Tavily web-search fallback
-- **Phase 4** — Guardrails AI output validation layer
+- **Phase 3** — Grading + `transform_query` + web-search fallback
+- **Phase 4** — Output validation layer (groundedness + PII)
 - **Phase 5** — FastAPI `/api/query` endpoint with step logs
 - **Phase 6** — React + Vite + Tailwind demo UI (source badges, trace viewer)
 - **Phase 7** — Docker Compose + deployment

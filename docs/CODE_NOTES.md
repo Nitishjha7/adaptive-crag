@@ -4,7 +4,7 @@ Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad
 interview me) yaad rahe ki har cheez kyun li gayi.
 
 **Legend:** ✅ = likha ja chuka · ⬜ = abhi khaali (planned intent).
-Phase 1, 2, 3 ✅ ho chuke; Phase 4 se aage ⬜.
+Phase 1–5 ✅ ho chuke; Phase 6 (frontend) + 7 (compose) ⬜.
 
 ---
 
@@ -17,8 +17,9 @@ Phase 1, 2, 3 ✅ ho chuke; Phase 4 se aage ⬜.
 | `langchain-groq` | Groq LLM binding | Free tier + bahut fast inference — grading jaisa chhota call latency-sensitive hai |
 | `chromadb` | Embedded vector database | Local knowledge base. Zero infra (embedded), Docker volume pe persist ho jaata hai |
 | `fastembed` | Lightweight local embedding models (ONNX) | API key nahi chahiye, offline chalta hai, fast. HuggingFace se halka |
-| `tavily-python` | Tavily Search API client | Web fallback tool — LLM-optimized snippets deta hai (raw HTML nahi), grounding ke liye clean |
-| `guardrails-ai` | Output validation framework | Final answer pe hallucination / PII / toxicity checks. Ungrounded generation catch karta hai |
+| `tavily-python` | Tavily Search API client | **Optional upgrade** (`SEARCH_PROVIDER=tavily`). LLM-optimized snippets deta hai (raw HTML nahi), par signup chahiye |
+| ~~`guardrails-ai`~~ | — | **Nahi liya.** Hub download + version pinning time-sink tha; custom LLM groundedness check + regex PII usi kaam ko zero dependency me karta hai. Neeche `validators.py` dekh |
+| `ddgs` | DuckDuckGo search client | **Default web search provider — koi API key nahi chahiye.** Project pehle din se chalta hai |
 | `fastapi` | ASGI web framework — REST endpoint | `/api/query` gateway. Async-native, auto `/docs` |
 | `uvicorn[standard]` | ASGI server jo FastAPI run karta hai | FastAPI khud server nahi hai |
 | `pydantic` / `pydantic-settings` | Validation + typed config | Request/response models; `.env` se typed settings |
@@ -89,20 +90,43 @@ busy` aata hai. Fix: directory nahi, uske **contents** clear karo.
 ## backend/app/__main__.py ✅
 
 `python -m app "question"` — graph ko FastAPI ke bina invoke karke poora trace print karta hai.
-Phase 5 tak API hai hi nahi, aur uske baad bhi debugging ka sabse chhota loop yahi hai.
+API ban chuki hai, phir bhi debugging ka sabse chhota loop yahi hai: ek process, ek invoke, poora trace.
 
 ---
 
 ## dev.ps1 ✅ (repo root)
 
 Is machine pe local Python installed nahi hai — sab kuch Docker me chalta hai. Ye helper
-lamba `docker run` incantation wrap karta hai: `build` / `ingest [-Reset]` / `ask "..."` / `shell`.
+lamba `docker run` incantation wrap karta hai: `build` / `ingest [-Reset]` / `ask "..."` /
+`test` / `serve [-Port N]` / `shell`.
 
 Code **bind-mount** hota hai (`app/`, `data/`, `ingest.py`), isliye edit ke baad rebuild nahi
 karna padta — image sirf dependencies deti hai. `.env` `--env-file` se inject hoti hai, image
 me bake nahi hoti.
 
 Phase 7 me proper `docker-compose.yml` isko replace kar dega.
+
+---
+
+## backend/tests/ ✅ — 27 tests, `.\dev.ps1 test`
+
+| File | Kya cover karta hai |
+|---|---|
+| `conftest.py` | `fake_llm` aur `fake_search` fixtures (monkeypatch se, taaki test ke baad apne aap undo ho) |
+| `test_routing.py` | dono routes, docs replace hona, search failure, ajeeb grader output |
+| `test_grading.py` | `parse_verdict` ke 11 cases |
+| `test_validation.py` | PII redaction, false positives, ungrounded flagging, fail-open |
+| `test_api.py` | `/health`, 422 validation, response shape |
+
+**Tests me asli LLM call kyun nahi:** ye **control flow** ke test hain, model quality ke
+nahi. Asli calls slow, mehnge, key-dependent aur non-deterministic hote — yaani CI me flaky.
+Grader ko scripted verdict dena hi wo cheez hai jo test karni hai: *"agar grader 'no' bole
+to kya graph sahi raasta leta hai."* Grader ki **accuracy** alag cheez hai — wo eval harness
+ka kaam hai (ROADMAP), in tests ka nahi.
+
+**Sabse important test:** `test_fallback_replaces_local_docs_instead_of_merging`. Agar reject
+kiye hue local docs web snippets ke saath context me bach gaye, to CRAG ka poora point khatam —
+aur ye baat silently toot sakti hai, isliye assert kiya hua hai.
 
 ---
 
@@ -124,17 +148,17 @@ Phase 7 me proper `docker-compose.yml` isko replace kar dega.
 
 ---
 
-## backend/app/graph/build_graph.py ✅ (Phase 3 shape)
+## backend/app/graph/build_graph.py ✅ (poora graph)
 
 Graph wiring — nodes register, edges define, `compile()`.
 
-### Abhi ka shape (Phase 3)
+### Abhi ka shape
 
 - `START → retrieve → grade_documents`.
 - `grade_documents` pe conditional edge: `relevance_score == "yes"` → `generate`, warna
   → `transform_query`.
 - `transform_query → web_search_fallback → generate`.
-- `generate → END`. *(Phase 4 me beech me `validate_guardrails` aayega.)*
+- `generate → validate_guardrails → END`.
 
 **Chain kyun nahi, graph kyun — ab saaf dikhta hai:** `grade_documents` ke baad kaunsa node
 chalega ye compile time pe fixed nahi hai; runtime pe state padh ke decide hota hai. Linear
@@ -211,30 +235,80 @@ rakhna generation ko dilute karega aur hallucination risk badhayega.
 
 ---
 
-## backend/app/nodes/validate_guardrails.py ⬜ (Phase 4)
+## backend/app/nodes/validate_guardrails.py ✅
 
-`validate_guardrails` — final safety net.
+`validate_guardrails` — graph ka aakhri safety net. `final_output` yahi node bharta hai.
 
 - `guardrails/validators.py` ka `validate_answer(answer, context, question)` call.
-- Checks: groundedness (answer context se supported hai?), PII leak, toxicity.
-- Pass → `final_output = generation`. Fail → sanitized / flagged output (v1 me: flag + note).
-- Log: `"validate_guardrails -> pass=True/False"`.
+- Log: `"validate_guardrails -> pass=True/False (reason)"`.
+
+**Ye node kyun, jab `generate` ka prompt already "sirf context se" bolta hai:** prompt ek
+guzarish hai, guarantee nahi. Model chupke se apni training knowledge daal sakta hai. Ye
+node us answer par ek doosri, *independent* nazar hai.
 
 ---
 
-## backend/app/guardrails/validators.py ⬜ (Phase 4)
+## backend/app/guardrails/validators.py ✅ — custom, Guardrails AI **nahi**
 
-Guardrails AI wiring. `Guard` object with validators (`ProvenanceLLM` / `DetectPII` /
-`ToxicLanguage` ya custom groundedness). Ek `ValidationResult` return karta hai
-(`validated_output`, `passed`).
+> **Decision (Phase 4):** `guardrails-ai` library use *nahi* ki. Uska hub-based validator
+> download + version pinning is project ka sabse bada time-sink tha, aur interview me jo
+> matter karta hai wo library ka naam nahi — ye samajh hai ki final answer verify kyun aur
+> kaise karna hai. Do chhote checks wahi kaam karte hain, zero extra dependency me.
+> ROADMAP me ye fallback plan pehle se likha tha; wahi liya gaya.
 
-**Fallback plan:** agar Guardrails AI hub setup heavy pade, ek simple LLM call
-("Is this answer fully supported by the context? yes/no") se replace — same interview
-talking point, kam dependency.
+Do checks:
+
+1. **Groundedness (LLM call)** — "kya answer ka har claim context se supported hai? yes/no".
+   Temperature 0, wahi defensive `parse_verdict` jo grader me hai (reuse — do jagah parsing
+   logic drift na kare).
+2. **PII (regex)** — email / card / SSN / intl phone. **Deliberately regex, LLM nahi:** PII
+   detection deterministic honi chahiye, aur ek aur LLM call latency badhata hai bina
+   bharose ke faayde ke.
+
+**Toxicity chhoda kyun:** input controlled corpus + search snippets hai, aur bina proper
+classifier ke "toxic" ka LLM check dikhawa hota. Uska naam lena aur verify na karna — dono
+me se naam *na* lena behtar hai.
+
+### Do design decisions jo interview me poochhe ja sakte hain
+
+**Ungrounded answer block nahi hota, flag hota hai.** Warning prefix jodte hain, answer
+chhupate nahi. Demo me hallucination *pakda gaya* dikhana usse gayab kar dene se zyada
+convincing hai — aur user ke liye bhi "ye shayad galat hai" khaali screen se behtar hai.
+**PII isse alag hai** — wo redact hota hai, kyunki flag karke dikhana leak hi hai.
+
+**Groundedness check fail-open hai, fail-closed nahi.** Agar check khud crash ho jaye
+(network / rate limit), answer block karna galat hai — wo already verified context se bana
+hai. Exception pe "grounded maan lo" + log me note. Fail-closed hone se ek flaky call poore
+system ko "kuch nahi bata sakta" bana deta.
 
 ---
 
-## backend/app/tools/tavily_search.py ✅
+## backend/app/tools/web_search.py ✅ — provider abstraction
+
+`web_search_fallback` node yahin se search karta hai; usse pata nahi hota ki neeche kaun
+hai. Provider `SEARCH_PROVIDER` env var se badalta hai, code se nahi.
+
+**Ye layer kyun:** DuckDuckGo bina key ke chalta hai (project din ek se chalu), Tavily behtar
+snippets deta hai par signup maangta hai. Ek interface hone se switch karna ek env var ka
+kaam hai, aur test me poora search layer ek line se mock ho jaata hai.
+
+---
+
+## backend/app/tools/duckduckgo_search.py ✅ — **default provider**
+
+`ddgs` package. **Koi API key nahi, koi signup nahi.** Interface `tavily_search` ke bilkul
+same hai — `(query, max_results) -> List[str]` — taaki provider badalne pe node me kuch na badle.
+
+Trade-off saaf hai: DDG ke snippets patle hote hain aur wo bina warning ke throttle karta
+hai. Lekin zero signup ka matlab hai project pehle din se chalta hai. Key mil jaye to
+`SEARCH_PROVIDER=tavily`.
+
+`ddgs` aur purana `duckduckgo_search` dono import handle karte hain — package rename hua tha,
+version drift pe import nahi tootna chahiye.
+
+---
+
+## backend/app/tools/tavily_search.py ✅ (optional upgrade)
 
 Tavily client wrapper. `tavily_search(query, max_results) -> List[str]` — sirf snippet text
 return karta hai (URL metadata abhi optional). Node ko clean interface deta hai.
@@ -246,14 +320,27 @@ Ek jagah k / score-threshold tuning.
 
 ---
 
-## backend/main.py ⬜ (Phase 5)
+## backend/main.py ✅
 
-FastAPI entrypoint. `build_crag_graph()` ek baar compile (module load pe), `POST /api/query`
-har request pe `graph.invoke(initial_state)`. Response me `answer`, `source_type`,
-`relevance_score`, `logs` — frontend badge + trace isi se render karta hai. `/health` Docker
-healthcheck.
+FastAPI entrypoint. Graph `lifespan` me ek baar compile hota hai (har request pe dobara
+banana bewajah kaam hai). `POST /api/query` → `answer`, `source_type`, `relevance_score`,
+`transformed_query`, `logs`, `elapsed_ms`. Frontend ka badge + trace viewer isi se banega.
 
-CORS: dev me `allow_origins=["*"]`, production me frontend domain tak restrict. Note kar liya.
+**`run_in_threadpool` kyun:** `graph.invoke` sync hai aur LLM/search calls pe **block** karta
+hai. Seedha `async def` me call karne se ek slow request poore event loop ko rok deti — FastAPI
+async hone ka poora fayda khatam. Threadpool me bhejne se baaki requests chalti rehti hain.
+
+**`/health` LLM call kyun nahi karta:** healthcheck sasta aur bharosemand hona chahiye. Agar
+wo LLM ping karta, to ek rate limit hi container ko unhealthy mark karwa deta aur Docker use
+restart karta rehta. Isliye sirf index count + config echo — including `groq_key_set`, jo
+setup debug karne me sabse pehle kaam aata hai.
+
+CORS: dev me `allow_origins=["*"]`, Phase 7 me deploy pe frontend origin tak restrict karna
+hai — code me TODO pada hai.
+
+**Verified (asli HTTP requests, container me):** `/health` → `{"status":"ok",
+"indexed_chunks":22,...}`; khaali question → `422`; bina Groq key ke query → `500` uss saaf
+`GROQ_API_KEY set nahi hai` message ke saath.
 
 ---
 
