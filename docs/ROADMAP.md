@@ -8,14 +8,22 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-- ✅ Repo scaffold — `backend/`, `frontend/`, `docs/`, `docker-compose.yml`, `.gitignore`, `.env.example`
-- ✅ Empty placeholder files: `state.py`, `build_graph.py`, `retrieve.py`,
-  `grade_documents.py`, `transform_query.py`, `web_search_fallback.py`, `generate.py`,
-  `validate_guardrails.py`, `tavily_search.py`, `vector_search.py`, `validators.py`, `main.py`
-- ✅ Docs: README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES
-- ❌ Koi actual implementation nahi (sab files khaali hai)
-- ❌ Vector store ingestion
-- ❌ Frontend
+**Phase 1 ✅ · Phase 2 ✅ (real LLM call pending) · Phase 3–7 ❌**
+
+- ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
+- ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /
+  `get_vectorstore` factories); `app/tools/vector_search.py`; `backend/data/` — 7-doc controlled
+  corpus **with a deliberate gap**; `ingest.py` (idempotent, `--reset`); `backend/Dockerfile`
+- ✅ **Phase 2** — `app/schemas/crag_state.py` (`CRAGState`, additive `logs` reducer);
+  `app/graph/state.py`; `app/nodes/retrieve.py`; `app/nodes/generate.py`;
+  `app/graph/build_graph.py` (`START → retrieve → generate → END`); `app/__main__.py` CLI
+- ✅ `dev.ps1` — Docker dev loop (is machine pe local Python installed nahi hai)
+- ✅ **Verified:** ingestion chali (7 docs → 22 chunks persisted); retrieval sahi chunks laati hai;
+  graph compile hota hai, node order + `logs` reducer sahi merge karte hain
+- 🟡 **Pending:** asli Groq call — `GROQ_API_KEY` chahiye. Tab tak `generate` mocked LLM se verify hua
+- ❌ Phase 3 — grading + conditional edge + transform + web fallback (yahi asli USP hai)
+- ❌ Phase 4–7 — guardrails, FastAPI, frontend, docker-compose
+- ❌ `docker-compose.yml` abhi bhi khaali (Phase 7)
 
 ---
 

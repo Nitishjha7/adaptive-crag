@@ -1,12 +1,14 @@
 # Code Notes — Kya Kis Liye Hai
 
 Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad me (ya
-interview me) yaad rahe ki har cheez kyun li gayi. Jaise-jaise code likha jayega, isko
-update karte rahenge. Abhi zyada files khaali hai — ye "planned intent" note hai.
+interview me) yaad rahe ki har cheez kyun li gayi.
+
+**Legend:** ✅ = likha ja chuka · ⬜ = abhi khaali (planned intent).
+Phase 1 + 2 ✅ ho chuke; Phase 3 se aage ⬜.
 
 ---
 
-## backend/requirements.txt (planned)
+## backend/requirements.txt ✅
 
 | Package | Kya kaam karta hai | Kyun liya |
 |---|---|---|
@@ -24,20 +26,87 @@ update karte rahenge. Abhi zyada files khaali hai — ye "planned intent" note h
 
 ---
 
-## backend/app/config.py
-
-Central config + factory functions. Koi business logic nahi.
-
-- `Settings(BaseSettings)` — `GROQ_API_KEY`, `TAVILY_API_KEY`, `VECTOR_DB`, model names.
-- `get_llm()` — ek configured `ChatGroq` instance (temperature 0 for grading determinism).
-- `get_embeddings()` — FastEmbed embedding function.
-- `get_vectorstore()` — Chroma client pointed at the persisted `vectorstore/` dir.
-
-**Kyun factory, direct import nahi:** test me mock karna easy, aur ek jagah se model swap.
+> `langchain-text-splitters` bhi add hua — `RecursiveCharacterTextSplitter` ingestion me
+> chahiye tha (paragraph/heading boundaries pe todta hai, fixed character count pe nahi).
 
 ---
 
-## backend/app/schemas/crag_state.py
+## backend/app/config.py ✅
+
+Central config + factory functions. Koi business logic nahi.
+
+- `Settings(BaseSettings)` — `GROQ_API_KEY`, `TAVILY_API_KEY`, model names, `TOP_K`,
+  chunk params, paths. `.env` repo root se load hoti hai (docker-compose bhi wahi padhta hai).
+- `get_llm(temperature=0.0)` — configured `ChatGroq`. Key missing ho to saaf error message.
+- `get_embeddings()` — `FastEmbedEmbeddings` (local ONNX, koi API call nahi).
+- `get_vectorstore()` — persisted Chroma collection ka handle.
+
+**Kyun factory, direct import nahi:** test me mock karna easy (Phase 2 ka wiring test
+`get_llm` ko fake se replace karke hi chala tha, bina Groq key ke), aur model swap ek jagah se.
+
+**Kyun `@lru_cache`:** har node config import karta hai. Bina cache ke har call pe `.env`
+dobara parse hota aur naya embedding model load hota — slow aur bewajah.
+
+**`ChatGroq` / `FastEmbedEmbeddings` ka import function ke andar kyun hai:** module import
+sasta rehta hai. `python -m app --help` jaisa kuch chalane pe heavy ML deps load nahi hote.
+
+---
+
+## backend/data/ ✅ — controlled corpus
+
+7 markdown docs — RAG / agent engineering **concepts** (embeddings, chunking, vector DBs,
+naive-RAG failure modes, CRAG, query transformation, agent graphs & state).
+
+**Deliberate gap:** koi product/pricing/vendor detail nahi, koi recent release nahi, aur
+**MCP ka zero mention**. Ye gap hi Scenario 2 (correction path) ko predictably trigger karta
+hai — demo live randomness pe depend nahi karta.
+
+**Corpus real topics ka kyun, fictional company ka kyun nahi:** fictional hota to `grade: no`
+to aa jaata, lekin web search bhi kachra deta aur demo ka doosra half mar jaata. Gap aisa
+chahiye jo web se **genuinely answerable** ho.
+
+Fixed demo queries + expected routes `backend/data/README.md` me hai.
+
+---
+
+## backend/ingest.py ✅
+
+Docs → chunks → embeddings → Chroma.
+
+- `load_documents()` — `data/*.md|txt` padhta hai, `README.md` skip karta hai (wo corpus ka
+  part nahi; usko ingest karna corpus me "yahan kya nahi hai" wala meta-text daal deta, jo
+  grader ko confuse karta).
+- `split_documents()` — `RecursiveCharacterTextSplitter`, 800/100, separators me `\n## ` sabse
+  pehle taaki heading boundaries pe toote.
+- **Idempotent** — collection bhari ho to skip. `--reset` se wipe + rebuild.
+
+**Ek real bug jo yahan mila:** `--reset` pehle `shutil.rmtree(store_dir)` karta tha. Docker me
+`vectorstore/` ek **mount point** hai, aur usko remove karne pe `OSError: Device or resource
+busy` aata hai. Fix: directory nahi, uske **contents** clear karo.
+
+---
+
+## backend/app/__main__.py ✅
+
+`python -m app "question"` — graph ko FastAPI ke bina invoke karke poora trace print karta hai.
+Phase 5 tak API hai hi nahi, aur uske baad bhi debugging ka sabse chhota loop yahi hai.
+
+---
+
+## dev.ps1 ✅ (repo root)
+
+Is machine pe local Python installed nahi hai — sab kuch Docker me chalta hai. Ye helper
+lamba `docker run` incantation wrap karta hai: `build` / `ingest [-Reset]` / `ask "..."` / `shell`.
+
+Code **bind-mount** hota hai (`app/`, `data/`, `ingest.py`), isliye edit ke baad rebuild nahi
+karna padta — image sirf dependencies deti hai. `.env` `--env-file` se inject hoti hai, image
+me bake nahi hoti.
+
+Phase 7 me proper `docker-compose.yml` isko replace kar dega.
+
+---
+
+## backend/app/schemas/crag_state.py ✅
 
 `CRAGState` TypedDict — graph ka single source of truth. Har node ise partially update karta hai.
 
@@ -53,7 +122,7 @@ Central config + factory functions. Koi business logic nahi.
 
 ---
 
-## backend/app/graph/build_graph.py
+## backend/app/graph/build_graph.py ✅ (Phase 2 skeleton)
 
 Graph wiring — nodes register, edges + conditional edge define, `compile()`.
 
@@ -69,7 +138,7 @@ type se farak nahi padta.
 
 ---
 
-## backend/app/nodes/retrieve.py
+## backend/app/nodes/retrieve.py ✅
 
 `retrieve` node — Chroma se cosine similarity top-k chunks.
 
@@ -79,7 +148,7 @@ type se farak nahi padta.
 
 ---
 
-## backend/app/nodes/grade_documents.py
+## backend/app/nodes/grade_documents.py ⬜ (Phase 3)
 
 **Project ka core #1.** LLM binary relevance grader.
 
@@ -93,7 +162,7 @@ se pehle. Yahi naive RAG se difference hai: verify-before-trust.
 
 ---
 
-## backend/app/nodes/transform_query.py
+## backend/app/nodes/transform_query.py ⬜ (Phase 3)
 
 `transform_query` — natural language question → keyword-focused web search query.
 
@@ -103,7 +172,7 @@ se pehle. Yahi naive RAG se difference hai: verify-before-trust.
 
 ---
 
-## backend/app/nodes/web_search_fallback.py
+## backend/app/nodes/web_search_fallback.py ⬜ (Phase 3)
 
 **Core #2.** Tavily se live web context.
 
@@ -116,7 +185,7 @@ rakhna generation ko dilute karega aur hallucination risk badhayega.
 
 ---
 
-## backend/app/nodes/generate.py
+## backend/app/nodes/generate.py ✅
 
 `generate` — final answer synthesis.
 
@@ -126,7 +195,7 @@ rakhna generation ko dilute karega aur hallucination risk badhayega.
 
 ---
 
-## backend/app/nodes/validate_guardrails.py
+## backend/app/nodes/validate_guardrails.py ⬜ (Phase 4)
 
 `validate_guardrails` — final safety net.
 
@@ -137,7 +206,7 @@ rakhna generation ko dilute karega aur hallucination risk badhayega.
 
 ---
 
-## backend/app/guardrails/validators.py
+## backend/app/guardrails/validators.py ⬜ (Phase 4)
 
 Guardrails AI wiring. `Guard` object with validators (`ProvenanceLLM` / `DetectPII` /
 `ToxicLanguage` ya custom groundedness). Ek `ValidationResult` return karta hai
@@ -149,19 +218,19 @@ talking point, kam dependency.
 
 ---
 
-## backend/app/tools/tavily_search.py
+## backend/app/tools/tavily_search.py ⬜ (Phase 3)
 
 Tavily client wrapper. `tavily_search(query, max_results) -> List[str]` — sirf snippet text
 return karta hai (URL metadata abhi optional). Node ko clean interface deta hai.
 
-## backend/app/tools/vector_search.py
+## backend/app/tools/vector_search.py ✅
 
 Chroma similarity search wrapper — `retrieve` node aur ingestion script dono use karte hain.
 Ek jagah k / score-threshold tuning.
 
 ---
 
-## backend/main.py
+## backend/main.py ⬜ (Phase 5)
 
 FastAPI entrypoint. `build_crag_graph()` ek baar compile (module load pe), `POST /api/query`
 har request pe `graph.invoke(initial_state)`. Response me `answer`, `source_type`,
@@ -172,7 +241,7 @@ CORS: dev me `allow_origins=["*"]`, production me frontend domain tak restrict. 
 
 ---
 
-## backend/Dockerfile
+## backend/Dockerfile ✅
 
 1. `python:3.11-slim` base.
 2. `requirements.txt` pehle copy + install (layer caching).

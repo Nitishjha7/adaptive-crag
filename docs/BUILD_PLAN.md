@@ -21,7 +21,7 @@ aur kitna time lagega. Har session ke baad isko update karte rahenge (✅ mark k
 
 | Session | Phase | Deliverable | Status |
 |---|---|---|---|
-| 1 | Phase 1 + 2 | Chroma ingestion script + persistence, `config.py` (LLM + embedding factory), `CRAGState` schema, LangGraph skeleton (`retrieve` + `generate` + wiring), ek dummy query end-to-end chale | ⬜ |
+| 1 | Phase 1 + 2 | Chroma ingestion script + persistence, `config.py` (LLM + embedding factory), `CRAGState` schema, LangGraph skeleton (`retrieve` + `generate` + wiring), ek dummy query end-to-end chale | 🟡 code done, ingestion + wiring verified; real LLM call `GROQ_API_KEY` ka wait kar raha hai |
 | 2 | Phase 3 | `grade_documents` binary grader + conditional edge, `transform_query` rewrite, `tavily_search` tool + `web_search_fallback` node, dono paths verify | ⬜ |
 | 3 | Phase 4 + 5 | Guardrails AI `validators.py` + `validate_guardrails` node, FastAPI `POST /api/query` with step logs + `source_type`, `docker-compose.yml` chalu | ⬜ |
 | 4 | Phase 6 + 7 | React + Vite + Tailwind demo UI (ChatBox, SourceBadge, TraceViewer), `/api/` proxy, end-to-end wiring, local run verify, deployment | ⬜ |
