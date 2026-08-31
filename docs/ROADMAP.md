@@ -8,7 +8,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-**Phase 1 ✅ · Phase 2 ✅ (real LLM call pending) · Phase 3–7 ❌**
+**Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4–7 ❌ · real API run pending**
 
 - ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
 - ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /

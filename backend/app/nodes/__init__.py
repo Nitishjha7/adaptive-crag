@@ -1,9 +1,21 @@
 """Graph nodes. Har module ek `run(state) -> dict` expose karta hai.
 
-Phase 2 me sirf retrieve + generate wired hai. Baaki modules Phase 3/4 me
-bharenge — tab yahan import ho jayenge.
+Phase 3 tak wired: retrieve, grade_documents, transform_query,
+web_search_fallback, generate. `validate_guardrails` Phase 4 me aayega.
 """
 
-from app.nodes import generate, retrieve
+from app.nodes import (
+    generate,
+    grade_documents,
+    retrieve,
+    transform_query,
+    web_search_fallback,
+)
 
-__all__ = ["retrieve", "generate"]
+__all__ = [
+    "retrieve",
+    "grade_documents",
+    "transform_query",
+    "web_search_fallback",
+    "generate",
+]

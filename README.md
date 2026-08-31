@@ -9,20 +9,24 @@ a grading node decides whether the retrieved chunks actually answer the question
 falls back to the web when they don't — so you get grounded answers without paying the
 cost and latency of a web call on every query.
 
-> ## ⚠️ Status: design complete, implementation not started
+> ## ⚠️ Status: core graph built, API keys pending
 >
-> Every file under `backend/` is currently an empty scaffold. This README, the
-> technical spec, and the interview notes describe the **intended** system — they
-> are a design document, not a description of running code.
+> The corrective loop is implemented and its routing is verified. The API layer and
+> frontend are not written yet, and no run against the real Groq/Tavily APIs has
+> happened — there are no keys on this machine, so every LLM and search call so far
+> has been exercised against mocks.
 >
 > | Piece | State |
 > |---|---|
 > | Docs (README, spec, build plan, roadmap, interview notes) | ✅ complete |
-> | Repo scaffold, `docker-compose.yml`, `.env.example` | ✅ complete |
-> | Vector store ingestion, LangGraph nodes, FastAPI, frontend | ❌ not written |
+> | Phase 1 — Chroma ingestion, config, controlled corpus | ✅ built & run (7 docs → 22 chunks) |
+> | Phase 2 — `CRAGState`, LangGraph skeleton | ✅ built & verified |
+> | Phase 3 — grading, conditional edge, query transform, web fallback | ✅ built, routing verified with mocked LLM/search |
+> | Real end-to-end run against Groq + Tavily | ❌ needs `GROQ_API_KEY`, `TAVILY_API_KEY` |
+> | Phase 4–7 — guardrails, FastAPI, frontend, compose | ❌ not written |
 >
-> Build order is in [docs/ROADMAP.md](docs/ROADMAP.md). Until Phase 1 lands, do not
-> present this as a working project — describe it as designed and in progress.
+> Build order is in [docs/ROADMAP.md](docs/ROADMAP.md). Until a real run lands, describe
+> this as *built and being validated* — not as a working demo you have run.
 
 ## Tech Stack
 

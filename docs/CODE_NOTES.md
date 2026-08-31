@@ -4,7 +4,7 @@ Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad
 interview me) yaad rahe ki har cheez kyun li gayi.
 
 **Legend:** ✅ = likha ja chuka · ⬜ = abhi khaali (planned intent).
-Phase 1 + 2 ✅ ho chuke; Phase 3 se aage ⬜.
+Phase 1, 2, 3 ✅ ho chuke; Phase 4 se aage ⬜.
 
 ---
 
@@ -112,8 +112,10 @@ Phase 7 me proper `docker-compose.yml` isko replace kar dega.
 
 - `question` — original, kabhi mutate nahi hota.
 - `transformed_query` — sirf `transform_query` node set karta hai.
-- `documents` — `retrieve` append karta hai, `web_search_fallback` **replace** karta hai.
-  Additive reducer (`Annotated[list, operator.add]`) lagta hai retrieve ke liye.
+- `documents` — **overwrite** semantics (koi reducer nahi). `retrieve` set karta hai,
+  `web_search_fallback` **replace** karta hai. Yahan additive reducer *deliberately nahi*
+  lagaya: append karte to reject kiye hue local docs web snippets ke saath context me bane
+  rehte — wahi hallucination risk jise grading step hatane ke liye hai.
 - `relevance_score` — `"yes"` / `"no"`, conditional edge isi pe route karta hai.
 - `source_type` — `"vector_db"` default, fallback pe `"web_search"`. UI badge isi se.
 - `generation` — raw LLM answer.
@@ -122,15 +124,29 @@ Phase 7 me proper `docker-compose.yml` isko replace kar dega.
 
 ---
 
-## backend/app/graph/build_graph.py ✅ (Phase 2 skeleton)
+## backend/app/graph/build_graph.py ✅ (Phase 3 shape)
 
-Graph wiring — nodes register, edges + conditional edge define, `compile()`.
+Graph wiring — nodes register, edges define, `compile()`.
+
+### Abhi ka shape (Phase 3)
 
 - `START → retrieve → grade_documents`.
 - `grade_documents` pe conditional edge: `relevance_score == "yes"` → `generate`, warna
   → `transform_query`.
 - `transform_query → web_search_fallback → generate`.
-- `generate → validate_guardrails → END`.
+- `generate → END`. *(Phase 4 me beech me `validate_guardrails` aayega.)*
+
+**Chain kyun nahi, graph kyun — ab saaf dikhta hai:** `grade_documents` ke baad kaunsa node
+chalega ye compile time pe fixed nahi hai; runtime pe state padh ke decide hota hai. Linear
+chain ye express hi nahi kar sakti.
+
+**`decide_to_generate` alag function kyun:** routing logic aur grading logic alag rakhne se
+dono alag-alag test hote hain. Ye function deliberately trivial hai — saara faisla
+`grade_documents` me hota hai, yahan sirf uska result padha jaata hai.
+
+**Default `transform_query` kyun, `generate` nahi:** agar `relevance_score` kisi wajah se
+khaali reh jaye, to safe direction correction path hai — ek extra web call bhugto, lekin
+unverified context pe answer mat bolo.
 
 **Design choice:** fallback branch bhi wapas `generate` pe hi merge hota hai (do alag
 generate nodes nahi) — DRY, aur `generate` bas `state["documents"]` padhta hai, source
@@ -148,7 +164,7 @@ type se farak nahi padta.
 
 ---
 
-## backend/app/nodes/grade_documents.py ⬜ (Phase 3)
+## backend/app/nodes/grade_documents.py ✅
 
 **Project ka core #1.** LLM binary relevance grader.
 
@@ -162,7 +178,7 @@ se pehle. Yahi naive RAG se difference hai: verify-before-trust.
 
 ---
 
-## backend/app/nodes/transform_query.py ⬜ (Phase 3)
+## backend/app/nodes/transform_query.py ✅
 
 `transform_query` — natural language question → keyword-focused web search query.
 
@@ -172,7 +188,7 @@ se pehle. Yahi naive RAG se difference hai: verify-before-trust.
 
 ---
 
-## backend/app/nodes/web_search_fallback.py ⬜ (Phase 3)
+## backend/app/nodes/web_search_fallback.py ✅
 
 **Core #2.** Tavily se live web context.
 
@@ -218,7 +234,7 @@ talking point, kam dependency.
 
 ---
 
-## backend/app/tools/tavily_search.py ⬜ (Phase 3)
+## backend/app/tools/tavily_search.py ✅
 
 Tavily client wrapper. `tavily_search(query, max_results) -> List[str]` — sirf snippet text
 return karta hai (URL metadata abhi optional). Node ko clean interface deta hai.
