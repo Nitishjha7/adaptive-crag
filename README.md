@@ -9,6 +9,21 @@ a grading node decides whether the retrieved chunks actually answer the question
 falls back to the web when they don't — so you get grounded answers without paying the
 cost and latency of a web call on every query.
 
+> ## ⚠️ Status: design complete, implementation not started
+>
+> Every file under `backend/` is currently an empty scaffold. This README, the
+> technical spec, and the interview notes describe the **intended** system — they
+> are a design document, not a description of running code.
+>
+> | Piece | State |
+> |---|---|
+> | Docs (README, spec, build plan, roadmap, interview notes) | ✅ complete |
+> | Repo scaffold, `docker-compose.yml`, `.env.example` | ✅ complete |
+> | Vector store ingestion, LangGraph nodes, FastAPI, frontend | ❌ not written |
+>
+> Build order is in [docs/ROADMAP.md](docs/ROADMAP.md). Until Phase 1 lands, do not
+> present this as a working project — describe it as designed and in progress.
+
 ## Tech Stack
 
 | Layer | Technology |

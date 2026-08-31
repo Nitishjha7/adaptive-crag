@@ -5,6 +5,23 @@
 
 ---
 
+> ## ⚠️ Padhne se pehle — ye abhi bana nahi hai
+>
+> `backend/` ki saari files khaali hain. Ye doc **intended** system ka hai, chal
+> rahe code ka nahi. Interview me ise "banaya hai" bol dena aur interviewer ka
+> GitHub khol lena — sabse bada credibility risk hai, aur wo tumhare
+> **Self-Healing SQL Agent** pe bhi shak daal dega, jo actually bana hua hai.
+>
+> **Jab tak implementation nahi hoti, aise bolo:**
+> *"CRAG design kar chuka hoon — retrieval grading with conditional web fallback.
+> Architecture aur trade-offs pe detail me baat kar sakta hoon; implementation abhi
+> chal rahi hai."*
+>
+> Ye honest bhi hai aur architectural thinking bhi dikhata hai. Build order
+> [ROADMAP.md](ROADMAP.md) me hai. Implementation ke baad ye banner hata dena.
+
+---
+
 ## Table of Contents
 1. The 30-Second Pitch
 2. The Problem (Why This Project Exists)
