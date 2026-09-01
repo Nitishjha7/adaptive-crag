@@ -32,7 +32,8 @@ $Mounts = @(
     "-v", "${Backend}\vectorstore:/app/vectorstore",
     "-v", "${Backend}\ingest.py:/app/ingest.py",
     "-v", "${Backend}\main.py:/app/main.py",
-    "-v", "${Backend}\tests:/app/tests"
+    "-v", "${Backend}\tests:/app/tests",
+    "-v", "${Backend}\eval:/app/eval"
 )
 
 # .env repo root se - secrets image me bake nahi hote
@@ -60,6 +61,12 @@ switch ($Command) {
     }
     "test" {
         docker run --rm @Mounts @EnvArgs $Image python -m pytest tests/ -q
+    }
+    "eval" {
+        # Asli Groq + asli DuckDuckGo hit karta hai — tests ke ulat. Rate limit
+        # bachane ke liye smoke run: .\dev.ps1 eval --limit 5
+        $evalArgs = @("python", "-m", "eval.run_eval") + $Rest
+        docker run --rm @Mounts @EnvArgs $Image @evalArgs
     }
     "shell"  { docker run --rm -it @Mounts @EnvArgs $Image bash }
     default  { Write-Host "unknown command: $Command  (build | ingest | ask | test | serve | shell)" }
