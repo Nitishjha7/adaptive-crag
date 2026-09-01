@@ -24,5 +24,6 @@ def run(state: CRAGState) -> dict:
 
     return {
         "final_output": result.validated_output,
+        "guardrail_passed": result.passed,
         "logs": [f"validate_guardrails -> pass={result.passed} ({result.reason})"],
     }

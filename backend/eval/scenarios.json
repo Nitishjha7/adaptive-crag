@@ -1,0 +1,204 @@
+{
+  "_about": [
+    "20 labelled queries measuring whether the CRAG router sends each question",
+    "down the right path. `expected_route` is the label: 'local' means the corpus",
+    "in backend/data/ genuinely answers it, 'web' means it does not.",
+    "",
+    "Labels are derived from corpus coverage, not from watching the system run —",
+    "each case names the doc that covers it (or states that nothing does).",
+    "",
+    "`hard: true` marks cases where the surface form points the wrong way: a",
+    "question that sounds product-specific but is answered by the corpus, or one",
+    "that sounds conceptual but needs live data. Easy cases inflate the score;",
+    "these are the ones that actually test the grader.",
+    "",
+    "`expect_keywords` is a weak secondary signal on local cases only — did the",
+    "answer land near the right material. It is NOT the headline metric and it is",
+    "not checked on web cases, where the text comes from live search results."
+  ],
+
+  "cases": [
+    {
+      "id": 1,
+      "question": "Why is cosine similarity used for text embeddings instead of Euclidean distance?",
+      "expected_route": "local",
+      "source_doc": "01_vector_embeddings.md",
+      "why": "Covered directly: cosine ignores magnitude, which varies with text length.",
+      "expect_keywords": ["magnitude", "angle", "length"],
+      "hard": false,
+      "demo": true
+    },
+    {
+      "id": 2,
+      "question": "Why does chunk overlap matter when splitting documents?",
+      "expected_route": "local",
+      "source_doc": "02_chunking_strategies.md",
+      "why": "Covered: a sentence straddling a split point retrieves badly from neither chunk.",
+      "expect_keywords": ["boundary", "overlap", "split"],
+      "hard": false,
+      "demo": true
+    },
+    {
+      "id": 3,
+      "question": "Why does CRAG replace the local documents on fallback instead of merging them?",
+      "expected_route": "local",
+      "source_doc": "05_corrective_rag.md",
+      "why": "Covered explicitly: already-rejected documents would dilute the context.",
+      "expect_keywords": ["dilute", "replace", "irrelevant"],
+      "hard": false,
+      "demo": true
+    },
+    {
+      "id": 4,
+      "question": "What is the trade-off between small and large chunk sizes?",
+      "expected_route": "local",
+      "source_doc": "02_chunking_strategies.md",
+      "why": "Covered: small = precise but contextless, large = context but diluted.",
+      "expect_keywords": ["precise", "context", "dilute"],
+      "hard": false
+    },
+    {
+      "id": 5,
+      "question": "How does a recursive character splitter decide where to split text?",
+      "expected_route": "local",
+      "source_doc": "02_chunking_strategies.md",
+      "why": "Covered: tries separators in order, paragraph then line then sentence then word.",
+      "expect_keywords": ["separator", "paragraph", "sentence"],
+      "hard": false
+    },
+    {
+      "id": 6,
+      "question": "When should you use an approximate nearest neighbour index instead of exact search?",
+      "expected_route": "local",
+      "source_doc": "03_vector_databases.md",
+      "why": "Covered: exact is fine to roughly 100k vectors, ANN/HNSW beyond that.",
+      "expect_keywords": ["exact", "HNSW", "recall"],
+      "hard": false
+    },
+    {
+      "id": 7,
+      "question": "What is the difference between running Chroma embedded and in server mode?",
+      "expected_route": "local",
+      "source_doc": "03_vector_databases.md",
+      "why": "Covered: embedded = library writing to a directory, server = shared process.",
+      "expect_keywords": ["embedded", "process", "server"],
+      "hard": true,
+      "hard_why": "Names a specific product (Chroma), so it reads like a vendor-docs question - but the corpus covers exactly this."
+    },
+    {
+      "id": 8,
+      "question": "What is the lost in the middle problem in retrieval augmented generation?",
+      "expected_route": "local",
+      "source_doc": "04_naive_rag_failure_modes.md",
+      "why": "Covered: models attend to the beginning and end of long contexts.",
+      "expect_keywords": ["middle", "context", "attend"],
+      "hard": false
+    },
+    {
+      "id": 9,
+      "question": "What is HyDE and why does it help vector search?",
+      "expected_route": "local",
+      "source_doc": "06_query_transformation.md",
+      "why": "Covered: embed a hypothetical answer so the query sits in the corpus register.",
+      "expect_keywords": ["hypothetical", "embed", "answer"],
+      "hard": false
+    },
+    {
+      "id": 10,
+      "question": "What is the difference between a normal edge and a conditional edge in an agent graph?",
+      "expected_route": "local",
+      "source_doc": "07_agent_graphs_and_state.md",
+      "why": "Covered: conditional edges route on a function reading state at runtime.",
+      "expect_keywords": ["conditional", "runtime", "state"],
+      "hard": false
+    },
+    {
+      "id": 11,
+      "question": "Why can a naive RAG pipeline never say I don't know?",
+      "expected_route": "local",
+      "source_doc": "04_naive_rag_failure_modes.md",
+      "why": "Covered: generation is unconditional, so there is no abstention path.",
+      "expect_keywords": ["abstention", "unconditional", "relevance"],
+      "hard": false
+    },
+    {
+      "id": 12,
+      "question": "How many dimensions does the BAAI bge-small-en-v1.5 embedding model produce?",
+      "expected_route": "local",
+      "source_doc": "01_vector_embeddings.md",
+      "why": "Covered: 384 dimensions, stated by name in the corpus.",
+      "expect_keywords": ["384"],
+      "hard": true,
+      "hard_why": "A specific model name and a specific number - looks exactly like the vendor-spec questions that SHOULD go to web. The corpus happens to name it."
+    },
+    {
+      "id": 13,
+      "question": "What is the Model Context Protocol and what problem does it solve?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "The deliberate corpus gap. A relevant-sounding agent topic with zero mention in backend/data/.",
+      "hard": false,
+      "demo": true
+    },
+    {
+      "id": 14,
+      "question": "What is the current pricing of the Tavily search API?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Vendor pricing. Corpus carries no product or pricing detail by design.",
+      "hard": false,
+      "demo": true
+    },
+    {
+      "id": 15,
+      "question": "What are the current free tier rate limits on the Groq API?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live vendor limits. Nothing in the corpus, and it changes over time.",
+      "hard": false
+    },
+    {
+      "id": 16,
+      "question": "Which chat models are available on Groq right now?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live model catalogue. This project already broke once when a model id was retired.",
+      "hard": false
+    },
+    {
+      "id": 17,
+      "question": "What changed in the most recent LangGraph release?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Release notes. The corpus explains graph concepts but carries no version history.",
+      "hard": true,
+      "hard_why": "Sits on top of a topic the corpus DOES cover (agent graphs), so retrieval returns confident-looking chunks that do not answer the question. Exactly the retrieval-mismatch case grading exists for."
+    },
+    {
+      "id": 18,
+      "question": "How much does OpenAI charge per million tokens for its embedding models?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Vendor pricing. Corpus discusses embedding trade-offs but never cost figures.",
+      "hard": true,
+      "hard_why": "The word 'embedding' pulls doc 01 strongly, but doc 01 has no pricing at all."
+    },
+    {
+      "id": 19,
+      "question": "Which vector database companies raised funding this year?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Company news. Corpus covers vector DB architecture, not the market.",
+      "hard": true,
+      "hard_why": "'Vector database' retrieves doc 03 with high similarity, and doc 03 answers a completely different question."
+    },
+    {
+      "id": 20,
+      "question": "What is the context window of the newest Claude model?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live model spec. No model specifications anywhere in the corpus.",
+      "hard": false
+    }
+  ]
+}

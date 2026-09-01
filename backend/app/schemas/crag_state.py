@@ -49,6 +49,14 @@ class CRAGState(TypedDict, total=False):
     final_output: str
     """Guardrails-validated answer — yahi user ko jaata hai."""
 
+    guardrail_passed: bool
+    """Guardrails clean nikle ya nahi (groundedness + PII, dono milake).
+
+    Ye `logs` me bhi likha jaata hai, par wahan se parse karna string matching
+    hai — eval harness ko groundedness rate measure karna hai, aur usko ek
+    structured field chahiye jo log ka wording badalne pe na toote.
+    """
+
     # --- trace -------------------------------------------------------------
     logs: Annotated[List[str], operator.add]
     """Node-by-node execution trace. Additive — har node ek line append karta hai."""
