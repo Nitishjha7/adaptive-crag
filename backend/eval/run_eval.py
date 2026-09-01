@@ -305,9 +305,12 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
     print(f"  Groundedness pass     : {f('groundedness_pass_pct')}")
     print(f"  Keyword hit (local)   : {f('keyword_hit_pct')}")
     print()
-    print(f"  LLM calls / query     : local {s['llm_calls_local_route']}  vs  web {s['llm_calls_web_route']}"
+    def n(v, suffix: str = "") -> str:
+        return "n/a" if v in (None, 0) else f"{v}{suffix}"
+
+    print(f"  LLM calls / query     : local {n(s['llm_calls_local_route'])}  vs  web {n(s['llm_calls_web_route'])}"
           "   <- the cost of correcting")
-    print(f"  Mean latency          : local {s['mean_ms_local_route']} ms  vs  web {s['mean_ms_web_route']} ms")
+    print(f"  Mean latency          : local {n(s['mean_ms_local_route'], ' ms')}  vs  web {n(s['mean_ms_web_route'], ' ms')}")
     print("      (latency is throttling-dominated at this scale — not a route signal, see RESULTS.md)")
     if s["errored"]:
         print(f"\n  ⚠️  {s['errored']} case(s) errored out and were excluded from scoring")

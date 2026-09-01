@@ -48,8 +48,20 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 - ⚠️ **Model badalna pada:** `llama-3.3-70b-versatile` is Groq account pe available nahi hai
   (404 `model_not_found`). `/v1/models` list karke `openai/gpt-oss-120b` pe switch kiya —
   yahi wo cheez hai jo mocks kabhi nahi pakadte
-- 🟡 **Abhi bhi pending:** eval harness. Routing 5/5 sahi aayi, par ye ek chhota controlled
-  set hai — koi accuracy percentage claim karne layak data abhi nahi hai
+- ✅ **Phase 8 — eval harness ban gaya** (`backend/eval/`, `.\dev.ps1 eval`). 20 labelled
+  queries, routing **20/20**, **0 missed fallbacks**, groundedness 90–95%, aur per-route
+  LLM call count (local 3.0 vs web 4.0). Poora analysis
+  [backend/eval/RESULTS.md](../backend/eval/RESULTS.md) me.
+  **Do cheezein jo eval ne pakdi:**
+  1. Latency comparison **confounded tha** — cases file order me chal rahe the (pehle
+     saare local, phir saare web), aur Groq ki throttling case 5 ke baad shuru hoti hai,
+     to poora slowdown local bucket me gira. `interleave()` default kiya. Phir bhi
+     latency route ka signal nahi deti — isliye cost argument ab **call counts** pe khada
+     hai, jo exact hai.
+  2. Groundedness checker ka ek **consistent false positive** (case #1) — answer verbatim
+     corpus se hai phir bhi flag hota hai, teeno runs me.
+  ⚠️ 100% ka matlab "router perfect hai" nahi, "labelled task aasan hai" hai — corpus gap
+  categorical hai. RESULTS.md me likha hai ki eval ko sach me hard kaise banaya jaaye.
 - ✅ **Test suite** — `backend/tests/`, 27 tests, `.\dev.ps1 test`. Dono routes, docs-replace
   invariant, search failure, guardrails ke saare case, aur API shape covered
 - ✅ **Phase 6** — React + Vite + Tailwind UI: `ChatBox` (fixed demo queries ke saath),

@@ -9,12 +9,12 @@ a grading node decides whether the retrieved chunks actually answer the question
 falls back to the web when they don't — so you get grounded answers without paying the
 cost and latency of a web call on every query.
 
-> ## Status: backend working end-to-end; no UI yet
+> ## Status: full stack works; measured; not deployed
 >
-> The corrective loop and the API are implemented and **verified against the real Groq
-> API and live DuckDuckGo search**. All five fixed demo queries in
-> [backend/data/README.md](backend/data/README.md) take the route they are supposed to
-> (3 local, 2 web fallback).
+> The corrective loop, the API and the UI are implemented and **verified against the
+> real Groq API and live DuckDuckGo search** — `docker compose up` gives a working
+> system. Routing is now **measured, not asserted**: 20 labelled queries, 20/20
+> correct, 0 missed fallbacks ([results](backend/eval/RESULTS.md)).
 >
 > | Piece | State |
 > |---|---|
@@ -127,7 +127,9 @@ don't need a rebuild:
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ingest [-Reset]    # embed backend/data/ into Chroma
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 27 tests
+.\dev.ps1 test               # 27 tests, no API key needed
+.\dev.ps1 eval               # 20-case routing eval (real LLM + live web calls)
+.\dev.ps1 eval --limit 6     # smoke run, saves rate limit
 .\dev.ps1 serve -Port 8042   # FastAPI alone
 ```
 
@@ -146,6 +148,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md). Short version:
 - **Phase 5** — FastAPI `/api/query` endpoint with step logs
 - **Phase 6** — React + Vite + Tailwind demo UI (source badges, trace viewer)
 - **Phase 7** — Docker Compose + deployment
+- **Phase 8** — Routing eval harness (`backend/eval/`) — ✅ done, [results](backend/eval/RESULTS.md)
 
 ## Positioning
 
