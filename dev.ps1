@@ -5,7 +5,9 @@
 #   .\dev.ps1 ingest             # docs -> chroma (incremental)
 #   .\dev.ps1 ingest -Reset      # wipe karke dobara build
 #   .\dev.ps1 ask "why does chunk overlap matter?"
-#   .\dev.ps1 test               # pytest suite
+#   .\dev.ps1 test               # pytest suite (no API key needed)
+#   .\dev.ps1 eval               # routing eval - ASLI Groq + DuckDuckGo calls
+#   .\dev.ps1 eval --limit 5     # smoke run, rate limit bachane ke liye
 #   .\dev.ps1 serve [-Port 8042] # FastAPI -> http://localhost:PORT/docs
 #   .\dev.ps1 shell              # container ke andar bash
 #

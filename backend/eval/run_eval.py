@@ -155,8 +155,15 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     local_cases = [r for r in ok if r["expected_route"] == "local"]
     went_web = [r for r in ok if r["observed_route"] == "web"]
 
-    def pct(n: int, d: int) -> float:
-        return round(100.0 * n / d, 1) if d else 0.0
+    def pct(n: int, d: int):
+        """Denominator zero ho to `None`, `0.0` nahi.
+
+        Ye cosmetic nahi hai: `--only local` chalane pe fallback recall ka
+        denominator zero hota hai, aur "0.0%" padhne me *failure* lagta hai
+        jabki sach ye hai ki wo metric is subset pe defined hi nahi. Ek eval ka
+        kaam hi galat impression na dena hai.
+        """
+        return round(100.0 * n / d, 1) if d else None
 
     hard = [r for r in ok if r.get("hard")]
     easy = [r for r in ok if not r.get("hard")]
@@ -224,13 +231,17 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
             f"{mark:<4} {('yes' if r.get('hard') else ''):<5} {r['elapsed_ms']:>6}  {r['question'][:34]}"
         )
 
+    def f(key: str) -> str:
+        v = s[key]
+        return "n/a" if v is None else f"{v}%"
+
     print("\n" + "-" * 72)
-    print(f"  Routing accuracy      : {s['routing_accuracy_pct']}%  ({s['routing_correct']}/{s['scored']})")
-    print(f"    on easy cases       : {s['accuracy_easy_pct']}%")
-    print(f"    on hard cases       : {s['accuracy_hard_pct']}%  ({s['hard_case_count']} cases)")
+    print(f"  Routing accuracy      : {f('routing_accuracy_pct')}  ({s['routing_correct']}/{s['scored']})")
+    print(f"    on easy cases       : {f('accuracy_easy_pct')}")
+    print(f"    on hard cases       : {f('accuracy_hard_pct')}  ({s['hard_case_count']} cases)")
     print()
-    print(f"  Fallback recall       : {s['fallback_recall_pct']}%   <- the metric that matters")
-    print(f"  Fallback precision    : {s['fallback_precision_pct']}%")
+    print(f"  Fallback recall       : {f('fallback_recall_pct')}   <- the metric that matters")
+    print(f"  Fallback precision    : {f('fallback_precision_pct')}")
     print()
     print(f"  Missed fallbacks      : {s['missed_fallbacks']}  {s['missed_fallback_ids'] or ''}   (expensive error)")
     print(f"  Unnecessary fallbacks : {s['unnecessary_fallbacks']}  {s['unnecessary_fallback_ids'] or ''}   (cheap error)")
