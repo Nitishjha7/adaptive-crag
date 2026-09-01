@@ -26,12 +26,39 @@ cost and latency of a web call on every query.
 > | Phase 6 — React UI (chat, source badge, relevance pill, trace viewer) | ✅ |
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Test suite — 27 tests (`.\dev.ps1 test`) | ✅ |
+> | Evaluation harness — 20 labelled queries (`.\dev.ps1 eval`) | ✅ **routing 20/20, 0 missed fallbacks** |
 > | Deployment (Render + Vercel) | ❌ not done |
-> | Evaluation harness | ❌ **no accuracy has been measured** |
->
-> Routing was correct on all five demo queries, but that is a small controlled set, not a
-> benchmark — don't quote an accuracy figure until the eval harness in
-> [docs/ROADMAP.md](docs/ROADMAP.md) exists.
+
+## Measured: does the router actually route?
+
+`backend/eval/` turns "routing looked right on the demo queries" into a number —
+20 labelled questions, each marked for whether the local corpus genuinely answers it.
+
+| Metric | Result |
+|---|---|
+| Routing accuracy | **20/20 (100%)**, stable across 3 runs |
+| — on the 5 deliberately misleading cases | 5/5 |
+| **Missed fallbacks** (answered locally when it should have searched) | **0** |
+| Unnecessary fallbacks | 0 |
+| Groundedness pass rate | 90–95% |
+| **LLM calls per query** | **local 3.0 · web 4.0** |
+
+Two things worth saying out loud, because the number alone flatters the system:
+
+- **100% means the labelled task is easy, not that the router is perfect.** The
+  corpus gap is categorical by design — concepts in, vendor/pricing/news out — so
+  most web cases differ along an obvious axis. It does *not* show that routing
+  survives an *ambiguous* gap, where the corpus half-covers a topic. [RESULTS.md](backend/eval/RESULTS.md)
+  says what would make the eval genuinely hard.
+- **The cost argument rests on call counts, not latency.** Correction costs one
+  extra LLM call (+33%) and one web round trip, only on queries that need it.
+  Latency was tried first and **failed as a measurement** — Groq's throttling
+  swamps the route difference, and the first ordering produced a confounded
+  result that looked convincing. That story is in RESULTS.md; it is the more
+  useful half of this eval.
+
+The exit code fails when missed fallbacks exceed the threshold, so a prompt or
+model change that quietly breaks routing fails the way a test does.
 
 ## Tech Stack
 
