@@ -59,6 +59,27 @@ DEFAULT_SCENARIOS = HERE / "scenarios.json"
 ROUTE_OF_SOURCE = {"vector_db": "local", "web_search": "web"}
 
 
+# Kaunse node LLM call karte hain. `retrieve` aur `web_search_fallback` nahi —
+# ek vector search hai, doosra HTTP search. Ye list graph ke saath badalni padegi
+# agar koi naya LLM node aaye; isliye ek jagah rakhi hai.
+LLM_NODES = ("grade_documents", "transform_query", "generate", "validate_guardrails")
+
+
+def count_llm_calls(logs: List[str]) -> int:
+    """Trace se LLM calls gino.
+
+    **Latency ki jagah yahi metric kyun.** "Adaptive kyun, hamesha web search
+    kyun nahi" ka poora argument cost pe khada hai. Latency se wo cost measure
+    karne ki koshish ki thi aur wo fail hui — Groq ki throttling itni hawi hai
+    ki route ka farak usme doob jaata hai (detail RESULTS.md me).
+
+    Call count us problem se azaad hai: ye graph ke structure se aata hai, timing
+    se nahi. Do baar chalao, wahi number milega. Yahi wo cheez hai jo asli me
+    claim ki ja sakti hai.
+    """
+    return sum(1 for line in logs if line.split(" ")[0] in LLM_NODES)
+
+
 # ---------------------------------------------------------------------------
 # running one case
 # ---------------------------------------------------------------------------
@@ -125,6 +146,8 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             "keywords_found": hit,
             "keyword_hit": keyword_hit,
             "elapsed_ms": elapsed_ms,
+            "llm_calls": count_llm_calls(final.get("logs", [])),
+            "nodes_run": len(final.get("logs", [])),
             "attempts": attempt + 1,
             "answer": answer[:400],
             "error": "",
@@ -202,6 +225,9 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     def mean_ms(rows: List[Dict[str, Any]]) -> int:
         return int(sum(r["elapsed_ms"] for r in rows) / len(rows)) if rows else 0
 
+    def mean_calls(rows: List[Dict[str, Any]]):
+        return round(sum(r["llm_calls"] for r in rows) / len(rows), 2) if rows else None
+
     return {
         "total_cases": len(results),
         "errored": len(errored),
@@ -234,6 +260,8 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         "mean_ms_local_route": mean_ms([r for r in ok if r["observed_route"] == "local"]),
         "mean_ms_web_route": mean_ms([r for r in ok if r["observed_route"] == "web"]),
+        "llm_calls_local_route": mean_calls([r for r in ok if r["observed_route"] == "local"]),
+        "llm_calls_web_route": mean_calls([r for r in ok if r["observed_route"] == "web"]),
 
         "local_case_count": len(local_cases),
         "web_case_count": len(web_cases),
@@ -277,8 +305,10 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
     print(f"  Groundedness pass     : {f('groundedness_pass_pct')}")
     print(f"  Keyword hit (local)   : {f('keyword_hit_pct')}")
     print()
-    print(f"  Mean latency local    : {s['mean_ms_local_route']} ms")
-    print(f"  Mean latency web      : {s['mean_ms_web_route']} ms   <- the cost of correcting")
+    print(f"  LLM calls / query     : local {s['llm_calls_local_route']}  vs  web {s['llm_calls_web_route']}"
+          "   <- the cost of correcting")
+    print(f"  Mean latency          : local {s['mean_ms_local_route']} ms  vs  web {s['mean_ms_web_route']} ms")
+    print("      (latency is throttling-dominated at this scale — not a route signal, see RESULTS.md)")
     if s["errored"]:
         print(f"\n  ⚠️  {s['errored']} case(s) errored out and were excluded from scoring")
     if s["total_retries"]:
