@@ -133,6 +133,34 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
     return {}  # unreachable, loop hamesha return karta hai
 
 
+def interleave(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """local aur web cases ko alternate karo.
+
+    **Ye ek asli bug ka fix hai, cosmetic nahi.** Pehle run me cases file order
+    me chale — pehle saare 12 local, phir saare 8 web. Result: case #1-4 me
+    2-8 sec lage, aur #5 se aage har case 15-22 sec, chahe route koi bhi ho.
+    Yaani Groq sustained load pe throttle kar raha tha, aur wo slowdown poora ka
+    poora local bucket me gir gaya.
+
+    Us run ka "local 13.7s vs web 18.5s" comparison isliye **route ka cost measure
+    kar hi nahi raha tha** — wo position ka cost measure kar raha tha. Aur yahi
+    number us poore argument ki jaan hai ki "hamesha web search kyun nahi".
+
+    Alternate karne se throttling dono buckets pe barabar padti hai, to difference
+    wapas route ka ho jaata hai. Isiliye ye default hai; `--order file` sirf
+    reproduce karne ke liye rakha hai.
+    """
+    local = [c for c in cases if c["expected_route"] == "local"]
+    web = [c for c in cases if c["expected_route"] == "web"]
+    out: List[Dict[str, Any]] = []
+    for i in range(max(len(local), len(web))):
+        if i < len(local):
+            out.append(local[i])
+        if i < len(web):
+            out.append(web[i])
+    return out
+
+
 # ---------------------------------------------------------------------------
 # scoring
 # ---------------------------------------------------------------------------
@@ -271,11 +299,15 @@ def main() -> int:
                    help="run only cases with this expected route")
     p.add_argument("--max-missed-fallbacks", type=int, default=1,
                    help="exit non-zero above this many missed fallbacks (the expensive error)")
+    p.add_argument("--order", choices=["interleave", "file"], default="interleave",
+                   help="case order; 'interleave' alternates local/web (default)")
     args = p.parse_args()
 
     cases = json.loads(Path(args.scenarios).read_text(encoding="utf-8"))["cases"]
     if args.only:
         cases = [c for c in cases if c["expected_route"] == args.only]
+    if args.order == "interleave":
+        cases = interleave(cases)
     if args.limit:
         cases = cases[: args.limit]
 
