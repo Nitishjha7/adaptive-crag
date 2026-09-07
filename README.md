@@ -150,6 +150,67 @@ See [docs/ROADMAP.md](docs/ROADMAP.md). Short version:
 - **Phase 7** — Docker Compose + deployment
 - **Phase 8** — Routing eval harness (`backend/eval/`) — ✅ done, [results](backend/eval/RESULTS.md)
 
+## Planned extensions
+
+**None of the following is built.** They are ranked by whether they strengthen the thesis
+of this project — *measure the corrective loop, then improve it* — rather than by how well
+they demo.
+
+### Worth building next
+
+**Evaluation dashboard.** Render `backend/eval/` output in the UI: routing accuracy, missed
+vs unnecessary fallbacks, groundedness rate, LLM calls per route. The data already exists as
+JSON, so this is presentation rather than new measurement — and it puts the honest caveats
+from [RESULTS.md](backend/eval/RESULTS.md) on screen next to the numbers, where they belong.
+
+**Knowledge base manager.** Upload, delete and re-index documents from the UI, with chunk
+count and last-indexed time. The reason this beats the other UI ideas: it makes the corpus
+gap *manipulable live*. An interviewer can add a document about a topic that currently
+routes to the web, re-index, ask the same question, and watch the route flip to local. That
+demonstrates the grading loop far better than any static badge.
+
+**Feedback loop.** 👍/👎 plus a reason (`wrong source`, `not grounded`, `outdated`),
+persisted, and convertible into new labelled eval cases. This closes the loop the eval
+harness opens — real disagreements become the ambiguous test cases the current 20-case set
+admits it lacks.
+
+### Needs a design decision first
+
+**Multi-source answers (local + web combined).** This **contradicts a documented decision**:
+on fallback the pipeline deliberately *replaces* local documents rather than merging them,
+because they were just graded irrelevant and keeping them dilutes the context — see
+[docs/CODE_NOTES.md](docs/CODE_NOTES.md). Merging isn't wrong, but it can't be bolted on:
+it needs the binary grader to become three-way (fully / partially / not relevant) so
+"partially relevant" is an actual state. Ship the three-way grader first, re-run the eval,
+then merge — otherwise it silently reintroduces the failure mode the grading step exists to
+remove.
+
+**Confidence score.** A single `Confidence: 92%` is only as honest as its inputs, and today
+those inputs are two binaries (`grade: yes/no`, `grounded: yes/no`). Combining them into a
+two-decimal percentage invents precision that isn't there, and an interviewer who asks "why
+92 and not 85?" would get no real answer. It becomes defensible only on top of continuous
+signal the pipeline doesn't yet surface — retrieval distances (already available via
+`similarity_search_with_scores`), grader token logprobs, snippet agreement.
+
+### Partly redundant with what exists
+
+**Cost & performance analytics.** LLM calls per query is *already* the headline cost metric
+(local 3.0 · web 4.0), and token usage plus estimated cost are an easy addition since Groq
+returns usage on every response. But the latency half needs care: latency was already tried
+as an eval metric and **failed** — Groq's throttling swamps the route difference. A latency
+panel would resurrect a number this project has already shown to be unreliable on a free
+tier, so label it as indicative, not measured.
+
+**Source quality scoring** (relevance · freshness · authority). Relevance and groundedness
+are already computed. Freshness and authority need metadata the pipeline doesn't collect —
+DuckDuckGo gives a URL and a snippet, no publication date — so this means a date-extraction
+step and a domain-authority heuristic, both of which are guesses worth labelling as guesses.
+
+**Query intelligence.** The rewritten query is already surfaced in the UI, and the trace
+already shows why the fallback fired. The genuinely new part is *local coverage* — and that
+one is real, because retrieval distances are already available and would give an honest
+"how close was the local corpus" number instead of a synthesised one.
+
 ## Positioning
 
 Part of an **"Agentic Self-Correcting Systems"** portfolio theme alongside the
