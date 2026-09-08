@@ -14,7 +14,25 @@
     "",
     "`expect_keywords` is a weak secondary signal on local cases only — did the",
     "answer land near the right material. It is NOT the headline metric and it is",
-    "not checked on web cases, where the text comes from live search results."
+    "not checked on web cases, where the text comes from live search results.",
+    "",
+    "--- expected_route: 'ambiguous' (cases 21-28) --------------------------",
+    "",
+    "These are the cases RESULTS.md said were missing: the corpus half-covers the",
+    "topic, so two reasonable people would label them differently. Each one names",
+    "the exact passage that makes it arguable, in `disagreement`.",
+    "",
+    "They are NOT scored for correctness — they carry no right answer, and mixing",
+    "an arguable label into routing accuracy would make the headline number",
+    "undefendable. That is precisely why they were left out of the first set.",
+    "",
+    "They are scored for STABILITY instead: run the same question several times",
+    "(`--repeat 3`) and check whether the router picks the same side every time.",
+    "Which side it picks is a judgement call; flipping between sides on identical",
+    "input is not — that is non-determinism, and it is a real defect.",
+    "",
+    "This is also the metric that makes future retrieval work measurable. Routing",
+    "accuracy is pinned at 100% and cannot improve; stability on these cases can."
   ],
 
   "cases": [
@@ -199,6 +217,71 @@
       "source_doc": null,
       "why": "Live model spec. No model specifications anywhere in the corpus.",
       "hard": false
+    },
+
+    {
+      "id": 21,
+      "question": "How does Self-RAG differ from CRAG?",
+      "expected_route": "ambiguous",
+      "source_doc": "05_corrective_rag.md",
+      "why": "Doc 05 mentions Self-RAG in exactly one clause: 'sits in the same family as Self-RAG, which has a model critique its own retrieval and generation'. A careful reader can derive a difference from that; a strict reader would say one clause is not a comparison.",
+      "disagreement": "Is a single defining clause enough to answer a 'how does X differ' question?"
+    },
+    {
+      "id": 22,
+      "question": "How does the HNSW index actually work internally?",
+      "expected_route": "ambiguous",
+      "source_doc": "03_vector_databases.md",
+      "why": "Doc 03 names HNSW and gives the trade-off ('trades a small amount of recall for a very large speed gain by searching a navigable graph'). It never explains layers, neighbour selection, or graph construction.",
+      "disagreement": "The corpus answers what HNSW is for, not how it works. 'Actually work internally' points past what is there."
+    },
+    {
+      "id": 23,
+      "question": "Which language models suffer most from the lost-in-the-middle problem?",
+      "expected_route": "ambiguous",
+      "source_doc": "04_naive_rag_failure_modes.md",
+      "why": "Doc 04 explains the phenomenon in full but names no model and gives no magnitude.",
+      "disagreement": "Phenomenon fully covered, the 'which models' half not at all. Half-covered by construction."
+    },
+    {
+      "id": 24,
+      "question": "Should I upgrade my embedding model from 384 to 1024 dimensions?",
+      "expected_route": "ambiguous",
+      "source_doc": "01_vector_embeddings.md",
+      "why": "Doc 01 states both dimension counts and says the retrieval-quality difference is usually smaller than the difference good chunking makes. It stops short of a recommendation.",
+      "disagreement": "The trade-off is covered; the decision is not. Whether that answers 'should I' is a judgement call."
+    },
+    {
+      "id": 25,
+      "question": "Does the 10-15% chunk overlap guidance also apply to source code files?",
+      "expected_route": "ambiguous",
+      "source_doc": "02_chunking_strategies.md",
+      "why": "Doc 02 gives the 10-15% figure for prose and describes structure-aware splitting for Markdown/HTML. Code is never mentioned.",
+      "disagreement": "The number is in the corpus but its domain of validity is not. Generalising it is exactly the kind of unsupported step the grader should catch."
+    },
+    {
+      "id": 26,
+      "question": "Should I use Chroma or Pinecone for a production RAG system?",
+      "expected_route": "ambiguous",
+      "source_doc": "03_vector_databases.md",
+      "why": "Doc 03 covers embedded vs server mode, which is the real axis behind this question, but names no hosted vendor — Pinecone appears nowhere in the corpus.",
+      "disagreement": "The underlying concept is covered; the specific products are not."
+    },
+    {
+      "id": 27,
+      "question": "What benchmark results did the Corrective RAG paper report?",
+      "expected_route": "ambiguous",
+      "source_doc": "05_corrective_rag.md",
+      "why": "Doc 05 cites 'Yan et al. in 2024' and describes the method, but reports no numbers or benchmarks.",
+      "disagreement": "The corpus identifies the paper, which may look like coverage to the grader, while containing none of what was asked for."
+    },
+    {
+      "id": 28,
+      "question": "Is 800 characters a good chunk size for long legal contracts?",
+      "expected_route": "ambiguous",
+      "source_doc": "02_chunking_strategies.md",
+      "why": "Doc 02 offers 800 as 'a common starting point' for general text and explains the size trade-off. It says nothing about legal documents or any other domain.",
+      "disagreement": "A general default is present; its applicability to a named domain is not."
     }
   ]
 }

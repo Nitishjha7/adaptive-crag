@@ -14,15 +14,20 @@
     "accuracy_easy_pct": 100.0,
     "accuracy_hard_pct": 100.0,
     "hard_case_count": 5,
-    "groundedness_pass_pct": 90.0,
+    "groundedness_pass_pct": 85.0,
     "keyword_hit_pct": 100.0,
-    "mean_ms_local_route": 15720,
-    "mean_ms_web_route": 14721,
+    "mean_ms_local_route": 14998,
+    "mean_ms_web_route": 17318,
     "llm_calls_local_route": 3.0,
     "llm_calls_web_route": 4.0,
     "local_case_count": 12,
     "web_case_count": 8,
-    "total_retries": 0
+    "total_retries": 1,
+    "ambiguous_cases": 0,
+    "ambiguous_stability_pct": null,
+    "ambiguous_unstable_ids": [],
+    "ambiguous_went_web": 0,
+    "ambiguous_detail": []
   },
   "results": [
     {
@@ -46,11 +51,11 @@
         "length"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 8900,
+      "elapsed_ms": 5816,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "\u26a0\ufe0f This answer could not be fully verified against the retrieved context \u2014 treat it with caution.\n\nCosine similarity is preferred because it measures the angle between vectors and ignores their magnitude, and embedding models often produce vectors whose length varies with text length rather than with meaning. By focusing on direction alone, cosine similarity captures semantic similarity more relia",
+      "answer": "\u26a0\ufe0f This answer could not be fully verified against the retrieved context \u2014 treat it with caution.\n\nCosine similarity is preferred because it measures the angle between vectors and ignores their magnitude, which in text embeddings often varies with text length rather than meaning. By focusing on direction alone, cosine better captures semantic similarity, whereas Euclidean distance would be influen",
       "error": ""
     },
     {
@@ -66,11 +71,11 @@
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 5312,
+      "elapsed_ms": 8175,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "The Model Context Protocol (MCP) is an open\u2011source, open\u2011standard interface that lets AI models\u2014such as large language models\u2014dynamically connect to external tools, services, and data sources. It solves the integration problem of how language models access and share data with the systems where that data resides, providing a standardized way to link AI assistants to content repositories, business t",
+      "answer": "The Model Context Protocol (MCP) is an open\u2011source, open\u2011standard interface that lets AI models\u2014such as large language models\u2014dynamically connect to external tools, services, and data sources. It solves the problem of having no universal, standardized way for AI assistants to integrate with the systems where data lives, enabling more intelligent, relevant responses by standardizing how models acce",
       "error": ""
     },
     {
@@ -89,15 +94,16 @@
         "split"
       ],
       "keywords_found": [
+        "boundary",
         "overlap",
         "split"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 3068,
+      "elapsed_ms": 2354,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "Chunk overlap ensures that consecutive chunks share a portion of text at their boundaries, so a sentence that spans a split point isn\u2019t broken across two separate chunks. Without overlap, such split sentences may be incomplete in each chunk, causing poor retrieval performance. Overlapping about 10\u201115\u202f% of the chunk size preserves sentence integrity and improves matching.",
+      "answer": "Chunk overlap ensures that consecutive chunks share some boundary text, so a sentence that would otherwise be split between two chunks remains intact in at least one chunk. Without this overlap, the fragmented sentence may not be retrieved effectively because neither chunk contains the full context. Overlapping 10\u201115\u202f% of the chunk size therefore preserves sentence continuity and improves retrieva",
       "error": ""
     },
     {
@@ -108,16 +114,16 @@
       "routed_correctly": true,
       "hard": false,
       "relevance_score": "no",
-      "transformed_query": "Tavily search API current pricing",
+      "transformed_query": "Tavily search API pricing current",
       "guardrail_passed": true,
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 5822,
+      "elapsed_ms": 8237,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "The Tavily search API provides\u202f1,000 free credits each month. After that, paid options are\u202f$30\u202fper month for a plan that includes\u202f4,000\u202fcredits (or\u202f$0.008\u202fper credit on a pay\u2011as\u2011you\u2011go basis). A basic search consumes\u202f1\u202fcredit and an advanced search consumes\u202f2\u202fcredits. (Sources: July\u202f6\u202f2026 and June\u202f3\u202f2026).",
+      "answer": "The Tavily search API provides a free tier of\u202f1,000\u202fcredits each month. Beyond that, usage is billed at\u202f$0.008\u202fper credit on a pay\u2011as\u2011you\u2011go basis. In addition, there are monthly subscription plans ranging from\u202f$30\u202fto\u202f$500\u202fthat include volume\u2011discounted credit bundles.",
       "error": ""
     },
     {
@@ -141,7 +147,7 @@
         "irrelevant"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 9395,
+      "elapsed_ms": 13169,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
@@ -156,16 +162,16 @@
       "routed_correctly": true,
       "hard": false,
       "relevance_score": "no",
-      "transformed_query": "Groq API current free tier rate limits",
+      "transformed_query": "Groq API free tier rate limits current",
       "guardrail_passed": true,
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 14396,
+      "elapsed_ms": 15950,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "The free\u2011tier Groq API allows\u202fup to\u202f30 requests per minute,\u202f6,000\u202fto\u202f30,000 tokens per minute (depending on the model), and\u202f1,000\u202fto\u202f14,400 requests per day. Whisper speech\u2011to\u2011text is also free, with a limit of\u202f2,000 audio requests. Rate limits are applied at the organization level, not per individual user.",
+      "answer": "The free tier of the Groq API allows up to\u202f30\u202frequests per minute and\u202f1,000\u202frequests per day. This applies to all models on the free tier.",
       "error": ""
     },
     {
@@ -189,11 +195,11 @@
         "dilute"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 20904,
+      "elapsed_ms": 18948,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "Small chunks (\u2248200\u2011400\u202fcharacters) produce very precise embeddings that match queries well, but they often miss the surrounding context needed to formulate a complete answer. Large chunks (\u22651500\u202fcharacters) retain more context, yet the embedding becomes diluted, causing the relevant sentence to be averaged with unrelated text and reducing match accuracy. Thus, the trade\u2011off is between precision (s",
+      "answer": "Small chunks (\u2248200\u2011400\u202fcharacters) produce very precise embeddings that match queries well, but they often omit the surrounding context needed to answer a question. Large chunks (\u22481500\u202f+\u202fcharacters) retain more context, yet the embedding becomes diluted, causing the relevant sentence to be averaged with unrelated text and reducing match precision. Thus the trade\u2011off is between precision (small chu",
       "error": ""
     },
     {
@@ -209,11 +215,11 @@
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 14036,
+      "elapsed_ms": 16789,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "The provided context does not list the specific chat models that are currently available on Groq.",
+      "answer": "The provided context does not contain a list of the chat models that are currently available on Groq.",
       "error": ""
     },
     {
@@ -237,11 +243,11 @@
         "sentence"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 18504,
+      "elapsed_ms": 20119,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "The recursive character splitter works by trying a hierarchy of separators in order: first it looks for paragraph breaks, then line breaks, then sentence boundaries, and finally word boundaries. It uses the first separator that can produce chunks small enough to meet the size limit, falling back to the next separator only when the current one still yields oversized chunks. This approach keeps rela",
+      "answer": "The recursive character splitter works by trying a hierarchy of separators in order: first it attempts to split at paragraph breaks, then at line breaks, then at sentence boundaries, and finally at word boundaries. If a chunk remains larger than the target size after using one separator, it falls back to the next separator in the list. This process continues until the chunk fits within the desired",
       "error": ""
     },
     {
@@ -252,16 +258,16 @@
       "routed_correctly": true,
       "hard": true,
       "relevance_score": "no",
-      "transformed_query": "LangGraph recent release changes",
+      "transformed_query": "LangGraph latest release changes",
       "guardrail_passed": true,
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 20928,
+      "elapsed_ms": 22823,
       "llm_calls": 4,
       "nodes_run": 6,
-      "attempts": 1,
-      "answer": "The latest LangGraph release (version\u202f1.2.11) adds a new feature that **exposes\u202f`trace_policy` on\u202f`add_node`**. It also includes a series of dependency\u2011bump chores across multiple directories and updates to related checkpoint packages (checkpoint\u2011postgres\u202f3.1.2 and checkpoint\u202f4.2.0). Additionally, a recent SDK patch (\u202f#2722\u202f) fixes the bug where resolved interrupts were re\u2011shown after a page reloa",
+      "attempts": 2,
+      "answer": "The most recent LangGraph release added a new\u202f`trace_policy`\u202fparameter to\u202f`add_node`, introduced per\u2011node trace\u2011policy input/output processors that can transform or omit payloads, and fixed a checkpoint bug involving delta\u2011channel history. It also shipped UI updates \u2013 a home tab with info cards, initial support for MCP blocks, and continued development of browser\u2011control features \u2013 along with vari",
       "error": ""
     },
     {
@@ -285,11 +291,11 @@
         "recall"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 19236,
+      "elapsed_ms": 17756,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "Use an approximate nearest\u2011neighbour (ANN) index when the collection grows beyond roughly a hundred\u202fthousand vectors. At that scale exact search becomes slow, while ANN (e.g., HNSW) offers a large speed gain with only a small loss in recall. Thus, for large\u2011scale vector stores where fast retrieval is needed and a slight reduction in accuracy is acceptable, choose ANN over exact search.",
+      "answer": "Use an approximate nearest\u2011neighbour (ANN) index when the vector store contains far more than about one hundred\u202fthousand vectors. In that regime exact search becomes slow, and ANN methods like HNSW give a large speed boost while only modestly reducing recall.",
       "error": ""
     },
     {
@@ -305,11 +311,11 @@
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 18226,
+      "elapsed_ms": 19871,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "OpenAI\u2019s embedding models are priced per\u202fmillion input tokens as follows:\n\n- **text\u2011embedding\u20113\u2011small:**\u202f$0.02\u202f/\u202fM tokens  \n- **text\u2011embedding\u20113\u2011large:**\u202f$0.13\u202f/\u202fM tokens  \n- **text\u2011embedding\u2011ada\u2011002 (legacy):**\u202f$0.10\u202f/\u202fM tokens  \n\n(When using the Batch API, the v3 model rates are halved.)",
+      "answer": "OpenAI\u2019s embedding pricing per\u202f1\u202fmillion tokens varies by model and API tier:\n\n- **text\u2011embedding\u20113\u2011small** \u2013 $0.02\u202f(standard) or $0.01\u202f(batch)  \n- **text\u2011embedding\u2011ada\u2011002** \u2013 $0.10\u202f(standard) or $0.05\u202f(batch)  \n- **text\u2011embedding\u20113\u2011large** \u2013 $0.13\u202f(standard) or $0.065\u202f(batch)  \n\nThese rates are the ones listed in the provided sources.",
       "error": ""
     },
     {
@@ -333,11 +339,11 @@
         "server"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 16195,
+      "elapsed_ms": 16740,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "Running Chroma **embedded** means it operates as a library within your application, writing its index to a local directory and requiring no separate service process. In **server mode**, Chroma runs as its own independent process that multiple client applications can connect to, which is needed when more than one instance must share the same index.",
+      "answer": "Running Chroma **embedded** means it operates as a library inside your application, writing its index to a local directory and requiring no separate service process. In **server mode**, Chroma runs as its own independent process that multiple client applications can connect to, which is needed when more than one instance must share the same index.",
       "error": ""
     },
     {
@@ -353,11 +359,11 @@
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 19494,
+      "elapsed_ms": 23973,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "The only vector\u2011database company mentioned as having raised money in the current year is **Qdrant**, which secured a funding round (the $50\u202fmillion Series\u202fB on March\u202f12,\u202f2026).",
+      "answer": "The only vector\u2011database company explicitly noted as having raised money in the current year is **Qdrant**, which closed a $28\u202fmillion Series\u202fA round in January\u202f2024. The provided context does not mention any other vector\u2011database firms receiving funding this year.",
       "error": ""
     },
     {
@@ -381,11 +387,11 @@
         "attend"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 22522,
+      "elapsed_ms": 15354,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "The \u201clost in the middle\u201d problem refers to the tendency of language models to attend most strongly to the beginning and end of a long prompt while largely ignoring material that appears in the middle. When a retrieval\u2011augmented generation system stuffs many document chunks into a single context, relevant information that ends up buried in the middle can be effectively missed, so adding more chunks",
+      "answer": "The \u201clost in the middle\u201d problem refers to the tendency of language models to attend most strongly to the beginning and end of a long context, while ignoring material that appears in the middle. When a retrieval\u2011augmented generation pipeline stuffs many chunks into a prompt, relevant information buried in the middle can be effectively missed, so adding more chunks does not always improve answer qu",
       "error": ""
     },
     {
@@ -401,11 +407,11 @@
       "keywords_expected": [],
       "keywords_found": [],
       "keyword_hit": null,
-      "elapsed_ms": 19558,
+      "elapsed_ms": 22733,
       "llm_calls": 4,
       "nodes_run": 6,
       "attempts": 1,
-      "answer": "\u26a0\ufe0f This answer could not be fully verified against the retrieved context \u2014 treat it with caution.\n\nThe newest Claude model supports a\u202f1\u202fmillion\u2011token context window. (All of Opus\u202f5, Sonnet\u202f5 and Fable\u202f5 have a 1\u202fM\u2011token window, while Haiku\u202f4.5 is limited to 200\u202fK.)",
+      "answer": "\u26a0\ufe0f This answer could not be fully verified against the retrieved context \u2014 treat it with caution.\n\nThe provided context does not cover the context window of the newest Claude model.",
       "error": ""
     },
     {
@@ -417,7 +423,7 @@
       "hard": false,
       "relevance_score": "yes",
       "transformed_query": "",
-      "guardrail_passed": true,
+      "guardrail_passed": false,
       "keywords_expected": [
         "hypothetical",
         "embed",
@@ -429,11 +435,11 @@
         "answer"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 18482,
+      "elapsed_ms": 17988,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "HyDE (Hypothetical Document Embeddings) is a technique that first generates a hypothetical answer to a question, embeds that answer, and then uses this embedding as the query for vector search. Because the hypothetical answer is written in the same declarative style as the corpus, its embedding tends to be closer to the true answer\u2019s embedding than the original question\u2019s embedding, improving retr",
+      "answer": "\u26a0\ufe0f This answer could not be fully verified against the retrieved context \u2014 treat it with caution.\n\nHyDE (Hypothetical Document Embeddings) is a technique that first generates a hypothetical answer to a query, embeds that answer, and then uses this embedding as the search query. Because the generated answer is written in the same declarative style as the documents in the corpus, its embedding tends",
       "error": ""
     },
     {
@@ -457,11 +463,11 @@
         "state"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 16758,
+      "elapsed_ms": 18395,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "A normal edge always routes from a node to the same next node, regardless of the current state. In contrast, a conditional edge uses a routing function that reads the state and can direct the flow to different nodes, enabling runtime decisions.",
+      "answer": "A normal edge always routes from its source node to the same next node, regardless of the current state. In contrast, a conditional edge uses a routing function that reads the state and can direct the flow to different nodes, enabling runtime decisions. This distinction allows the agent graph to adapt its path dynamically.",
       "error": ""
     },
     {
@@ -485,11 +491,11 @@
         "relevance"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 16591,
+      "elapsed_ms": 14420,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "A naive RAG pipeline always runs generation unconditionally; it never includes a relevance\u2011checking step that could decide the retrieved context is insufficient. Because there is no explicit abstention mechanism, the model must produce an answer for every query, even when the retrieved material is irrelevant. Adding a relevance decision before generation is required to enable \u201cI don\u2019t know\u201d respon",
+      "answer": "Because a naive RAG pipeline always proceeds to generation unconditionally, it lacks any decision point that could output \u201cI don\u2019t know.\u201d It simply embeds the query, retrieves chunks, stuffs them into a prompt, and generates an answer, so every query yields a response. Adding an explicit relevance check before generation is required to enable abstention.",
       "error": ""
     },
     {
@@ -509,11 +515,11 @@
         "384"
       ],
       "keyword_hit": true,
-      "elapsed_ms": 18092,
+      "elapsed_ms": 18927,
       "llm_calls": 3,
       "nodes_run": 4,
       "attempts": 1,
-      "answer": "The BAAI/bge-small-en-v1.5 embedding model produces 384\u2011dimensional vectors.",
+      "answer": "The BAAI/bge-small-en-v1.5 embedding model produces vectors with 384 dimensions.",
       "error": ""
     }
   ]

@@ -58,6 +58,12 @@ DEFAULT_SCENARIOS = HERE / "scenarios.json"
 # sakein aur eval graph ke internals se tightly coupled na ho.
 ROUTE_OF_SOURCE = {"vector_db": "local", "web_search": "web"}
 
+# Teesra label. "local"/"web" ka matlab hai corpus jawab deta hai / nahi deta.
+# "ambiguous" ka matlab hai **reasonable log disagree karenge** — corpus topic ko
+# aadha cover karta hai. Inpe accuracy measure karna bekaar hai; inpe stability
+# measure hoti hai (neeche score() dekh).
+AMBIGUOUS = "ambiguous"
+
 
 # Kaunse node LLM call karte hain. `retrieve` aur `web_search_fallback` nahi —
 # ek vector search hai, doosra HTTP search. Ye list graph ke saath badalni padegi
@@ -137,7 +143,11 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             "question": question,
             "expected_route": expected,
             "observed_route": observed,
-            "routed_correctly": observed == expected,
+            # Ambiguous cases pe `None`, `False` nahi. Inka koi ek sahi jawab hai
+            # hi nahi — inhe "galat" ginna headline accuracy ko meaningless bana
+            # dega, jo exactly wo problem hai jiski wajah se ye cases pehle
+            # eval se bahar rakhe gaye the. Inhe stability se maapa jaata hai.
+            "routed_correctly": None if expected == AMBIGUOUS else observed == expected,
             "hard": bool(case.get("hard")),
             "relevance_score": final.get("relevance_score", ""),
             "transformed_query": final.get("transformed_query", ""),
@@ -175,12 +185,20 @@ def interleave(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     local = [c for c in cases if c["expected_route"] == "local"]
     web = [c for c in cases if c["expected_route"] == "web"]
+    # Ambiguous cases bhi alternate hone chahiye. Pehle ye function sirf
+    # local/web buckets banata tha aur baaki sab **chupchaap drop** kar deta tha —
+    # ambiguous label add karte hi 8 cases bina kisi error ke gayab ho gaye.
+    # Isliye ab har wo case pakda jaata hai jo dono buckets me nahi hai.
+    rest = [c for c in cases if c["expected_route"] not in ("local", "web")]
     out: List[Dict[str, Any]] = []
-    for i in range(max(len(local), len(web))):
+    for i in range(max(len(local), len(web), len(rest))):
         if i < len(local):
             out.append(local[i])
         if i < len(web):
             out.append(web[i])
+        if i < len(rest):
+            out.append(rest[i])
+    assert len(out) == len(cases), "interleave ne cases drop kiye"
     return out
 
 
@@ -188,9 +206,69 @@ def interleave(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # scoring
 # ---------------------------------------------------------------------------
 
+def score_ambiguous(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ambiguous cases ko accuracy se nahi, **stability** se maapo.
+
+    In cases ka koi ek sahi jawab nahi hai — corpus topic ko aadha cover karta
+    hai, aur do reasonable log alag label denge. Isliye "correct route" ginna
+    ek arguable label ko metric me badal dega. RESULTS.md yahi wajah deta hai ki
+    ye cases pehle chhode gaye the.
+
+    Lekin ek cheez ambiguous case pe bhi **objectively galat** hai: ek hi
+    question pe har baar alag route lena. Wo label ka jhagda nahi, wo grader ka
+    non-determinism hai — aur wo asli defect hai. Isliye har case ko kai baar
+    chalate hain aur poochte hain: kya route har baar wahi rahi?
+
+    Ye metric aage kaam bhi aata hai: reranker ka pura point hai grader ko behtar
+    chunks dena. Agar reranker se stability badhti hai, wo **measurable** fayda
+    hai — jabki headline accuracy 100% pe pehle se pinned hai aur hil hi nahi sakti.
+    """
+    by_id: Dict[Any, List[Dict[str, Any]]] = {}
+    for r in rows:
+        by_id.setdefault(r["id"], []).append(r)
+
+    cases = []
+    for case_id, runs in sorted(by_id.items()):
+        routes = [r["observed_route"] for r in runs]
+        stable = len(set(routes)) == 1
+        cases.append({
+            "id": case_id,
+            "question": runs[0]["question"][:70],
+            "runs": len(routes),
+            "routes": routes,
+            "stable": stable,
+            # Majority route — kis taraf jhukav hai, ye batata hai grader kitna
+            # conservative hai. Aadha-cover topic pe "web" jaana zyada safe hai.
+            "majority": max(set(routes), key=routes.count) if routes else None,
+        })
+
+    repeated = [c for c in cases if c["runs"] > 1]
+    stable = [c for c in repeated if c["stable"]]
+    went_web = [c for c in cases if c["majority"] == "web"]
+
+    return {
+        "ambiguous_cases": len(cases),
+        # Stability sirf tab meaningful hai jab case ek se zyada baar chala ho.
+        # `--repeat 1` pe ye `None` hai, `100.0` nahi — warna ek hi run "perfectly
+        # stable" dikhta, jo jhoot hai.
+        "ambiguous_stability_pct": (
+            round(100.0 * len(stable) / len(repeated), 1) if repeated else None
+        ),
+        "ambiguous_unstable_ids": [c["id"] for c in repeated if not c["stable"]],
+        "ambiguous_went_web": len(went_web),
+        "ambiguous_detail": cases,
+    }
+
+
 def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    ok = [r for r in results if not r.get("error")]
+    ok_all = [r for r in results if not r.get("error")]
     errored = [r for r in results if r.get("error")]
+
+    # Ambiguous cases headline metrics se **bilkul bahar**. Inhe accuracy me
+    # milaane se poora number arguable ho jaata — ek eval ka kaam hi ye hai ki
+    # uska number defend kiya ja sake.
+    ambiguous_rows = [r for r in ok_all if r["expected_route"] == AMBIGUOUS]
+    ok = [r for r in ok_all if r["expected_route"] != AMBIGUOUS]
 
     correct = [r for r in ok if r["routed_correctly"]]
 
@@ -231,7 +309,7 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "total_cases": len(results),
         "errored": len(errored),
-        "scored": len(ok),
+        "scored": len(ok),   # ambiguous ise me nahi ginte
 
         "routing_accuracy_pct": pct(len(correct), len(ok)),
         "routing_correct": len(correct),
@@ -266,6 +344,7 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "local_case_count": len(local_cases),
         "web_case_count": len(web_cases),
         "total_retries": sum(r.get("attempts", 1) - 1 for r in results),
+        **score_ambiguous(ambiguous_rows),
     }
 
 
@@ -312,6 +391,20 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
           "   <- the cost of correcting")
     print(f"  Mean latency          : local {n(s['mean_ms_local_route'], ' ms')}  vs  web {n(s['mean_ms_web_route'], ' ms')}")
     print("      (latency is throttling-dominated at this scale — not a route signal, see RESULTS.md)")
+    # Ambiguous block alag hai, aur jaan-boojh ke headline ke *neeche* hai —
+    # ye alag axis hai, accuracy ka hissa nahi.
+    if s["ambiguous_cases"]:
+        print()
+        print(f"  Ambiguous cases       : {s['ambiguous_cases']}   (excluded from accuracy above)")
+        if s["ambiguous_stability_pct"] is None:
+            print("      stability          : not measured — needs --repeat 2 or more")
+        else:
+            print(f"      route stability    : {s['ambiguous_stability_pct']}%"
+                  f"   {s['ambiguous_unstable_ids'] or ''}")
+            print("      (same question, repeated: did it pick the same route every time?)")
+        print(f"      leaned web         : {s['ambiguous_went_web']}/{s['ambiguous_cases']}"
+              "   (higher = more conservative grader)")
+
     if s["errored"]:
         print(f"\n  ⚠️  {s['errored']} case(s) errored out and were excluded from scoring")
     if s["total_retries"]:
@@ -334,15 +427,32 @@ def main() -> int:
                    help="exit non-zero above this many missed fallbacks (the expensive error)")
     p.add_argument("--order", choices=["interleave", "file"], default="interleave",
                    help="case order; 'interleave' alternates local/web (default)")
+    p.add_argument("--repeat", type=int, default=1, metavar="N",
+                   help="run each AMBIGUOUS case N times to measure routing stability "
+                        "(default 1; 3 is enough to catch a flapping grader)")
+    p.add_argument("--skip-ambiguous", action="store_true",
+                   help="run only the labelled local/web cases")
     args = p.parse_args()
 
     cases = json.loads(Path(args.scenarios).read_text(encoding="utf-8"))["cases"]
     if args.only:
         cases = [c for c in cases if c["expected_route"] == args.only]
+    if args.skip_ambiguous:
+        cases = [c for c in cases if c["expected_route"] != AMBIGUOUS]
     if args.order == "interleave":
         cases = interleave(cases)
     if args.limit:
         cases = cases[: args.limit]
+
+    # Ambiguous cases ko N baar duplicate karo. Repeats ko aapas me alag rakhne
+    # ki koshish nahi karte — ek hi question back-to-back chalane se cache-jaisa
+    # koi effect nahi hai (graph stateless hai), aur saath rakhne se rate-limit
+    # backoff ek hi jagah padta hai.
+    if args.repeat > 1:
+        expanded = []
+        for c in cases:
+            expanded.extend([c] * (args.repeat if c["expected_route"] == AMBIGUOUS else 1))
+        cases = expanded
 
     print(f"Running {len(cases)} case(s)...", flush=True)
     graph = build_crag_graph()
