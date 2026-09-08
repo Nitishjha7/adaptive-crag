@@ -197,9 +197,10 @@ signal the pipeline doesn't yet surface — retrieval distances (already availab
 **Cost & performance analytics.** LLM calls per query is *already* the headline cost metric
 (local 3.0 · web 4.0), and token usage plus estimated cost are an easy addition since Groq
 returns usage on every response. But the latency half needs care: latency was already tried
-as an eval metric and **failed** — Groq's throttling swamps the route difference. A latency
-panel would resurrect a number this project has already shown to be unreliable on a free
-tier, so label it as indicative, not measured.
+as an eval metric and **failed** — Groq's throttling swamps the route difference so badly
+that the measured local route (15.7s) came out *slower* than the web route (14.9s), which is
+backwards. A latency panel would put that unreliable number on screen looking authoritative,
+so label it indicative, not measured.
 
 **Source quality scoring** (relevance · freshness · authority). Relevance and groundedness
 are already computed. Freshness and authority need metadata the pipeline doesn't collect —
