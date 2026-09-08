@@ -88,7 +88,9 @@ model change that quietly breaks routing fails the way a test does.
 See [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) for the full architecture, state
 schema, node contracts, and reference implementation. See
 [docs/INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.md) for the pitch, USP deep-dives,
-trade-offs, and anticipated Q&A.
+trade-offs, and anticipated Q&A. See [docs/RAG_FUNDAMENTALS.md](docs/RAG_FUNDAMENTALS.md)
+for general RAG concepts, a production-RAG question bank, and an honest map of which
+pipeline stages this project has and which it deliberately does not.
 
 ## Project Structure
 
