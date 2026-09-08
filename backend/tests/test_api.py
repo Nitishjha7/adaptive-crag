@@ -39,9 +39,10 @@ def test_response_shape(client, fake_llm, fake_search):
     body = r.json()
     # Frontend inhi fields pe badge + trace render karega -- shape na toote
     assert set(body) == {
-        "answer", "source_type", "relevance_score",
+        "answer", "source_type", "sources", "relevance_score",
         "transformed_query", "logs", "elapsed_ms",
     }
+    assert isinstance(body["sources"], list)
     assert body["source_type"] in {"vector_db", "web_search"}
     assert body["relevance_score"] in {"yes", "no"}
     assert body["logs"], "trace khaali hai -- explainability chali gayi"

@@ -48,6 +48,7 @@ class QueryIn(BaseModel):
 class QueryOut(BaseModel):
     answer: str
     source_type: str          # "vector_db" | "web_search" -> UI badge
+    sources: List[str]        # filenames (local) ya URLs (web)  -> UI citations
     relevance_score: str      # "yes" | "no"                -> UI relevance pill
     transformed_query: str    # khaali agar fallback nahi chala
     logs: List[str]           # node-by-node trace          -> UI trace viewer
@@ -68,6 +69,7 @@ async def query(body: QueryIn) -> QueryOut:
         # final_output guardrails node bharta hai; generation defensive fallback hai.
         answer=final.get("final_output") or final.get("generation") or "",
         source_type=final.get("source_type", ""),
+        sources=final.get("sources", []),
         relevance_score=final.get("relevance_score", ""),
         transformed_query=final.get("transformed_query", ""),
         logs=final.get("logs", []),

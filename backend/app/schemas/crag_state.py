@@ -42,6 +42,17 @@ class CRAGState(TypedDict, total=False):
     source_type: str
     """"vector_db" | "web_search" — UI ka source badge isi se."""
 
+    sources: List[str]
+    """Citations — local path pe filenames, web path pe URLs.
+
+    `documents` ke saath-saath chalta hai, uske andar nahi. Isse `documents`
+    `List[str]` hi rehta hai aur `generate` ka contract nahi tootta: wo sirf
+    context padhta hai, use pata nahi hona chahiye ki wo kahan se aaya.
+
+    `documents` ki tarah ye bhi **overwrite** hota hai (koi reducer nahi) —
+    fallback pe local filenames web URLs se replace ho jaate hain, warna UI ek
+    web-sourced answer ke neeche local files cite kar deta."""
+
     # --- output ------------------------------------------------------------
     generation: str
     """Raw LLM answer, abhi guardrails-checked nahi."""
@@ -72,6 +83,7 @@ def initial_state(question: str) -> CRAGState:
         "question": question,
         "transformed_query": "",
         "documents": [],
+        "sources": [],
         "relevance_score": "",
         "source_type": "vector_db",
         "generation": "",

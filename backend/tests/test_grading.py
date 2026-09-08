@@ -29,3 +29,28 @@ from app.nodes.grade_documents import parse_verdict
 )
 def test_parse_verdict(raw, expected):
     assert parse_verdict(raw) == expected
+
+
+# --- web snippet se URL extraction -----------------------------------------
+
+import pytest as _pytest  # noqa: E402
+
+from app.nodes.web_search_fallback import extract_urls  # noqa: E402
+
+
+@_pytest.mark.parametrize(
+    "snippets,expected",
+    [
+        (["text\n[source: https://a.com]"], ["https://a.com"]),
+        # dedupe, order preserve
+        (
+            ["a\n[source: https://x.com]", "b\n[source: https://x.com]"],
+            ["https://x.com"],
+        ),
+        # URL na ho to snippet skip ho jaye, crash na kare
+        (["plain text with no marker"], []),
+        ([], []),
+    ],
+)
+def test_extract_urls(snippets, expected):
+    assert extract_urls(snippets) == expected

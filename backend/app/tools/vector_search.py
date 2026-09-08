@@ -4,7 +4,7 @@
 score-threshold tuning ek hi jagah rehti hai, do jagah drift nahi hoti.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from app.config import get_settings, get_vectorstore
 
@@ -34,6 +34,23 @@ def similarity_search_with_scores(query: str, k: Optional[int] = None):
         (d.page_content, score)
         for d, score in get_vectorstore().similarity_search_with_score(query, k=k)
     ]
+
+
+def similarity_search_with_sources(
+    query: str, k: Optional[int] = None
+) -> List[Tuple[str, str]]:
+    """Top-k chunks `(text, source)` pairs ki tarah.
+
+    `source` wo filename hai jo ingestion ne metadata me daala tha
+    (`ingest.py` -> `metadata={"source": path.name}`). Wo metadata pehle se store
+    ho raha tha, bas kabhi padha nahi jaata tha — citations ke liye wahi chahiye.
+
+    Alag function hai, `similarity_search` badla nahi, kyunki wo eval aur tests
+    dono me use hota hai aur unko sirf text chahiye.
+    """
+    k = k or get_settings().TOP_K
+    docs = get_vectorstore().similarity_search(query, k=k)
+    return [(d.page_content, d.metadata.get("source", "unknown")) for d in docs]
 
 
 def collection_count() -> int:

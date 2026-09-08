@@ -97,3 +97,64 @@ def test_empty_relevance_score_routes_to_correction(graph, fake_llm, fake_search
 
     assert final["relevance_score"] == "no"
     assert "transform_query" in node_order(final)
+
+
+def test_local_route_cites_source_filenames(graph, fake_llm, fake_search):
+    """Local answers ke saath citations aani chahiye.
+
+    Metadata me `source` filename ingestion ke time se store ho raha tha, par
+    kabhi padha nahi jaata tha — answer tak pahunchta hi nahi tha.
+    """
+    fake_llm.verdict = "yes"
+
+    final = graph.invoke(initial_state("Why does chunk overlap matter?"))
+
+    assert final["sources"], "local route pe koi citation nahi aayi"
+    assert all(s.endswith(".md") for s in final["sources"]), final["sources"]
+    assert len(final["sources"]) == len(set(final["sources"])), "duplicate sources"
+
+
+def test_fallback_replaces_sources_too(graph, fake_llm, monkeypatch):
+    """Sabse important citation assertion.
+
+    `documents` ki tarah `sources` bhi replace hone chahiye. Agar local filenames
+    bache reh gaye, to UI ek web-sourced answer ke neeche local files cite karega —
+    yaani user ko galat jagah bhejega.
+    """
+    import app.nodes.web_search_fallback as node
+
+    monkeypatch.setattr(
+        node,
+        "web_search",
+        lambda q, max_results=4: [
+            "Some web content.\n[source: https://example.com/a]",
+            "More web content.\n[source: https://example.com/b]",
+        ],
+    )
+    fake_llm.verdict = "no"
+
+    final = graph.invoke(initial_state("What is the Model Context Protocol?"))
+
+    assert final["sources"] == [
+        "https://example.com/a",
+        "https://example.com/b",
+    ], final["sources"]
+    assert not any(s.endswith(".md") for s in final["sources"]), (
+        "reject kiye hue local docs abhi bhi cite ho rahe hain"
+    )
+
+
+def test_search_failure_clears_sources(graph, fake_llm, monkeypatch):
+    """Search fail ho to koi citation nahi — local wale bhi nahi, kyunki wo
+    reject ho chuke hain aur unpe koi answer nahi bana."""
+    import app.nodes.web_search_fallback as node
+
+    def _boom(query, max_results=4):
+        raise RuntimeError("simulated rate limit")
+
+    monkeypatch.setattr(node, "web_search", _boom)
+    fake_llm.verdict = "no"
+
+    final = graph.invoke(initial_state("anything"))
+
+    assert final["sources"] == []

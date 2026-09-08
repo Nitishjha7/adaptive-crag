@@ -30,6 +30,7 @@ def main() -> int:
     print(final.get("final_output") or final.get("generation") or "(none)")
     print("--- meta " + "-" * 51)
     print(f"  source_type     : {final.get('source_type')}")
+    print(f"  sources         : {', '.join(final.get('sources') or []) or '(none)'}")
     print(f"  relevance_score : {final.get('relevance_score') or '(Phase 3)'}")
     print()
     return 0

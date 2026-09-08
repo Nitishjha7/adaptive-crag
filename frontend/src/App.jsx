@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import ChatBox from "./components/ChatBox.jsx";
+import Citations from "./components/Citations.jsx";
 import RelevancePill from "./components/RelevancePill.jsx";
 import SourceBadge from "./components/SourceBadge.jsx";
 import TraceViewer from "./components/TraceViewer.jsx";
@@ -92,6 +93,8 @@ export default function App() {
                 </p>
               </div>
             )}
+
+            <Citations sources={result.sources} />
 
             <TraceViewer logs={result.logs} />
           </div>
