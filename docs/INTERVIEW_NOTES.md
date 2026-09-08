@@ -370,9 +370,64 @@ Present this as a **pattern**, not an isolated project:
 
 This shows a recruiter you understand an architectural pattern, not just one trick.
 
-**If asked "do these overlap?":** No — they share the *pattern* but the correction targets
-are different (execution errors vs retrieval quality). Together they make one coherent
-skill-area story.
+### "Aren't these the same project twice?"
+
+Expect this, and answer it with specifics rather than a denial. **The overlap is real but
+it is in the plumbing; the hard parts do not overlap at all.**
+
+**Shared (~40%):** LangGraph `StateGraph` · FastAPI · React · Docker Compose · an eval
+harness · the verify-then-correct pattern itself.
+
+**Only in the SQL Agent:**
+
+| | |
+|---|---|
+| Text-to-SQL, schema and JOIN reasoning | Postgres + SQLAlchemy |
+| **Human-in-the-loop approval** — the graph genuinely *pauses* and resumes | **Conversation memory** — Postgres checkpointer, multi-turn |
+| **MCP** — client and server, over stdio | Write-safety / destructive-query gating |
+| Power BI export | **Deployed** (`render.yaml`) |
+
+**Only in Adaptive CRAG:**
+
+| | |
+|---|---|
+| **Embeddings, chunking, vector search** — Chroma, FastEmbed, cosine | **Retrieval evaluation** — grading relevance before generating |
+| **External tool integration** — live web search behind a provider abstraction | **Groundedness validation** — catching unsupported claims |
+| **Eval design for ambiguous cases** — scored for stability, not correctness | Citations |
+
+If someone doubts it, the dependency lists settle it: `sqlalchemy · psycopg2 · mcp` on one
+side, `chromadb · fastembed · ddgs` on the other. Almost nothing in common.
+
+### Two answers that land better than "they're different"
+
+**1. The LangGraph construct is different.**
+The SQL agent is a **cycle** — the error feeds back into the same node, up to three times.
+CRAG is a **branch** — a conditional edge picks one of two paths that merge again. Those
+are two different features of the framework, not the same graph twice.
+
+**2. The nature of the error signal is different — and this is the good answer.**
+
+| | SQL Agent | Adaptive CRAG |
+|---|---|---|
+| How failure announces itself | Postgres raises an error — **objective, external, free** | Nothing happens. Irrelevant chunks still produce a fluent answer — **silent** |
+| So the correction trigger is | A fact | An LLM's judgement, which can itself be wrong |
+| And therefore | You can watch the loop work | You have to **build a labelled set**, or you cannot know it works at all |
+
+That last row is why CRAG needed an eval harness and the SQL agent did not. *"SQL failure
+is loud; retrieval failure is silent"* is a far better answer than "one does SQL, one does
+RAG."
+
+### Which one to lead with
+
+| Situation | Lead with |
+|---|---|
+| RAG / LLM / search role | **Adaptive CRAG** — the retrieval skills exist only here |
+| General backend / agent role | **SQL Agent** — more features, and it is deployed |
+| Asked "what are you proudest of?" | **CRAG's eval** — the confounded latency run and the ambiguity tier |
+
+**One honest asymmetry to be aware of:** the SQL Agent has a live link, this one does not.
+Two projects where one is deployed and one isn't invites "why not?" — deploying this is
+the highest-value work left ([ROADMAP](ROADMAP.md)).
 
 ---
 
@@ -439,3 +494,112 @@ class CRAGState(TypedDict):
     final_output: str        # Guardrail-validated final response
     logs: List[str]          # Node trace execution logs
 ```
+
+---
+
+## 15. Honesty Checklist — What NOT to Claim
+
+Overclaiming is the biggest risk. If the interviewer opens the repo and one claim is
+false, the whole project's credibility goes — **and it takes the Self-Healing SQL Agent
+down with it**, because both are yours. Keep these straight:
+
+| ❌ Don't say | ✅ Say |
+|---|---|
+| "It validates output with Guardrails AI" | "I dropped Guardrails AI. The hub download and version pinning were going to be the biggest time sink, and what I needed was groundedness plus PII — one temperature-0 call and four regexes, no dependency" |
+| **"Routing accuracy is 100%"** — without the condition | Always name the condition. "20/20 on a set where the corpus gap is *categorical* — concepts in, live facts out. That means the labelled task is easy, not that the router is robust. That's why I added ambiguous cases" |
+| "It does hybrid search / reranking" | "It doesn't. Pure vector search. My corpus has no identifiers or product codes, which is where BM25 earns its place, so I couldn't have measured a benefit" |
+| **"Adaptive routing saves latency"** | The latency measurement **failed** — Groq's throttling swamps the route difference, and one run showed the local route slower than web. "The cost argument rests on LLM calls per query, 3.0 vs 4.0, which comes from graph structure and is identical on every run" |
+| "It has citations with page numbers" | Local answers cite the source **filename**; web answers cite the URL. No page or chunk offsets |
+| "It's production ready" | "Portfolio project. It needs CORS restricted, a deploy, prompt-injection handling on the web path, and an incremental re-index pipeline" |
+| "The guardrails layer stops prompt injection" | "It's a partial net — an injected instruction usually produces an answer the context doesn't support, so groundedness catches some of it. But it was not designed for that, and the web path is exactly where the risk lives" |
+| "The eval proves the grader works" | "It proves the grader handles a categorical gap. One person wrote both the corpus and the labels, which is its own bias — the honest fix is someone else writing cases" |
+| "It handles a large knowledge base" | "Seven documents, 22 chunks. That's enough to make the corrective loop demonstrable and measurable. It says nothing about retrieval at scale" |
+
+**Why this matters:** "I didn't build that, and I know why it matters" lands better than
+a false "I built everything". Interviewers hunt for gaps — naming them yourself keeps
+you in control of the conversation.
+
+---
+
+## 16. How strong this project is — an honest assessment
+
+This section is for you, not the interviewer. It should tell you **what position you are
+speaking from**.
+
+### Its strength is not the architecture
+
+LangGraph + conditional routing + web fallback + guardrails is a **published reference
+pattern** (Yan et al. 2024, and LangGraph's own CRAG cookbook). Do not present it as
+invention, and do not play on the feature-list field — a feature list is the easiest
+thing in this repo to reproduce.
+
+**The real strength is three things:**
+
+**1. You published a measurement that failed.**
+The first latency comparison looked clean and convincing — local 13.7s vs web 18.5s —
+and it was **confounded**. Cases ran in file order, so throttling ramped into the web
+bucket and the number measured position, not routing. You found it, interleaved the
+cases, and when latency *still* wouldn't separate you dropped it as a metric and moved
+the cost argument onto call counts. **That story is worth more than the 20/20.**
+
+**2. You designed the eval so it could still fail.**
+Routing accuracy was pinned at 100% and could not move, which meant no future retrieval
+work could ever be justified. Adding ambiguous cases scored for *stability* rather than
+correctness — because their labels are genuinely arguable — is eval design, not eval
+usage. Very few candidates have thought about what makes a metric defendable.
+
+**3. Every decision is written down with its cost.**
+"Replace local docs, don't merge — you lose a partially useful chunk, but keeping
+rejected context reintroduces the exact failure the grading step exists to remove."
+"Flag ungrounded answers, don't block; redact PII, because flagging a leak is still a
+leak." "Fail open, because failing closed lets one flaky call turn the system into
+'I can't tell you anything'." That is trade-off language.
+
+### Weaknesses — know these before you're asked
+
+| Weakness | How big |
+|---|---|
+| **Seven documents, 22 chunks** | Big. Enough to prove the loop, nothing about scale |
+| **Not deployed** | **The biggest.** No link means a portfolio project loses half its value |
+| The 100% is on an easy gap | You know this and say it first — which is what defuses it |
+| No hybrid search, no reranker, no context filter | Deliberate scope choice, but a real gap in "production RAG" terms |
+| One author wrote corpus, labels and system | Structural bias in the eval that no amount of care removes |
+| Groundedness sits at 85–95%, not investigated | You report it; you have not dug into which answers fail and why |
+| No prompt-injection handling | And the web path is where it matters |
+| No incremental re-index | Documents are ingested once; updates mean a full rebuild |
+
+**All of these are already in the docs — that is what protects you.** An interviewer
+stops hunting once a candidate names their own limits.
+
+### How this differs from the Self-Healing SQL Agent
+
+You will be asked. The answer is **the signal each one corrects on**:
+
+| | SQL Agent | Adaptive CRAG |
+|---|---|---|
+| Error signal | The database's own error message — **objective, external** | An LLM's judgement of relevance — **subjective, and itself fallible** |
+| Correction | Rewrite the SQL, retry (a **cycle**) | Rewrite the query, change source (a **branch**) |
+| How you know it worked | The query executes | You had to *build a labelled set* — there is no error to observe |
+
+**That last row is the interesting one.** SQL failure is self-evident; retrieval failure
+is silent. That is precisely why CRAG needed an eval harness and the SQL agent's loop
+could be watched directly — and it is a much better answer than "one does SQL, one does
+RAG."
+
+### Which level this fits
+
+| Level | Verdict |
+|---|---|
+| **Fresher / 0–2 years** | **Well above** the bar |
+| **2–4 years (mid)** | **Competitive** — the eval design is the part that carries it |
+| **Senior (5+)** | Not on its own — that needs scale and production traffic. The *thinking* reads senior; the gap is scale |
+
+### Priorities now — and new features are not among them
+
+1. **Deploy it** — highest value left, more than any feature
+2. **Learn the eval story cold** — the confounded latency run, in 60 seconds, with numbers
+3. **Be able to trace the code yourself** — see [BUILD_PLAN](BUILD_PLAN.md); this is still
+   the single biggest risk, because the code will be read as yours
+4. **Keep the two demo queries warm** — one local, one web fallback
+
+> **Do not add more features.** What is left is presentation and one deploy, not code.
