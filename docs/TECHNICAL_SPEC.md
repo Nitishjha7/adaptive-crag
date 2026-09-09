@@ -400,7 +400,7 @@ adaptive-crag/
 │   │   ├── guardrails/validators.py   # groundedness + PII
 │   │   └── __main__.py                # `python -m app "question"` CLI
 │   ├── data/                          # 7-doc controlled corpus with a deliberate gap
-│   ├── tests/                         # 34 tests — routing, grading, validation, API
+│   ├── tests/                         # 50 tests — routing, grading, validation, API
 │   ├── vectorstore/                   # persisted Chroma index (gitignored)
 │   ├── ingest.py                      # docs -> chunks -> embeddings -> Chroma
 │   ├── main.py                        # FastAPI app

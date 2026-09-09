@@ -4,7 +4,7 @@ Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad
 interview me) yaad rahe ki har cheez kyun li gayi.
 
 **Legend:** ✅ = likha ja chuka.
-Phase 1–8 ✅ ho chuke (eval harness + citations included). Deployment abhi baaki.
+Phase 1–9 ✅ ho chuke (eval harness, citations, hybrid retrieval + rerank). Deployment abhi baaki.
 
 ---
 
@@ -20,6 +20,7 @@ Phase 1–8 ✅ ho chuke (eval harness + citations included). Deployment abhi ba
 | `tavily-python` | Tavily Search API client | **Optional upgrade** (`SEARCH_PROVIDER=tavily`). LLM-optimized snippets deta hai (raw HTML nahi), par signup chahiye |
 | ~~`guardrails-ai`~~ | — | **Nahi liya.** Hub download + version pinning time-sink tha; custom LLM groundedness check + regex PII usi kaam ko zero dependency me karta hai. Neeche `validators.py` dekh |
 | `ddgs` | DuckDuckGo search client | **Default web search provider — koi API key nahi chahiye.** Project pehle din se chalta hai |
+| `rank-bm25` | BM25 keyword scoring | Hybrid retrieval ka doosra half. Vector search exact tokens pe kamzor hai; BM25 wahan strong. Reranker `fastembed` me hi aa gaya — **koi nayi dependency nahi** |
 | `fastapi` | ASGI web framework — REST endpoint | `/api/query` gateway. Async-native, auto `/docs` |
 | `uvicorn[standard]` | ASGI server jo FastAPI run karta hai | FastAPI khud server nahi hai |
 | `pydantic` / `pydantic-settings` | Validation + typed config | Request/response models; `.env` se typed settings |
@@ -109,7 +110,7 @@ gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 
 ---
 
-## backend/tests/ ✅ — 34 tests, `.\dev.ps1 test`
+## backend/tests/ ✅ — 50 tests, `.\dev.ps1 test`
 
 | File | Kya cover karta hai |
 |---|---|
@@ -118,6 +119,7 @@ gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 | `test_grading.py` | `parse_verdict` ke 11 cases |
 | `test_validation.py` | PII redaction, false positives, ungrounded flagging, fail-open |
 | `test_api.py` | `/health`, 422 validation, response shape |
+| `test_retrieval.py` | BM25, RRF fusion math, reranker fallback, retrieval flags |
 
 **Tests me asli LLM call kyun nahi:** ye **control flow** ke test hain, model quality ke
 nahi. Asli calls slow, mehnge, key-dependent aur non-deterministic hote — yaani CI me flaky.

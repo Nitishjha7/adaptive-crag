@@ -153,7 +153,7 @@ don't need a rebuild:
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ingest [-Reset]    # embed backend/data/ into Chroma
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 34 tests, no API key needed
+.\dev.ps1 test               # 50 tests, no API key needed
 .\dev.ps1 eval               # 20 labelled cases (real LLM + live web calls)
 .\dev.ps1 eval --repeat 3    # + 8 ambiguous cases, scored for route stability
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit

@@ -409,7 +409,7 @@ docker compose up --build     # full stack → :3001 (UI) · :8001 (API docs)
 
 .\dev.ps1 ingest [-Reset]     # backend/data/ → Chroma
 .\dev.ps1 ask "..."           # one query, full trace, no server
-.\dev.ps1 test                # 34 tests, no API key needed
+.\dev.ps1 test                # 50 tests, no API key needed
 .\dev.ps1 eval                # 20 labelled cases — real LLM + live web
 .\dev.ps1 eval --repeat 3     # + 8 ambiguous cases, scored for stability
 .\dev.ps1 serve -Port 8042    # API alone

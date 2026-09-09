@@ -21,8 +21,11 @@
 >   Live demo bhi de sakta hai — UI ban chuki hai.
 > - ✅ Numbers bol sakta hai — **par condition ke saath.** 20/20 ek *categorical* gap pe
 >   hai (concepts in, live facts out). Matlab task aasan hai, router perfect nahi.
-> - ❌ **Mat bolna:** hybrid search, BM25, reranker, ya "latency saved" — teeno me se koi
->   nahi hai, aur latency measurement **fail** hui thi. [Section 15](#15-honesty-checklist--what-not-to-claim) poori list hai.
+> - ✅ **Do negative results tere paas hain, aur wahi sabse strong cheez hai** — latency
+>   measurement fail hui, aur hybrid+reranker ka A/B **koi fayda nahi** dikha (27/28 cases
+>   pe alag chunks aaye, routing ek bhi case pe nahi badla). Dono likhe hue hain.
+> - ❌ **Mat bolna:** "reranker se retrieval improve hua" ya "latency save hui" — dono
+>   measure hue aur dono negative nikle. [Section 15](#15-honesty-checklist--what-not-to-claim) poori list hai.
 > - ❌ **Deployed nahi hai.** Live link nahi hai — Self-Healing SQL Agent pe hai. Ye
 >   asymmetry poochhi ja sakti hai.
 >
@@ -107,7 +110,8 @@ fails and can architect the fix.
 ## 4. What the System Actually Does (Full Flow)
 
 1. User asks a question.
-2. **`retrieve`** — vector similarity search against ChromaDB returns the top-k local chunks.
+2. **`retrieve`** — vector search + BM25 over ChromaDB, fused by RRF, then reranked by a
+   local cross-encoder down to the top-k chunks.
 3. **`grade_documents`** — a cheap LLM call scores: are these chunks relevant/sufficient?
    → `"yes"` or `"no"`.
 4. **Outcome A — relevant (`yes`):** straight to `generate`, answer from local context,
@@ -145,8 +149,8 @@ LangGraph StateGraph  (CRAGState threaded through every node)
                     |
        +------------+------------+
        v                         v
-  ChromaDB / FAISS          DuckDuckGo / Tavily
-  (local embeddings)        (live web, fallback only)
+  ChromaDB + BM25            DuckDuckGo / Tavily
+  RRF + cross-encoder       (live web, fallback only)
                     |
                     v
      Output validation  (LLM groundedness check + regex PII redaction)
@@ -523,7 +527,7 @@ down with it**, because both are yours. Keep these straight:
 |---|---|
 | "It validates output with Guardrails AI" | "I dropped Guardrails AI. The hub download and version pinning were going to be the biggest time sink, and what I needed was groundedness plus PII — one temperature-0 call and four regexes, no dependency" |
 | **"Routing accuracy is 100%"** — without the condition | Always name the condition. "20/20 on a set where the corpus gap is *categorical* — concepts in, live facts out. That means the labelled task is easy, not that the router is robust. That's why I added ambiguous cases" |
-| "It does hybrid search / reranking" | "It doesn't. Pure vector search. My corpus has no identifiers or product codes, which is where BM25 earns its place, so I couldn't have measured a benefit" |
+| **"I added hybrid search and reranking and retrieval improved"** | It is built — and the A/B says it changed **nothing** on routing. "I added them last so the ambiguity tier could measure them, then A/B'd behind flags. 27 of 28 questions retrieved different chunks and not one routing decision changed. On a 22-chunk topically-clustered corpus the verdict follows topic, not ranking — and the grader concatenates chunks, so it never sees the ordering a reranker optimises" |
 | **"Adaptive routing saves latency"** | The latency measurement **failed** — Groq's throttling swamps the route difference, and one run showed the local route slower than web. "The cost argument rests on LLM calls per query, 3.0 vs 4.0, which comes from graph structure and is identical on every run" |
 | "It has citations with page numbers" | Local answers cite the source **filename**; web answers cite the URL. No page or chunk offsets |
 | "It's production ready" | "Portfolio project. It needs CORS restricted, a deploy, prompt-injection handling on the web path, and an incremental re-index pipeline" |
@@ -558,6 +562,15 @@ bucket and the number measured position, not routing. You found it, interleaved 
 cases, and when latency *still* wouldn't separate you dropped it as a metric and moved
 the cost argument onto call counts. **That story is worth more than the 20/20.**
 
+**1b. And then you published a second one.**
+Hybrid search and reranking were added *last*, specifically so the ambiguity tier could
+measure them — and the A/B came back flat. Routing 100% → 100%, stability 8/8 → 8/8, and
+**27 of 28 questions retrieved different chunks while not one routing decision changed.**
+Most people would ship that as "added hybrid retrieval and reranking" and stop. You have
+the comparison, and the explanation: on a 22-chunk topically-clustered corpus the verdict
+follows topic rather than ranking, and `grade_documents` concatenates its chunks so it
+never sees the ordering a reranker optimises.
+
 **2. You designed the eval so it could still fail.**
 Routing accuracy was pinned at 100% and could not move, which meant no future retrieval
 work could ever be justified. Adding ambiguous cases scored for *stability* rather than
@@ -575,10 +588,10 @@ leak." "Fail open, because failing closed lets one flaky call turn the system in
 
 | Weakness | How big |
 |---|---|
-| **Seven documents, 22 chunks** | Big. Enough to prove the loop, nothing about scale |
+| **Seven documents, 22 chunks** | **The biggest technical limit.** It is why the reranker A/B came back flat — at this scale retrieval improvements cannot move a topic-level decision |
 | **Not deployed** | **The biggest.** No link means a portfolio project loses half its value |
 | The 100% is on an easy gap | You know this and say it first — which is what defuses it |
-| No hybrid search, no reranker, no context filter | Deliberate scope choice, but a real gap in "production RAG" terms |
+| No context filter, no PDF parsing | Hybrid + reranker exist but showed no measurable routing benefit — the gap now is corpus scale, not components |
 | One author wrote corpus, labels and system | Structural bias in the eval that no amount of care removes |
 | Groundedness sits at 85–95%, not investigated | You report it; you have not dug into which answers fail and why |
 | No prompt-injection handling | And the web path is where it matters |
