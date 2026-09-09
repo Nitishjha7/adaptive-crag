@@ -147,6 +147,76 @@ the eval is its own bias — the honest fix is someone else writing cases.
 
 ---
 
+## Hybrid retrieval and reranking: a clean negative result
+
+Hybrid search (vector + BM25, fused with RRF) and cross-encoder reranking were added
+last, deliberately — after the ambiguity tier existed, so there was a metric that
+*could* move. Both sit behind `USE_HYBRID` / `USE_RERANKER`, and the same 44 runs
+were executed with them off and on.
+
+| Metric | Baseline (vector only) | Hybrid + rerank |
+|---|---|---|
+| Routing accuracy | 100% (20/20) | 100% (20/20) |
+| Missed fallbacks | 0 | 0 |
+| Unnecessary fallbacks | 0 | 0 |
+| **Ambiguous route stability** | **100% (8/8)** | **100% (8/8)** |
+| Ambiguous split | 4 local · 4 web | 4 local · 4 web |
+| Groundedness pass | 85% | 90% |
+
+**Every one of the eight ambiguous cases took the same route in both configurations,**
+including the #25/#28 incoherence described above. It survives reranking unchanged.
+
+Groundedness moved 85% → 90%, which is one case out of twenty and sits inside the
+run-to-run range this document already reports (85–95%). It is not evidence.
+
+### The retrieval genuinely changed — the decision did not
+
+The obvious objection is that the flags did nothing. They did:
+
+| Comparing top-4 across all 28 cases | |
+|---|---|
+| Identical chunks, identical order | **0** |
+| Same chunks, reordered | **1** |
+| **Different chunks retrieved** | **27** |
+
+So 27 of 28 questions were answered from a *different* set of chunks, and the routing
+decision was identical on every single one.
+
+### Why — and this is the useful part
+
+**The corpus is small and topically clustered.** With 22 chunks and k=4, any reasonable
+retriever surfaces chunks from the right document. Whether the grader sees chunking
+chunks 1,2,4,7 or 2,3,4,9, the signal it reads is the same: *this material is about
+chunking*. The verdict follows from topic, not from ranking quality.
+
+**And the grader does not consume order.** `grade_documents` joins all four chunks into
+one prompt. Reranking optimises *ordering*, but ordering is invisible to a node that
+concatenates. Reranking can therefore only change the outcome by changing *membership* —
+and on a 22-chunk corpus, membership changes rarely cross a topic boundary.
+
+**Reranking is not useless — it is aimed at the wrong metric here.** It should help the
+*answer* (which passages the model writes from), and this eval does not measure answer
+quality. It measures routing. Those are different axes, and the honest conclusion is that
+this eval cannot show a benefit rather than that no benefit exists.
+
+### What this changes about the claim
+
+Do not say "I added hybrid search and reranking and it improved retrieval." The defensible
+version:
+
+> "I added them last, on purpose, because until the ambiguity tier existed there was no
+> metric that could respond. Then I A/B'd them and got a negative result — 27 of 28
+> questions retrieved different chunks and not one routing decision changed. On a
+> 22-chunk topically-clustered corpus the grading decision is dominated by topic-level
+> signal, and the grader concatenates chunks so it never sees the ordering the reranker
+> optimises. To show a benefit I would need a larger corpus, and an answer-quality metric
+> rather than a routing one."
+
+That is a better answer than a fabricated improvement, and it is the second negative
+result in this file — see the latency section below for the first.
+
+---
+
 ## The cost argument, and the measurement that failed
 
 The design claims adaptive routing is cheaper than always searching. The eval

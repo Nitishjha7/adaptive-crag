@@ -26,7 +26,8 @@ cost and latency of a web call on every query.
 > | Phase 6 — React UI (chat, source badge, relevance pill, trace viewer) | ✅ |
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Citations — source filenames (local) / URLs (web) | ✅ |
-> | Test suite — 34 tests (`.\dev.ps1 test`) | ✅ |
+> | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ built and A/B'd — **no routing benefit measured** |
+> | Test suite — 50 tests (`.\dev.ps1 test`) | ✅ |
 > | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
 > | Deployment (Render + Vercel) | ❌ not done |
 
@@ -66,6 +67,14 @@ Two things worth saying out loud, because the number alone flatters the system:
   result that looked convincing. That story is in RESULTS.md; it is the more
   useful half of this eval.
 
+- **Hybrid search and reranking made no measurable difference — and that is reported,
+  not buried.** They were added last, once the ambiguity tier gave the metric room to
+  move, then A/B'd behind flags. Routing 100% → 100%, stability 8/8 → 8/8, every ambiguous
+  case unchanged. The flags were not no-ops: **27 of 28 questions retrieved different
+  chunks**. The retrieval changed a lot; the decision changed not at all. On a 22-chunk
+  topically-clustered corpus the verdict follows topic, not ranking — and `grade_documents`
+  concatenates the chunks, so it never sees the ordering a reranker optimises.
+
 The exit code fails when missed fallbacks exceed the threshold, so a prompt or
 model change that quietly breaks routing fails the way a test does.
 
@@ -76,6 +85,7 @@ model change that quietly breaks routing fails the way a test does.
 | Agent orchestration | LangGraph (StateGraph) — conditional branching, corrective loops |
 | LLM & embeddings | LangChain + Groq / FastEmbed / HuggingFace |
 | Local knowledge base | ChromaDB / FAISS (cosine similarity) |
+| Retrieval | Vector (Chroma) + BM25, fused with RRF, then cross-encoder rerank |
 | Web search fallback | DuckDuckGo (default, no key) / Tavily (optional, `SEARCH_PROVIDER=tavily`) |
 | Output validation | Custom LLM groundedness check + regex PII redaction |
 | Backend | FastAPI (async ASGI) |
@@ -84,7 +94,8 @@ model change that quietly breaks routing fails the way a test does.
 
 ## How it works
 
-1. **`retrieve`** — vector similarity search against ChromaDB for the top-k chunks.
+1. **`retrieve`** — vector search + BM25 over ChromaDB, fused by RRF, reranked by a local
+   cross-encoder down to the top-k chunks.
 2. **`grade_documents`** — an LLM binary grader scores whether the retrieved context is
    relevant/sufficient (`"yes"` / `"no"`).
 3. **Relevant →** straight to `generate`.

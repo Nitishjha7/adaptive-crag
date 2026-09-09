@@ -265,6 +265,23 @@ Both stages sit behind `USE_HYBRID` and `USE_RERANKER`, defaulting on. The flags
 the eval can run the same 44 cases with them off and compare — a feature whose benefit
 cannot be shown is not a feature in this project.
 
+**And the comparison came back negative.** Routing 100% → 100%. Ambiguous stability
+8/8 → 8/8. Every ambiguous case took the *same* route in both configurations.
+
+The flags were not no-ops: **27 of 28 questions retrieved a different set of chunks.** The
+retrieval changed substantially; the decision did not change at all.
+
+Why, and this is the part worth understanding: the corpus is 22 chunks and topically
+clustered, so any reasonable retriever lands in the right document — the grader reads
+"this is about chunking" either way. On top of that, `grade_documents` **concatenates**
+all four chunks, so it never sees the ordering a reranker optimises. Reranking could only
+change the verdict by changing membership across a topic boundary, which barely happens at
+this scale.
+
+The honest conclusion is not "reranking is useless" but "**this eval cannot show a benefit**" —
+it measures routing, and reranking should help *answer* quality. Full write-up in
+[RESULTS.md](../backend/eval/RESULTS.md).
+
 ---
 
 ## 4. How the whole system works now
