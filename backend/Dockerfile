@@ -12,8 +12,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV FASTEMBED_CACHE_PATH=/app/.fastembed_cache
 RUN python -c "\
 from fastembed import TextEmbedding; \
+from fastembed.rerank.cross_encoder import TextCrossEncoder; \
 TextEmbedding(model_name='BAAI/bge-small-en-v1.5'); \
-print('fastembed model cached')"
+TextCrossEncoder(model_name='Xenova/ms-marco-MiniLM-L-6-v2'); \
+print('fastembed embedding + reranker models cached')"
 
 COPY app/ ./app/
 COPY data/ ./data/

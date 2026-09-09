@@ -103,6 +103,12 @@ def main() -> int:
     print(f"[ingest] embedding with {s.EMBEDDING_MODEL} (pehli baar model download hoga)...")
     store.add_documents(chunks)
 
+    # BM25 index poore corpus se banta hai aur lru_cache me rehta hai. Ingestion
+    # ke baad wo stale hai — clear na karo to same process me purana index chalta rahe.
+    from app.tools.bm25_search import bust_cache
+
+    bust_cache()
+
     print(f"[ingest] done -> {collection_count()} chunks persisted at {store_dir}")
     return 0
 

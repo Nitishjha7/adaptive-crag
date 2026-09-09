@@ -42,6 +42,20 @@ class Settings(BaseSettings):
     SEARCH_PROVIDER: str = "duckduckgo"
     COLLECTION_NAME: str = "crag_docs"
     TOP_K: int = 4
+
+    # --- hybrid retrieval + reranking (Phase 9) ----------------------------
+    # Dono flags ke peeche hain, default ON, taaki eval inhe off karke **delta
+    # measure** kar sake. Ek feature jiska fayda dikhaya na ja sake wo is project
+    # me feature nahi hai — routing accuracy 100% pe pinned hai, isliye inhe
+    # ambiguous cases ki stability pe judge kiya jaata hai.
+    USE_HYBRID: bool = True
+    USE_RERANKER: bool = True
+
+    # Rerank se pehle kitne candidates uthane hain. TOP_K se bada hona chahiye —
+    # warna reranker ke paas chunne ko kuch hai hi nahi aur wo no-op ban jaata hai.
+    RETRIEVAL_CANDIDATES: int = 8
+
+    RERANKER_MODEL: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100
 
