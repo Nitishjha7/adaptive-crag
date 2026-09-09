@@ -46,7 +46,7 @@ cost and latency of a web call on every query.
 | **LLM calls per query** | **local 3.0 · web 4.0** |
 | **Ambiguous cases** — 8 half-covered questions, 3 runs each | **8/8 stable · split 4 local / 4 web** |
 
-Two things worth saying out loud, because the number alone flatters the system:
+Four things worth saying out loud, because the numbers alone flatter the system:
 
 - **100% means the labelled task is easy, not that the router is perfect.** The
   corpus gap is categorical by design — concepts in, vendor/pricing/news out — so
@@ -58,15 +58,14 @@ Two things worth saying out loud, because the number alone flatters the system:
   ("does the 10-15% overlap guidance apply to source code?") went web while #28
   ("is 800 characters right for legal contracts?") went local, and those are the same
   question shape. The grader applies *a* rule reliably, not demonstrably a consistent
-  one. That is the more useful finding, and it gives a future reranker something it
-  can actually be measured against — routing accuracy cannot move from 100%.
+  one. That is the more useful finding — and it is what gave the retrieval work below
+  something to be measured against, since routing accuracy cannot move from 100%.
 - **The cost argument rests on call counts, not latency.** Correction costs one
   extra LLM call (+33%) and one web round trip, only on queries that need it.
   Latency was tried first and **failed as a measurement** — Groq's throttling
   swamps the route difference, and the first ordering produced a confounded
   result that looked convincing. That story is in RESULTS.md; it is the more
   useful half of this eval.
-
 - **Hybrid search and reranking made no measurable difference — and that is reported,
   not buried.** They were added last, once the ambiguity tier gave the metric room to
   move, then A/B'd behind flags. Routing 100% → 100%, stability 8/8 → 8/8, every ambiguous
@@ -84,7 +83,7 @@ model change that quietly breaks routing fails the way a test does.
 |---|---|
 | Agent orchestration | LangGraph (StateGraph) — conditional branching, corrective loops |
 | LLM & embeddings | LangChain + Groq / FastEmbed / HuggingFace |
-| Local knowledge base | ChromaDB / FAISS (cosine similarity) |
+| Local knowledge base | ChromaDB, embedded mode (cosine similarity) |
 | Retrieval | Vector (Chroma) + BM25, fused with RRF, then cross-encoder rerank |
 | Web search fallback | DuckDuckGo (default, no key) / Tavily (optional, `SEARCH_PROVIDER=tavily`) |
 | Output validation | Custom LLM groundedness check + regex PII redaction |
