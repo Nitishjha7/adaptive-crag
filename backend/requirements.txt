@@ -14,6 +14,13 @@ langchain-community>=0.3.14
 langchain-text-splitters>=0.3.5
 fastembed>=0.5.0
 
+# --- Hybrid retrieval + reranking (Phase 9) ------------------------------
+# BM25: keyword-based scoring. Vector search identifiers aur exact tokens pe
+# kamzor hai; BM25 wahan strong hai. Dono ko RRF se fuse karte hain.
+rank-bm25>=0.2.2
+# Reranker cross-encoder fastembed me hi aata hai (TextCrossEncoder) — koi
+# nayi dependency nahi, aur wahi local / ONNX / no-key rehta hai.
+
 # --- Web search fallback (Phase 3) ---------------------------------------
 # Default provider: koi API key nahi chahiye
 ddgs>=9.0.0
