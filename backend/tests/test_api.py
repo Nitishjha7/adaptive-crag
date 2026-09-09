@@ -46,3 +46,38 @@ def test_response_shape(client, fake_llm, fake_search):
     assert body["source_type"] in {"vector_db", "web_search"}
     assert body["relevance_score"] in {"yes", "no"}
     assert body["logs"], "trace khaali hai -- explainability chali gayi"
+
+
+class TestStats:
+    """`/api/stats` dashboard ko feed karta hai. Har number asli source se aana
+    chahiye — yahi wo endpoint hai jahan hardcoded demo values chupke se aa
+    jaati hain."""
+
+    def test_counts_come_from_the_real_corpus(self, client):
+        body = client.get("/api/stats").json()
+        assert body["documents"] > 0, "corpus files gine nahi gaye"
+        assert body["chunks"] > 0, "vectorstore khaali hai -- `ingest.py` chalaya?"
+
+    def test_config_is_echoed_not_invented(self, client):
+        cfg = client.get("/api/stats").json()["config"]
+        for key in ("llm_model", "embedding_model", "search_provider", "top_k"):
+            assert cfg.get(key), f"{key} missing"
+        assert isinstance(cfg["hybrid"], bool)
+
+    def test_evaluation_is_none_when_not_run(self, client, monkeypatch, tmp_path):
+        """Eval kabhi chala hi na ho to `null` aana chahiye, `0` nahi.
+
+        "Measure nahi hua" aur "score zero hai" do alag baatein hain, aur UI ko
+        farak pata hona chahiye -- warna dashboard ek jhoothi 0% accuracy dikha dega.
+        """
+        import app.config as config
+
+        monkeypatch.setattr(config, "BACKEND_DIR", tmp_path)
+
+        body = client.get("/api/stats").json()
+        assert body["evaluation"] is None
+
+    def test_makes_no_llm_call(self, client):
+        """Dashboard har page load pe ise hit karta hai -- ek LLM call yahan
+        rate limit ko UI ke saath baandh deta."""
+        assert client.get("/api/stats").status_code == 200

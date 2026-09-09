@@ -1,20 +1,55 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import ChatBox from "./components/ChatBox.jsx";
-import Citations from "./components/Citations.jsx";
-import RelevancePill from "./components/RelevancePill.jsx";
-import SourceBadge from "./components/SourceBadge.jsx";
-import TraceViewer from "./components/TraceViewer.jsx";
+import Message from "./components/Message.jsx";
+import Sidebar, { Logo } from "./components/Sidebar.jsx";
+import SidePanel from "./components/SidePanel.jsx";
+import StatCards from "./components/StatCards.jsx";
+
+/** Fixed demo queries — `backend/data/README.md` wali, expected route ke saath.
+ *  Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga, wahi
+ *  galti demo todti hai. */
+const SUGGESTIONS = [
+  { q: "Why does chunk overlap matter when splitting documents?", route: "local" },
+  { q: "Why is cosine similarity used instead of Euclidean distance?", route: "local" },
+  { q: "What is the Model Context Protocol?", route: "web" },
+  { q: "What is the current pricing of the Tavily search API?", route: "web" },
+];
+
+const LLM_NODES = [
+  "grade_documents",
+  "transform_query",
+  "generate",
+  "validate_guardrails",
+];
 
 export default function App() {
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [turns, setTurns] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("trace");
+  const [draft, setDraft] = useState("");
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    fetch("/api/stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setLoadingStats(false));
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns, busy]);
+
+  const latest = [...turns].reverse().find((t) => t.role === "assistant");
 
   async function ask(question) {
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    if (!question.trim() || busy) return;
+    setDraft("");
+    setBusy(true);
+    setTurns((t) => [...t, { role: "user", text: question, at: Date.now() }]);
 
     try {
       // Relative path — dev me Vite proxy, production me Nginx handle karta hai.
@@ -31,75 +66,171 @@ export default function App() {
         throw new Error(`HTTP ${res.status} — ${body.slice(0, 300)}`);
       }
 
-      setResult({ ...(await res.json()), question });
+      const data = await res.json();
+      setTurns((t) => [
+        ...t,
+        { role: "assistant", text: data.answer, at: Date.now(), ...data },
+      ]);
     } catch (err) {
-      setError(err.message);
+      setTurns((t) => [...t, { role: "error", text: err.message, at: Date.now() }]);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold">Adaptive CRAG</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Self-correcting RAG — grades its own retrieval, and falls back to live
-            web search only when the local context can't answer.
-          </p>
-        </header>
+    <div className="flex h-screen bg-slate-50 text-slate-900">
+      <Sidebar active="chat" onSelect={setTab} onNewChat={() => setTurns([])} />
 
-        <ChatBox onSubmit={ask} loading={loading} />
-
-        {loading && (
-          <p className="mt-8 animate-pulse text-sm text-slate-500">
-            retrieve → grade → ...
-          </p>
-        )}
-
-        {error && (
-          <div className="mt-8 rounded-lg border border-red-900/50 bg-red-950/30 p-4">
-            <p className="text-sm font-medium text-red-300">Request failed</p>
-            <p className="mt-1 break-words font-mono text-xs text-red-400/80">
-              {error}
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <header className="flex flex-wrap items-center gap-3 px-6 pb-4 pt-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="flex items-center gap-2 text-2xl font-bold italic tracking-tight">
+              <span className="lg:hidden">
+                <Logo className="h-7 w-7" />
+              </span>
+              Adaptive Corrective RAG{" "}
+              <span className="not-italic text-indigo-600">(CRAG)</span>
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Self-grading RAG with web search fallback — grounded answers from your
+              documents, or the live web when they fall short.
             </p>
           </div>
-        )}
 
-        {result && (
-          <div className="mt-8 space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <SourceBadge sourceType={result.source_type} />
-              <RelevancePill score={result.relevance_score} />
-              <span className="text-xs text-slate-600">{result.elapsed_ms} ms</span>
-            </div>
+          <span
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
+              stats
+                ? "border-slate-200 bg-white text-slate-700"
+                : "border-amber-200 bg-amber-50 text-amber-700"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${stats ? "bg-emerald-500" : "bg-amber-500"}`}
+            />
+            {stats ? "System Online" : "Backend unreachable"}
+          </span>
 
-            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
-              <p className="whitespace-pre-wrap leading-relaxed text-slate-200">
-                {result.answer}
-              </p>
-            </div>
+          <a
+            href="https://github.com/Nitishjha7/adaptive-crag"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+              <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.9 10.9c.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.4-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.7 1.2 3.4.9.1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.1 4.7 18 5 18 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z" />
+            </svg>
+            GitHub
+          </a>
+        </header>
 
-            {/* Rewritten query sirf fallback path pe hoti hai. Ise dikhana
-                "system ne khud query badli" wala point sabse saaf dikhata hai. */}
-            {result.transformed_query && (
-              <div className="rounded-lg border border-sky-900/40 bg-sky-950/20 p-3">
-                <span className="text-xs uppercase tracking-wider text-sky-500/70">
-                  Rewritten for search
-                </span>
-                <p className="mt-1 font-mono text-sm text-sky-300">
-                  {result.transformed_query}
+        <div className="px-6">
+          <StatCards stats={stats} loading={loadingStats} />
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="flex min-h-[26rem] flex-col rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 className="font-semibold">Chat with CRAG</h2>
+                <p className="text-sm text-slate-500">
+                  Ask about the indexed documents, or anything current.
                 </p>
               </div>
-            )}
+              {turns.length > 0 && (
+                <button
+                  onClick={() => setTurns([])}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50"
+                >
+                  Clear Chat
+                </button>
+              )}
+            </div>
 
-            <Citations sources={result.sources} />
+            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+              {turns.length === 0 && !busy && (
+                <div className="py-10 text-center text-sm text-slate-400">
+                  Ask a question, or pick one below — two are answered locally, two
+                  force the web fallback.
+                </div>
+              )}
 
-            <TraceViewer logs={result.logs} />
-          </div>
-        )}
-      </div>
+              {turns.map((t, i) => (
+                <Message key={i} turn={t} />
+              ))}
+
+              {busy && (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+                  retrieve → grade → …
+                </div>
+              )}
+              <div ref={endRef} />
+            </div>
+
+            <div className="border-t border-slate-100 px-5 py-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  ask(draft);
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  disabled={busy}
+                  placeholder="Ask a question about your documents or anything on the web…"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition focus:border-indigo-300 focus:bg-white disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={busy || !draft.trim()}
+                  className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2.5 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="m22 2-7 20-4-9-9-4z" />
+                  </svg>
+                </button>
+              </form>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-slate-400">Try asking:</span>
+                {SUGGESTIONS.map(({ q, route }) => (
+                  <button
+                    key={q}
+                    disabled={busy}
+                    onClick={() => ask(q)}
+                    title={`Expected route: ${route}`}
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <span className={route === "web" ? "text-sky-500" : "text-emerald-500"}>
+                      ●
+                    </span>{" "}
+                    {q.length > 40 ? q.slice(0, 40) + "…" : q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <aside className="min-w-0">
+            <SidePanel
+              tab={tab}
+              onTab={setTab}
+              latest={latest}
+              stats={stats}
+              llmNodes={LLM_NODES}
+            />
+          </aside>
+        </div>
+      </main>
     </div>
   );
 }

@@ -25,7 +25,7 @@ function Card({ title, children }) {
   );
 }
 
-export default function SidePanel({ tab, onTab, latest, stats }) {
+export default function SidePanel({ tab, onTab, latest, stats, llmNodes = [] }) {
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
@@ -65,11 +65,15 @@ export default function SidePanel({ tab, onTab, latest, stats }) {
                 <Row label="Relevance Verdict">
                   <span className="font-mono">{latest.relevance_score}</span>
                 </Row>
+                {/* Trace se gina jaata hai, hardcode nahi — yahi wo cost metric
+                    hai jispe "hamesha web search kyun nahi" wala argument khada
+                    hai, aur eval bhi isi ko report karta hai (local 3 vs web 4). */}
                 <Row label="LLM Calls">
-                  {latest.logs.filter((l) =>
-                    ["grade_documents", "transform_query", "generate", "validate_guardrails"]
-                      .includes(l.split(" ->")[0].trim())
-                  ).length}
+                  {
+                    latest.logs.filter((l) =>
+                      llmNodes.includes(l.split(" ->")[0].trim())
+                    ).length
+                  }
                 </Row>
                 <Row label="Response Time">{(latest.elapsed_ms / 1000).toFixed(1)}s</Row>
               </>

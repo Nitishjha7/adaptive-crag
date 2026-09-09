@@ -19,6 +19,9 @@ print('fastembed embedding + reranker models cached')"
 
 COPY app/ ./app/
 COPY data/ ./data/
+# eval/ bhi chahiye: `/api/stats` `eval/results.json` se routing numbers padhta
+# hai, aur `python -m eval.run_eval` container ke andar chalta hai.
+COPY eval/ ./eval/
 COPY ingest.py main.py ./
 
 ENV PYTHONUNBUFFERED=1 \
