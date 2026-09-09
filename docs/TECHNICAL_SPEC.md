@@ -113,7 +113,7 @@ execution path.
             |                                         v
             |                               +-------------------+
             |                               |  Web Search Tool  |
-            |                               |  (Tavily Search)  |
+            |                               |  (DDG / Tavily)   |
             |                               +-------------------+
             |                                         |
             |                                         v
@@ -137,21 +137,35 @@ execution path.
 ### CRAGState schema definition
 
 ```python
-from typing import List
+import operator
+from typing import Annotated, List
 from typing_extensions import TypedDict
 
-class CRAGState(TypedDict):
-    question: str            # Original user query
+class CRAGState(TypedDict, total=False):
+    question: str            # Original user query, never mutated
     transformed_query: str   # Web-optimized search query (set by transform_query)
-    documents: List[str]     # Retrieved chunks — local first, replaced by web on fallback
+    documents: List[str]     # Working context — local chunks, REPLACED by web on fallback
+    sources: List[str]       # Citations — filenames (local) or URLs (web)
     relevance_score: str     # Graded status: "yes" (relevant) or "no" (irrelevant)
     source_type: str         # "vector_db" or "web_search"
     generation: str          # Raw synthesized answer
-    final_output: str        # Guardrail-validated final response
-    logs: List[str]          # Node trace execution logs
+    final_output: str        # Validated final response
+    guardrail_passed: bool   # Did validation pass clean
+    logs: Annotated[List[str], operator.add]   # Node trace — additive
 ```
 
-`documents` and `logs` use additive reducers so each node appends without clobbering.
+**Only `logs` has a reducer.** It is additive (`operator.add`), so every node appends one
+line and no node needs to know what ran before it — the execution trace assembles itself.
+
+`documents` and `sources` deliberately have **no reducer**: they use plain overwrite
+semantics. An additive reducer there would mean local chunks that were just graded
+*irrelevant* stay in the context window alongside the web snippets that replaced them —
+re-introducing the exact hallucination risk the grading step exists to remove. Same for
+`sources`, or the UI would cite local files under a web-sourced answer.
+
+This is the single most important schema decision in the project, and
+`test_fallback_replaces_local_docs_instead_of_merging` asserts it, because it is the kind
+of thing that breaks silently.
 
 ---
 
@@ -386,7 +400,7 @@ adaptive-crag/
 │   │   ├── guardrails/validators.py   # groundedness + PII
 │   │   └── __main__.py                # `python -m app "question"` CLI
 │   ├── data/                          # 7-doc controlled corpus with a deliberate gap
-│   ├── tests/                         # 27 tests — routing, grading, validation, API
+│   ├── tests/                         # 34 tests — routing, grading, validation, API
 │   ├── vectorstore/                   # persisted Chroma index (gitignored)
 │   ├── ingest.py                      # docs -> chunks -> embeddings -> Chroma
 │   ├── main.py                        # FastAPI app

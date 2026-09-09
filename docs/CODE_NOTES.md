@@ -4,7 +4,7 @@ Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad
 interview me) yaad rahe ki har cheez kyun li gayi.
 
 **Legend:** ✅ = likha ja chuka.
-Phase 1–7 ✅ ho chuke. Deployment aur eval harness abhi baaki.
+Phase 1–8 ✅ ho chuke (eval harness + citations included). Deployment abhi baaki.
 
 ---
 
@@ -109,7 +109,7 @@ gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 
 ---
 
-## backend/tests/ ✅ — 27 tests, `.\dev.ps1 test`
+## backend/tests/ ✅ — 34 tests, `.\dev.ps1 test`
 
 | File | Kya cover karta hai |
 |---|---|

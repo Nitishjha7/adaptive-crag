@@ -79,6 +79,66 @@ answer "how does Self-RAG differ from CRAG"? Reasonable people would disagree,
 which is exactly what makes it a real test. Those cases were left out because
 ambiguous labels make a metric meaningless, not because they do not matter.
 
+**That gap has since been filled — see the next section.**
+
+---
+
+## The ambiguous tier: measuring stability instead of correctness
+
+Eight cases (IDs 21–28) were added where the corpus **half-covers** the topic.
+Each names the exact passage that makes it arguable, in `disagreement`.
+
+They are deliberately **not scored for correctness.** Their labels are genuinely
+contestable, and folding a contestable label into routing accuracy would make the
+headline number undefendable — which is the reason they were excluded in the
+first place. Adding them by inventing a "right" answer would have recreated the
+original problem, not solved it.
+
+Instead they are scored for **stability**: run the same question three times
+(`--repeat 3`) and check whether the router picks the same side every time.
+*Which* side it picks is a judgement call. Flipping between sides on identical
+input is not — that is non-determinism, and it is a defect regardless of which
+label you prefer.
+
+This also gives future retrieval work something to move. Routing accuracy is
+pinned at 100% and cannot improve, so a reranker or hybrid search could be added
+but never justified. Stability on half-covered cases can.
+
+### Result
+
+| | |
+|---|---|
+| Ambiguous cases | 8 |
+| **Route stability** (3 runs each) | **8/8 — 100%** |
+| Split | 4 local · 4 web |
+
+Two readings, and the second is the useful one.
+
+**The grader is deterministic even where the question is not.** Twenty-four runs,
+zero flips. Temperature 0 plus a one-word output is doing its job.
+
+**But determinism is not consistency of reasoning.** Compare these two:
+
+| Case | Question | Route |
+|---|---|---|
+| #25 | Does the 10-15% chunk overlap guidance also apply to **source code files**? | **web** |
+| #28 | Is 800 characters a good chunk size for long **legal contracts**? | **local** |
+
+These are the *same question shape*: the corpus states a general guideline, the
+question asks whether it holds for a named domain the corpus never mentions. The
+grader routes them oppositely, and does so stably.
+
+So the honest reading of 100% stability is: **the grader applies *a* rule
+reliably, not necessarily a coherent one.** Per-question determinism is real and
+worth having; a consistent principle across structurally identical questions is
+not demonstrated. That is a sharper and more useful finding than the headline
+number, and it is exactly the kind of thing a reranker experiment could now be
+tested against.
+
+**The 4/4 split matters too** — it confirms these cases are genuinely ambiguous
+rather than secretly easy. Had all eight fallen the same way, the tier would be
+measuring nothing.
+
 **Not tuned against.** The cases were written from corpus coverage before the
 first run, and no prompt was changed in response to the results. (Contrast with
 Code Guardian's routing eval, where the tool docstrings *were* tuned against the

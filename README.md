@@ -25,8 +25,9 @@ cost and latency of a web call on every query.
 > | Phase 5 — FastAPI `/api/query` + `/health` | ✅ |
 > | Phase 6 — React UI (chat, source badge, relevance pill, trace viewer) | ✅ |
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
-> | Test suite — 27 tests (`.\dev.ps1 test`) | ✅ |
-> | Evaluation harness — 20 labelled queries (`.\dev.ps1 eval`) | ✅ **routing 20/20, 0 missed fallbacks** |
+> | Citations — source filenames (local) / URLs (web) | ✅ |
+> | Test suite — 34 tests (`.\dev.ps1 test`) | ✅ |
+> | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
 > | Deployment (Render + Vercel) | ❌ not done |
 
 ## Measured: does the router actually route?
@@ -42,14 +43,22 @@ cost and latency of a web call on every query.
 | Unnecessary fallbacks | 0 |
 | Groundedness pass rate | 90–95% |
 | **LLM calls per query** | **local 3.0 · web 4.0** |
+| **Ambiguous cases** — 8 half-covered questions, 3 runs each | **8/8 stable · split 4 local / 4 web** |
 
 Two things worth saying out loud, because the number alone flatters the system:
 
 - **100% means the labelled task is easy, not that the router is perfect.** The
   corpus gap is categorical by design — concepts in, vendor/pricing/news out — so
-  most web cases differ along an obvious axis. It does *not* show that routing
-  survives an *ambiguous* gap, where the corpus half-covers a topic. [RESULTS.md](backend/eval/RESULTS.md)
-  says what would make the eval genuinely hard.
+  most web cases differ along an obvious axis. Eight **ambiguous** cases were added
+  for the harder situation, where the corpus half-covers the topic. They are scored
+  for *stability*, not correctness, because their labels are genuinely contestable
+  and an arguable label would make the headline number undefendable.
+- **Stable is not the same as coherent.** All 8 were stable across 3 runs — but #25
+  ("does the 10-15% overlap guidance apply to source code?") went web while #28
+  ("is 800 characters right for legal contracts?") went local, and those are the same
+  question shape. The grader applies *a* rule reliably, not demonstrably a consistent
+  one. That is the more useful finding, and it gives a future reranker something it
+  can actually be measured against — routing accuracy cannot move from 100%.
 - **The cost argument rests on call counts, not latency.** Correction costs one
   extra LLM call (+33%) and one web round trip, only on queries that need it.
   Latency was tried first and **failed as a measurement** — Groq's throttling
@@ -85,6 +94,10 @@ model change that quietly breaks routing fails the way a test does.
 6. **`validate_guardrails`** — final scan: an independent LLM groundedness check plus PII
    redaction, before the answer is returned with a source badge (Local DB vs Web Fallback).
 
+**Start here: [docs/PROJECT_WALKTHROUGH.md](docs/PROJECT_WALKTHROUGH.md)** — the flowchart,
+how it was built step by step, and how the whole system runs. If you read one file, read
+that one.
+
 See [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) for the full architecture, state
 schema, node contracts, and reference implementation. See
 [docs/INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.md) for the pitch, USP deep-dives,
@@ -97,7 +110,8 @@ pipeline stages this project has and which it deliberately does not.
 ```
 backend/    FastAPI app, LangGraph state machine, nodes, tools, guardrails
 frontend/   React + Vite + Tailwind client (chat UI, source badges, trace viewer)
-docs/       Setup guide, technical spec, build plan, roadmap, code notes, interview notes
+docs/       Walkthrough (start here), technical spec, code notes, interview notes,
+            RAG fundamentals, setup, build plan, roadmap
 ```
 
 ## Setup
@@ -129,8 +143,9 @@ don't need a rebuild:
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ingest [-Reset]    # embed backend/data/ into Chroma
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 27 tests, no API key needed
-.\dev.ps1 eval               # 20-case routing eval (real LLM + live web calls)
+.\dev.ps1 test               # 34 tests, no API key needed
+.\dev.ps1 eval               # 20 labelled cases (real LLM + live web calls)
+.\dev.ps1 eval --repeat 3    # + 8 ambiguous cases, scored for route stability
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit
 .\dev.ps1 serve -Port 8042   # FastAPI alone
 ```

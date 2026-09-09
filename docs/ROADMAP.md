@@ -8,7 +8,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-**Phase 1–7 ✅ — poora stack `docker compose up` se chalta hai. Eval harness abhi baaki.**
+**Phase 1–8 ✅ — poora stack `docker compose up` se chalta hai aur measured hai. Deployment baaki.**
 
 - ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
 - ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /
@@ -62,7 +62,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
      corpus se hai phir bhi flag hota hai, teeno runs me.
   ⚠️ 100% ka matlab "router perfect hai" nahi, "labelled task aasan hai" hai — corpus gap
   categorical hai. RESULTS.md me likha hai ki eval ko sach me hard kaise banaya jaaye.
-- ✅ **Test suite** — `backend/tests/`, 27 tests, `.\dev.ps1 test`. Dono routes, docs-replace
+- ✅ **Test suite** — `backend/tests/`, 34 tests, `.\dev.ps1 test`. Dono routes, docs-replace
   invariant, search failure, guardrails ke saare case, aur API shape covered
 - ✅ **Phase 6** — React + Vite + Tailwind UI: `ChatBox` (fixed demo queries ke saath),
   `SourceBadge`, `RelevancePill`, `TraceViewer` (node-by-node timeline). App code me hamesha

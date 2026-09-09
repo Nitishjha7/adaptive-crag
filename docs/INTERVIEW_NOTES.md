@@ -5,27 +5,29 @@
 
 ---
 
-> ## ⚠️ Padhne se pehle — abhi kya sach hai
+> ## Padhne se pehle — abhi kya sach hai
 >
-> **Backend poora bana hua hai aur asli me chal chuka hai** (Phase 1–5): ingestion,
-> graph, grading, conditional routing, web fallback, groundedness + PII validation,
-> FastAPI. Frontend (Phase 6) aur docker-compose (Phase 7) abhi nahi hai.
+> **Poora stack bana hua hai aur chal raha hai** (Phase 1–8): ingestion, graph, grading,
+> conditional routing, web fallback, groundedness + PII validation, citations, FastAPI,
+> React UI, docker-compose, aur eval harness. `docker compose up` se sab chalta hai.
+> Verified Groq (`openai/gpt-oss-120b`) + live DuckDuckGo pe.
 >
-> **Asli run ho chuka hai** — Groq (`openai/gpt-oss-120b`) + live DuckDuckGo search pe.
-> Dono routes chale, `backend/data/README.md` wali **paanchon fixed demo queries sahi
-> route leti hain** (3 local, 2 web).
+> **Measured hai, claimed nahi** — 20 labelled queries: routing **20/20**, **0 missed
+> fallbacks**. Plus 8 ambiguous cases, **8/8 route-stable** across 3 runs.
+> [RESULTS.md](../backend/eval/RESULTS.md) me poora analysis.
 >
-> **Iska interview pe seedha asar:**
-> - ✅ Bol sakta hai: *"maine CRAG loop implement kiya aur chala ke dekha — grading node,
->   conditional routing, live web fallback, groundedness validation, FastAPI ke peeche."*
-> - ✅ Bol sakta hai ki controlled demo set pe routing sahi aata hai — **par saaf bolna ki
->   ye 5 queries ka chhota controlled set hai**, koi benchmark nahi.
-> - ❌ **Mat bolna:** koi bhi accuracy percentage, ya "X% fallback precision". Wo abhi
->   measure nahi hua — eval harness (ROADMAP section A) abhi banna baaki hai.
-> - ❌ Frontend / live UI demo ka zikr mat karna jab tak Phase 6 nahi banta. Abhi sirf
->   CLI aur Swagger hai.
+> **Interview pe seedha asar:**
+> - ✅ Bol sakta hai: *"maine CRAG loop implement kiya, chalaya, aur measure kiya."*
+>   Live demo bhi de sakta hai — UI ban chuki hai.
+> - ✅ Numbers bol sakta hai — **par condition ke saath.** 20/20 ek *categorical* gap pe
+>   hai (concepts in, live facts out). Matlab task aasan hai, router perfect nahi.
+> - ❌ **Mat bolna:** hybrid search, BM25, reranker, ya "latency saved" — teeno me se koi
+>   nahi hai, aur latency measurement **fail** hui thi. [Section 15](#15-honesty-checklist--what-not-to-claim) poori list hai.
+> - ❌ **Deployed nahi hai.** Live link nahi hai — Self-Healing SQL Agent pe hai. Ye
+>   asymmetry poochhi ja sakti hai.
 >
-> Build order [ROADMAP.md](ROADMAP.md) me hai.
+> Section 15 (kya NOT claim karna) aur 16 (honest assessment) sabse zaroori hain —
+> interview se pehle wahi padhna.
 
 ---
 
@@ -44,6 +46,8 @@
 12. Demo Strategy
 13. One-Liner for Resume/LinkedIn
 14. Quick Reference — CRAGState Schema
+15. **Honesty Checklist — What NOT to Claim** ← read before any interview
+16. **How strong this project is — an honest assessment**
 
 ---
 
@@ -484,16 +488,28 @@ Use a small controlled dataset and fixed demo queries so the fallback triggers p
 ## 14. Quick Reference — CRAGState Schema
 
 ```python
-class CRAGState(TypedDict):
-    question: str            # Original user query
-    transformed_query: str   # Web-optimized search query
-    documents: List[str]     # Retrieved chunks (local, or web on fallback)
-    relevance_score: str     # "yes" or "no"
-    source_type: str         # "vector_db" or "web_search"
+class CRAGState(TypedDict, total=False):
+    question: str            # Original user query, never mutated
+    transformed_query: str   # Web-optimized search query (fallback path only)
+    documents: List[str]     # Working context — REPLACED by web on fallback
+    sources: List[str]       # Citations — filenames (local) or URLs (web)
+    relevance_score: str     # "yes" or "no" — the conditional edge reads this
+    source_type: str         # "vector_db" or "web_search" — drives the UI badge
     generation: str          # Raw synthesized answer
-    final_output: str        # Guardrail-validated final response
-    logs: List[str]          # Node trace execution logs
+    final_output: str        # Validated answer — what the user receives
+    guardrail_passed: bool   # Did validation pass clean
+    logs: Annotated[List[str], operator.add]   # Node trace — the only reducer
 ```
+
+**If asked "why does only `logs` have a reducer?"** — that is the question worth being
+ready for, and the answer is the whole project in one sentence:
+
+> "`logs` is additive so every node appends one line and the trace builds itself.
+> `documents` is deliberately *not* — an additive reducer there would keep the local
+> chunks I just graded irrelevant sitting in the context next to the web snippets that
+> replaced them, which re-introduces exactly the hallucination the grading step exists to
+> prevent. Same for `sources`, or the UI cites local files under a web-sourced answer.
+> There is a test asserting it, because it would break silently."
 
 ---
 
