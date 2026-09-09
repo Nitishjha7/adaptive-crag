@@ -97,3 +97,78 @@ async def health():
         "llm_model": s.LLM_MODEL,
         "groq_key_set": bool(s.GROQ_API_KEY),
     }
+
+
+@app.get("/api/stats")
+async def stats():
+    """Dashboard ke stat cards + System Info / Evaluation tabs ke liye.
+
+    Sab kuch **asli source** se aata hai — corpus files gine jaate hain, chunk
+    count Chroma se, aur eval numbers `eval/results.json` se jo asli run ne
+    likhi thi. Yahan koi number hardcode nahi hai; agar eval dobara chale aur
+    result badle, UI apne aap badal jaayega.
+
+    `/health` ki tarah ye bhi **koi LLM call nahi** karta — dashboard har page
+    load pe isse hit karta hai.
+    """
+    import json
+    from pathlib import Path
+
+    from app.config import BACKEND_DIR
+    from app.tools.vector_search import collection_count
+
+    s = get_settings()
+
+    data_dir = Path(s.DATA_DIR)
+    documents = (
+        len([
+            p for p in data_dir.iterdir()
+            if p.suffix.lower() in {".md", ".txt"} and p.name.lower() != "readme.md"
+        ])
+        if data_dir.exists()
+        else 0
+    )
+
+    try:
+        chunks = collection_count()
+    except Exception:  # noqa: BLE001 — store abhi bana hi na ho
+        chunks = 0
+
+    # Eval results optional hain — repo clone karke bina eval chalaye bhi UI
+    # chalni chahiye. Isliye missing file pe `None`, zero nahi: "measure nahi
+    # hua" aur "zero score" do alag baatein hain, aur UI ko farak pata hona chahiye.
+    evaluation = None
+    results_path = BACKEND_DIR / "eval" / "results.json"
+    if results_path.exists():
+        try:
+            summary = json.loads(results_path.read_text(encoding="utf-8"))["summary"]
+            evaluation = {
+                "routing_correct": summary.get("routing_correct"),
+                "routing_total": summary.get("scored"),
+                "routing_accuracy_pct": summary.get("routing_accuracy_pct"),
+                "missed_fallbacks": summary.get("missed_fallbacks"),
+                "unnecessary_fallbacks": summary.get("unnecessary_fallbacks"),
+                "groundedness_pass_pct": summary.get("groundedness_pass_pct"),
+                "llm_calls_local": summary.get("llm_calls_local_route"),
+                "llm_calls_web": summary.get("llm_calls_web_route"),
+                "ambiguous_cases": summary.get("ambiguous_cases"),
+                "ambiguous_stability_pct": summary.get("ambiguous_stability_pct"),
+            }
+        except Exception:  # noqa: BLE001 — corrupt/partial file UI na tode
+            evaluation = None
+
+    return {
+        "documents": documents,
+        "chunks": chunks,
+        "evaluation": evaluation,
+        "config": {
+            "llm_model": s.LLM_MODEL,
+            "embedding_model": s.EMBEDDING_MODEL,
+            "reranker_model": s.RERANKER_MODEL if s.USE_RERANKER else None,
+            "search_provider": s.SEARCH_PROVIDER,
+            "top_k": s.TOP_K,
+            "hybrid": s.USE_HYBRID,
+            "reranker": s.USE_RERANKER,
+            "groq_key_set": bool(s.GROQ_API_KEY),
+        },
+    }
