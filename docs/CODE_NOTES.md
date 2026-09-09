@@ -181,11 +181,29 @@ type se farak nahi padta.
 
 ## backend/app/nodes/retrieve.py ✅
 
-`retrieve` node — Chroma se cosine similarity top-k chunks.
+Graph ka entry point. **Yahan koi relevance ka faisla nahi hota** — similarity search
+hamesha k results deta hai, chahe corpus me kuch relevant ho ya na ho. Wahi naive RAG ka
+core failure mode hai; faisla `grade_documents` karta hai.
 
-- `get_vectorstore().similarity_search(question, k=4)`.
-- Chunks `documents` me append, `source_type = "vector_db"`.
-- Log: `"retrieve -> k chunks"`.
+Pipeline (Phase 9 ke baad):
+
+```
+vector search (8)  ─┐
+                    ├─ RRF fusion ─→ cross-encoder rerank ─→ top 4
+BM25 search (8)    ─┘
+```
+
+- `documents` + `sources` bharta hai, `source_type = "vector_db"`.
+- Log me har stage dikhta hai: `retrieve -> 4 chunks (vector=8, bm25=8, fused=12, reranked 12->4)`.
+
+**`RETRIEVAL_CANDIDATES` (8) `TOP_K` (4) se bada kyun:** warna reranker ke paas chunne ko
+kuch hai hi nahi aur wo no-op ban jaata hai.
+
+**Dono stages flags ke peeche kyun (`USE_HYBRID`, `USE_RERANKER`):** ye configurability ke
+liye nahi hai. Ye isliye hai taaki **eval dono ko off karke baseline se compare kar sake**.
+Is project me ek feature tab tak feature nahi hai jab tak uska fayda dikhaya na ja sake —
+aur routing accuracy 100% pe pinned hai, isliye inhe ambiguous cases ki stability pe judge
+kiya jaata hai. A/B result `eval/RESULTS.md` me hai.
 
 ---
 
@@ -281,6 +299,69 @@ convincing hai — aur user ke liye bhi "ye shayad galat hai" khaali screen se b
 (network / rate limit), answer block karna galat hai — wo already verified context se bana
 hai. Exception pe "grounded maan lo" + log me note. Fail-closed hone se ek flaky call poore
 system ko "kuch nahi bata sakta" bana deta.
+
+---
+
+## backend/app/tools/bm25_search.py ✅ (Phase 9)
+
+BM25 keyword search, usi 22 chunks pe jo Chroma me hain.
+
+**Vector search ke saath ye kyun:** dono alag cheezon me strong hain. Vector search
+*meaning* pakadta hai — "annual time off" aur "paid leave entitlement" paas aa jaate hain
+chahe ek bhi word common na ho. Par exact tokens pe wo kamzor hai: `EMP-4582` aur
+`EMP-4583` embedding space me lagbhag ek hi jagah baithte hain, kyunki unka *matlab* same
+hai. BM25 ulta hai — exact term match + IDF, isliye identifiers, codes, version numbers pe
+jeetta hai.
+
+**Poora corpus load kyun karta hai:** BM25 ka IDF term ki **corpus-wide** frequency pe
+depend karta hai. Sirf top-k chunks pe BM25 chalane se IDF galat hoga aur scores bekaar.
+22 chunks pe ye trivial hai — **bade corpus pe ye approach nahi chalti**, wahan proper
+inverted index (Elasticsearch / Tantivy) chahiye. Ye limitation asli hai.
+
+**Zero-score chunks drop hote hain:** BM25 me 0 ka matlab hai query ka koi term us chunk me
+hai hi nahi. Unhe rank karna fusion me sirf shor bharta hai.
+
+**Stemming jaan-boojh ke nahi:** ek aur dependency (nltk/snowball) ka fayda 22 chunks pe
+measure hi nahi hoga, aur ye project har addition ko measure karne ke usool pe chalta hai.
+
+`lru_cache` pe index banta hai; `ingest.py` ke end me `bust_cache()` call hota hai, warna
+ingestion ke baad same process me purana index chalta rehta.
+
+---
+
+## backend/app/tools/reranker.py ✅ (Phase 9)
+
+Do cheezein: cross-encoder rerank aur RRF fusion.
+
+### Retriever vs reranker — ye interview me poochha jaata hai
+
+- **Retriever = bi-encoder.** Query aur document ko *alag-alag* embed karta hai. Isliye
+  fast: document vectors pehle se bane hote hain. Par query aur document ka interaction wo
+  dekh hi nahi sakta — dono kabhi ek saath model me jaate hi nahi.
+- **Reranker = cross-encoder.** Query aur document *ek saath* model me jaate hain. Kaafi
+  accurate, par har pair pe ek forward pass — poore corpus pe namumkin.
+
+Isliye do-step: sasta retriever 8 candidates laata hai, mehnga reranker unme se 4 chunta hai.
+
+**Is project me reranker ka point answer quality nahi hai — grader ka input hai.** Agar
+sahi chunk retrieve to hua par top-k me neeche reh gaya, grader use theek se dekh nahi
+paata aur galat "no" de sakta hai.
+
+### RRF — score normalization kyun nahi
+
+Chroma cosine **distance** deta hai (chhota = behtar), BM25 unbounded positive score
+(bada = behtar). Ye alag scales hain; unhe ek dusre me convert karna corpus-specific
+tuning maangta hai, jo brittle hota hai.
+
+RRF sirf **rank** dekhta hai: `score(d) = Σ 1/(60 + rank)`. Isliye dono lists ka scale
+bilkul irrelevant ho jaata hai — yahi wajah hai ki ye hybrid search ka default fusion hai.
+
+**Reranker fail ho to original order** lautata hai, exception nahi — reranking ek
+*improvement* hai, requirement nahi. Model load fail ho jaye to retrieval chalti rehni
+chahiye, bas thodi kam accurate.
+
+Model: `Xenova/ms-marco-MiniLM-L-6-v2`, 80MB ONNX, `fastembed` me hi aata hai — **koi nayi
+dependency nahi**, aur wahi local/no-key stance jo embeddings ka hai.
 
 ---
 

@@ -31,9 +31,14 @@ decision the system makes out loud, and can be measured.**
 
 ```mermaid
 flowchart TD
-    U([User asks]) --> RET[retrieve<br/>cosine top-k from Chroma<br/>k=4]
+    U([User asks]) --> VEC[vector search<br/>cosine, Chroma<br/>8 candidates]
+    U --> BM[BM25<br/>keyword, in-memory<br/>8 candidates]
 
-    RET --> GRADE[grade_documents<br/>temperature 0, one word out]
+    VEC --> RRF[Reciprocal Rank Fusion<br/>ranks only, no score normalising]
+    BM --> RRF
+    RRF --> RR[cross-encoder rerank<br/>ms-marco-MiniLM-L-6<br/>keep top 4]
+
+    RR --> GRADE[grade_documents<br/>temperature 0, one word out]
     GRADE --> DEC{Can these chunks<br/>answer the question?}
 
     DEC -->|yes| GEN
@@ -50,12 +55,17 @@ flowchart TD
 
     VAL --> OUT([answer + source badge<br/>+ citations + relevance<br/>+ full node trace])
 
+    style RRF fill:#1e3a5f,color:#fff
+    style RR fill:#1e3a5f,color:#fff
     style GRADE fill:#312e81,color:#fff
     style DEC fill:#78350f,color:#fff
     style SWAP fill:#7c2d12,color:#fff
     style VAL fill:#134e4a,color:#fff
     style OUT fill:#14532d,color:#fff
 ```
+
+**The blue boxes are the retrieval half** — hybrid search and reranking, added last
+(Step 11) precisely because they could not be justified before the eval could measure them.
 
 **The orange diamond is the whole project.** Everything else is ordinary RAG. That one
 runtime decision — taken *before* any answer is generated — is what separates this from
@@ -89,7 +99,7 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, which is why 34 tests run with no API key.
+swapped for a scripted fake in one line, which is why 50 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
@@ -215,6 +225,48 @@ that no case is lost.
 
 ---
 
+### Step 11 — Hybrid retrieval and reranking, once they could be measured
+
+This step was deliberately held back until Step 10 existed. Routing accuracy was at
+100% and could not move, so adding a reranker would have produced a longer feature list
+and no evidence. **The ambiguity tier had to come first so there was a number that could
+respond.**
+
+Three pieces, all local and key-free, matching the rest of the stack:
+
+**BM25** (`app/tools/bm25_search.py`) — keyword scoring over the same 22 chunks. Vector
+search is strong on meaning and weak on exact tokens: `EMP-4582` and `EMP-4583` sit almost
+on top of each other in embedding space because they *mean* the same thing. BM25 is the
+opposite. The index is built from the whole collection because IDF depends on
+corpus-wide term frequency — running BM25 over only the top-k would compute nonsense.
+
+**Reciprocal Rank Fusion** (`app/tools/reranker.py`) — merges the two ranked lists with
+`1 / (60 + rank)`. Chosen because it reads **ranks, not scores**: Chroma returns cosine
+*distance* (lower is better) and BM25 returns an unbounded positive score (higher is
+better). Normalising those into a common scale is corpus-specific tuning and brittle. RRF
+sidesteps the problem entirely.
+
+**Cross-encoder rerank** — `Xenova/ms-marco-MiniLM-L-6-v2`, 80 MB ONNX, shipped inside
+`fastembed`, so no new dependency and no API key.
+
+The retriever is a **bi-encoder**: query and document are embedded separately, which is
+why it is fast — document vectors are precomputed — but it never sees the two together. A
+**cross-encoder** feeds the pair through the model jointly, which is far more accurate and
+far too expensive to run over a whole corpus. Hence the two-step shape: the cheap retriever
+proposes 8, the expensive reranker picks 4.
+
+**Why a reranker helps *this* project specifically** — and this is the part worth saying
+out loud: it is not about answer quality. `grade_documents` decides whether local context
+is sufficient. If the right chunk was retrieved but sat fourth, the grader may never
+effectively see it and can return a wrong "no". **The reranker's real job here is to
+improve the grader's input.**
+
+Both stages sit behind `USE_HYBRID` and `USE_RERANKER`, defaulting on. The flags exist so
+the eval can run the same 44 cases with them off and compare — a feature whose benefit
+cannot be shown is not a feature in this project.
+
+---
+
 ## 4. How the whole system works now
 
 ### 4.1 Component map
@@ -235,9 +287,11 @@ flowchart LR
         V[validators<br/>groundedness + PII]
     end
 
-    subgraph Local
+    subgraph Local["Retrieval — all local, no keys"]
         CH[(Chroma<br/>22 chunks<br/>mounted volume)]
-        EMB[FastEmbed<br/>bge-small · ONNX · in-process]
+        EMB[FastEmbed<br/>bge-small · ONNX]
+        B25[BM25<br/>rank-bm25 · in-memory]
+        RRK[Cross-encoder<br/>ms-marco-MiniLM · ONNX]
     end
 
     WEBSRC[DuckDuckGo<br/>Tavily optional]
@@ -249,6 +303,8 @@ flowchart LR
     V <--> LLM
     G <--> CH
     CH <--> EMB
+    G <--> B25
+    G <--> RRK
     G -->|only on fallback| WEBSRC
 ```
 
@@ -287,9 +343,10 @@ this and should not be claimed as such.
 
 | | |
 |---|---|
-| **34 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape. No API key needed |
+| **50 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags. No API key needed |
 | **Routing eval** (`.\dev.ps1 eval`) | 20 labelled cases — 20/20, 0 missed fallbacks, 3 runs |
 | **Ambiguity eval** (`--repeat 3`) | 8 half-covered cases, scored for route stability |
+| **Retrieval A/B** | Same 44 cases with `USE_HYBRID`/`USE_RERANKER` off vs on — see [RESULTS](../backend/eval/RESULTS.md) |
 | **Real runs** | Both routes against live Groq + live DuckDuckGo |
 | **Full stack** | `docker compose up` → first query works (after the healthcheck fix) |
 
@@ -312,15 +369,12 @@ None of these were caught by tests, which is the point.
 **Deployment.** No `render.yaml`, no `vercel.json`. CORS is still `allow_origins=["*"]`
 and must be restricted to the frontend origin before it goes anywhere public.
 
-**The retrieval half.** No hybrid search, no BM25, no reranker, no context filter. This is
-a deliberate scope choice — the axis of this project is retrieval *verification*, not
-retrieval *quality* — but it is a genuine gap and
-[RAG_FUNDAMENTALS](RAG_FUNDAMENTALS.md#3-ye-project-vs-production-architecture) maps it
-honestly.
+**Context filter.** Hybrid search and reranking landed in Step 11, but there is still no
+relevance threshold that drops weak chunks before they reach `generate` — the top 4 go
+through regardless of how weak the fourth is.
 
-The ambiguity eval exists specifically so that work becomes justifiable: a reranker gives
-the grader better chunks, and stability on half-covered cases is a number that can move.
-Routing accuracy cannot.
+**Document parsing.** The corpus is Markdown. No PDF, DOCX or HTML extraction, which in a
+real system is where a surprising share of retrieval bugs originate.
 
 **Corpus maintenance.** Documents are ingested once. No incremental update, no delete,
 no re-index — a full re-ingest is the only path.

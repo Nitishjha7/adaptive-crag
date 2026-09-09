@@ -253,9 +253,9 @@ nahi.
 | Embeddings | Hosted ya local | ✅ FastEmbed `bge-small-en-v1.5`, local ONNX |
 | Vector DB | Pinecone / Weaviate / Qdrant | ✅ Chroma, embedded mode |
 | **Query rewrite** | Retrieval se **pehle** | 🟡 Hai, par **baad me** — sirf fallback path pe. Neeche dekh |
-| **Hybrid retrieval** | Vector + BM25 | ❌ **Nahi hai.** Sirf vector search |
-| **Reranker** | Cross-encoder | ❌ **Nahi hai** |
-| Context filter | Threshold / compression | ❌ Nahi. Top-k seedha `generate` me |
+| **Hybrid retrieval** | Vector + BM25 | ✅ Dono, RRF fusion se merge (`USE_HYBRID`) |
+| **Reranker** | Cross-encoder | ✅ `ms-marco-MiniLM-L-6`, local ONNX (`USE_RERANKER`) |
+| Context filter | Threshold / compression | ❌ Nahi. Rerank ke baad top-4 seedha `generate` me |
 | **Retrieval evaluator** | Usually nahi hota | ✅ **Hai — yahi project ka core hai** |
 | **Web fallback** | Usually nahi hota | ✅ **Hai — conditional, always-on nahi** |
 | Grounding check | Kabhi-kabhi | ✅ Independent LLM check + PII redaction |
@@ -283,22 +283,26 @@ Ye mat bolna ki tera placement production se better hai.
 
 ### Jo nahi hai, uspe kya bolna
 
-Ye teen sabse zyada poochhe jayenge:
+Ab sirf do bade gaps bache hain:
 
-**"Hybrid search kyun nahi?"**
-> "Mera corpus 7 concept documents ka hai — usme koi product code, SKU ya identifier nahi
-> hai, aur BM25 ka asli fayda wahin hota hai. Isliye usko add karna is corpus pe measure
-> hi nahi ho paata. Agar corpus me identifiers hote, BM25 pehla addition hota."
+**"Context filter kyun nahi?"**
+> "Rerank ke baad top-4 seedha generate me jaate hain — koi relevance threshold nahi hai
+> jo kamzor chunk ko drop kare. Reranker ke scores wahan available hain, to ye chhota fix
+> hai; maine isliye nahi kiya kyunki 22 chunks pe uska fayda measure nahi hota."
 
-**"Reranker kyun nahi?"**
-> "Wo agla step hai, aur grader ke liye seedha faydemand hai — reranker better chunks upar
-> laata hai, to grader ko judge karne ke liye better input milta hai. Abhi mera eval
-> categorical gap pe 20/20 de raha hai, to reranker ka fayda is dataset pe dikhega hi nahi.
-> Pehle ambiguous cases ka eval banana padega, tab reranker measurable ho jaayega."
+**"PDF/DOCX parsing kyun nahi?"**
+> "Corpus Markdown hai, to parser ki zaroorat hi nahi padi. Ye ek genuine gap hai —
+> production me retrieval bugs ka bada hissa wahin se aata hai, kyunki two-column PDF ya
+> tables galat extract ho jaati hain aur poori pipeline kachre pe chalti hai."
 
-**"Citations kyun nahi?"**
-> "Web results pe URL attach hota hai. Local chunks pe nahi — metadata me source filename
-> hai par wo answer tak carry nahi hota. Ye ek genuine gap hai, chhota fix hai."
+**Hybrid aur reranker ke baare me** — ab wo hain, par ye kehna zaroori hai ki **unka
+sequencing hi asli baat hai**:
+
+> "Maine hybrid aur reranker jaan-boojh ke sabse **aakhir me** banaye. Us waqt routing
+> accuracy 100% pe thi aur hil hi nahi sakti thi — matlab main koi bhi retrieval
+> improvement add karta, uska fayda dikha hi nahi paata. Pehle maine eval me ambiguous
+> cases add kiye jinpe number move kar sakta tha, phir ye feature banaye, aur dono
+> configurations pe same set chala ke compare kiya."
 
 ---
 
