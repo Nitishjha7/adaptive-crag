@@ -46,11 +46,22 @@ def main() -> int:
     p.add_argument("--web", type=int, default=8, help="kitne web cases")
     p.add_argument("--out", default=str(HERE / "scenarios_scifact.json"))
     p.add_argument("--seed", type=int, default=17, help="reproducibility ke liye")
+    p.add_argument(
+        "--limit", type=int, default=0,
+        help="wahi limit jo ingest me use ki thi — scenarios usi subset pe bane",
+    )
     args = p.parse_args()
 
     from app.tools.beir_loader import load_corpus, load_qrels, load_queries
 
-    corpus_ids = {doc_id for doc_id, _, _ in load_corpus("scifact")}
+    # **Wahi limit jo ingest me di thi.** Warna scenarios poore corpus ke against
+    # bante hain jabki index me subset hai — aur phir ek `local` case ka gold doc
+    # index me hai hi nahi. Wo failure eval me *grader ki galti* jaisa dikhta,
+    # jabki galti mismatch ki hoti.
+    #
+    # (Gold-first subset ki wajah se limit >= 283 pe ye vaise bhi match karta
+    # hai, par mismatch ko design pe chhodna theek nahi.)
+    corpus_ids = {doc_id for doc_id, _, _ in load_corpus("scifact", limit=args.limit)}
     queries = load_queries("scifact")
     qrels = load_qrels("scifact", "test")
 
@@ -106,9 +117,10 @@ def main() -> int:
             "chosen so that no static scientific corpus could answer them - live",
             "pricing, current rate limits, recent releases. The easy half.",
             "",
-            "Regenerate with: python -m eval.build_scifact_scenarios",
+            "Regenerate with: python -m eval.build_scifact_scenarios --limit 500",
         ],
         "corpus": "scifact",
+        "corpus_limit": args.limit,
         "cases": cases,
     }
 
