@@ -75,11 +75,12 @@ question.
 | Agent orchestration | LangGraph StateGraph | Conditional branching, corrective loop, state threading |
 | Grading / synthesis LLM | Groq (`openai/gpt-oss-120b`) via LangChain | Binary relevance grading, query rewrite, answer generation |
 | Embeddings | FastEmbed / HuggingFace | Local document + query vectorization |
-| Local knowledge base | ChromaDB / FAISS | Vector storage, cosine top-k similarity search |
+| Local knowledge base | ChromaDB (embedded) | Vector storage, cosine top-k similarity search |
+| Retrieval pipeline | BM25 (`rank-bm25`) + RRF + cross-encoder (`ms-marco-MiniLM`) | Hybrid candidates, fused by rank, reranked to top-k |
 | Web search tool | DuckDuckGo (default, no key) / Tavily (optional) | Fallback context when local docs graded irrelevant |
 | Output validation | Custom LLM groundedness check + regex PII | Catches ungrounded claims and redacts PII from the final answer |
 | Backend | FastAPI + Uvicorn | REST endpoint, retrieval scores, step execution logs |
-| Frontend | React + Vite + Tailwind CSS | Chat, source badges, relevance indicators, trace |
+| Frontend | React + Vite + Tailwind CSS | Dashboard: stat cards, chat, citations, trace, eval tab |
 | Containerization | Docker & Docker Compose | Backend + vector DB + frontend orchestration |
 
 ---

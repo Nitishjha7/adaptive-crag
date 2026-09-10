@@ -190,9 +190,28 @@ an `async def` would stall the event loop.
 `/health` deliberately makes **no LLM call**: if it did, one rate-limit would mark the
 container unhealthy and Docker would restart it in a loop.
 
-The UI renders the badge, the relevance pill, the rewritten query, the citations, and the
-node-by-node trace — with the two correction nodes in a different colour, so the moment
-the system changed course is visible without narrating it.
+The UI is a dashboard, not just a chat box: a nav rail, four stat cards, the conversation,
+and a right rail carrying the trace, the live system config, and the evaluation numbers.
+`GET /api/stats` feeds it — corpus counts from disk, chunk count from Chroma, routing
+numbers read out of `eval/results.json`. Like `/health` it makes no LLM call, because the
+dashboard hits it on every page load.
+
+**The rule the UI is built on: nothing on screen is a number the backend cannot produce.**
+Three consequences, and they are the interesting part:
+
+- **No "Relevance Score: 0.92".** The grader returns one word. Turning that into a
+  two-decimal percentage invents precision that does not exist, and "why 92 and not 85?"
+  would have no answer. The panel shows `Relevance Verdict: yes`.
+- **No per-step timestamps in the trace.** The backend does not emit per-node timing, so
+  printing `10:24:03` next to each step would be fabrication. Total `elapsed_ms` is real
+  and is shown.
+- **"Web Search (Skipped)" is displayed on purpose.** On the local route that node never
+  ran — showing it greyed out is what makes the fallback visibly *conditional* rather than
+  a default, which is the whole thesis in one glance.
+
+The Evaluation tab prints the caveat directly under the numbers: 100% means the labelled
+task is easy, not that the router is perfect. A dashboard that contradicts its own
+RESULTS.md would be worse than no dashboard.
 
 ### Step 9 — Citations
 
