@@ -138,6 +138,18 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         else:
             hit, keyword_hit = [], None
 
+        # **Retrieval recall@k** — sirf tab jab dataset gold docs deta ho (BEIR).
+        # Ye wo metric hai jo concepts corpus pe possible hi nahi tha: wahan
+        # koi ground truth nahi thi ki kaunsa chunk sahi hai, isliye retrieval
+        # quality measure hi nahi ho sakti thi — aur isiliye reranker ka A/B
+        # flat aaya tha. Yahan qrels hai, to ab ye sach me hil sakta hai.
+        gold = case.get("gold_docs") or []
+        if gold and expected == "local":
+            retrieved = set(final.get("sources") or [])
+            recall_hit = any(g in retrieved for g in gold)
+        else:
+            recall_hit = None
+
         return {
             "id": case["id"],
             "question": question,
@@ -155,6 +167,8 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             "keywords_expected": keywords,
             "keywords_found": hit,
             "keyword_hit": keyword_hit,
+            "gold_docs": gold,
+            "recall_hit": recall_hit,
             "elapsed_ms": elapsed_ms,
             "llm_calls": count_llm_calls(final.get("logs", [])),
             "nodes_run": len(final.get("logs", [])),
@@ -299,6 +313,7 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     graded = [r for r in ok if r.get("guardrail_passed") is not None]
     keyword_checked = [r for r in ok if r.get("keyword_hit") is not None]
+    recall_checked = [r for r in ok if r.get("recall_hit") is not None]
 
     def mean_ms(rows: List[Dict[str, Any]]) -> int:
         return int(sum(r["elapsed_ms"] for r in rows) / len(rows)) if rows else 0
@@ -332,6 +347,10 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "groundedness_pass_pct": pct(
             len([r for r in graded if r["guardrail_passed"]]), len(graded)
         ),
+        "recall_at_k_pct": pct(
+            len([r for r in recall_checked if r["recall_hit"]]), len(recall_checked)
+        ),
+        "recall_checked": len(recall_checked),
         "keyword_hit_pct": pct(
             len([r for r in keyword_checked if r["keyword_hit"]]), len(keyword_checked)
         ),
@@ -383,6 +402,12 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
     print()
     print(f"  Groundedness pass     : {f('groundedness_pass_pct')}")
     print(f"  Keyword hit (local)   : {f('keyword_hit_pct')}")
+    # Sirf tab dikhta hai jab dataset gold docs deta ho (BEIR). Concepts corpus
+    # pe ground truth hai hi nahi, to yahan jhoothi 0% dikhana galat hoga.
+    if s.get("recall_checked"):
+        print(f"  Retrieval recall@k    : {f('recall_at_k_pct')}"
+              f"  ({s['recall_checked']} cases with gold docs)"
+              "   <- whether the right document was even retrieved")
     print()
     def n(v, suffix: str = "") -> str:
         return "n/a" if v in (None, 0) else f"{v}{suffix}"

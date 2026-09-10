@@ -139,21 +139,34 @@ def main() -> int:
         print(f"[ingest] ERROR: corpus '{s.CORPUS}' se koi document nahi mila")
         return 1
     print(f"[ingest] {len(docs)} documents loaded")
-
-    chunks = split_documents(docs)
-    print(f"[ingest] {len(chunks)} chunks banaye (size={s.CHUNK_SIZE}, overlap={s.CHUNK_OVERLAP})")
-
     print(f"[ingest] embedding with {s.EMBEDDING_MODEL} ...")
 
-    # **Batch me add karte hain.** Chroma ka apna max batch size hai (~5.4k) aur
-    # SciFact usse kaafi upar jaata hai — poora list ek baar me dena wahan
-    # crash karta. Batching se progress bhi dikhta hai, jo 10k chunks pe zaroori
-    # hai warna lagta hai script hang ho gayi.
-    BATCH = 2000
-    for i in range(0, len(chunks), BATCH):
-        store.add_documents(chunks[i : i + BATCH])
-        done = min(i + BATCH, len(chunks))
-        print(f"[ingest]   {done}/{len(chunks)} chunks embedded", flush=True)
+    # **Streaming: split aur embed dono batch-wise.**
+    #
+    # Pehle poora corpus split karke saare chunks ek list me rakhe the — SciFact
+    # pe wo 17,266 chunks banti hai aur container (3.5 GB) **OOM se mar gaya**
+    # (exit 137). Concepts corpus ke 22 chunks pe ye kabhi dikhta hi nahi.
+    #
+    # Ab documents ke batch pe kaam hota hai: split -> embed -> chhod do. Peak
+    # memory corpus size se azaad ho jaati hai, isliye isse bade corpora bhi
+    # chalenge.
+    DOC_BATCH = 200
+    total_chunks = 0
+
+    for i in range(0, len(docs), DOC_BATCH):
+        batch_chunks = split_documents(docs[i : i + DOC_BATCH])
+        if not batch_chunks:
+            continue
+        store.add_documents(batch_chunks)
+        total_chunks += len(batch_chunks)
+        print(
+            f"[ingest]   {min(i + DOC_BATCH, len(docs))}/{len(docs)} docs "
+            f"-> {total_chunks} chunks",
+            flush=True,
+        )
+
+    print(f"[ingest] {total_chunks} chunks total "
+          f"(size={s.CHUNK_SIZE}, overlap={s.CHUNK_OVERLAP})")
 
     # BM25 index poore corpus se banta hai aur lru_cache me rehta hai. Ingestion
     # ke baad wo stale hai — clear na karo to same process me purana index chalta rahe.

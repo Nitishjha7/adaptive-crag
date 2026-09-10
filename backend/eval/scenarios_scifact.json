@@ -1,0 +1,332 @@
+{
+  "_about": [
+    "Routing eval for the BEIR SciFact corpus.",
+    "",
+    "`local` cases are NOT hand-labelled \u2014 they come from SciFact's own",
+    "qrels. If the dataset says a claim is supported by abstract D, and D",
+    "is in our index, the router should stay local. That removes the",
+    "single-author bias the concepts-corpus eval admits to.",
+    "",
+    "`web` cases ARE hand-written, and that is worth stating. They were",
+    "chosen so that no static scientific corpus could answer them - live",
+    "pricing, current rate limits, recent releases. The easy half.",
+    "",
+    "Regenerate with: python -m eval.build_scifact_scenarios"
+  ],
+  "corpus": "scifact",
+  "cases": [
+    {
+      "id": 1,
+      "question": "Mice defective for deoxyribonucleic acid (DNA) polymerase I (polI) reveal increased sensitivity to ionizing radiation (IR).",
+      "expected_route": "local",
+      "source_doc": "32275758",
+      "gold_docs": [
+        "32275758"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 2,
+      "question": "p16INK4A accumulation is  linked to an abnormal wound response caused by the microinvasive step of advanced Oral Potentially Malignant Lesions (OPMLs).",
+      "expected_route": "local",
+      "source_doc": "17717391",
+      "gold_docs": [
+        "17717391"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 3,
+      "question": "Hyperfibrinogenemia decreases rates of femoropopliteal bypass thrombosis.",
+      "expected_route": "local",
+      "source_doc": "12991445",
+      "gold_docs": [
+        "12991445"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 4,
+      "question": "Blocking the interaction between TDP-43 and respiratory complex I proteins ND3 and ND6 leads to increased TDP-43-induced neuronal loss.",
+      "expected_route": "local",
+      "source_doc": "16966326",
+      "gold_docs": [
+        "16966326"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 5,
+      "question": "Transferred UCB T cells acquire a memory-like phenotype in recipients.",
+      "expected_route": "local",
+      "source_doc": "27910499",
+      "gold_docs": [
+        "27910499"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 6,
+      "question": "Only a minority of cells survive development after differentiation into stress-resistant spores.",
+      "expected_route": "local",
+      "source_doc": "18855191",
+      "gold_docs": [
+        "18855191"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 7,
+      "question": "Infection of human T-cell lymphotropic virus type 1 is most frequent in individuals of African origin.",
+      "expected_route": "local",
+      "source_doc": "24512064",
+      "gold_docs": [
+        "24512064"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 8,
+      "question": "ALDH1 expression is associated with poorer prognosis in breast cancer.",
+      "expected_route": "local",
+      "source_doc": "45638119",
+      "gold_docs": [
+        "45638119"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 9,
+      "question": "Febrile seizures reduce the threshold for development of epilepsy.",
+      "expected_route": "local",
+      "source_doc": "14924526",
+      "gold_docs": [
+        "14924526"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 10,
+      "question": "Mice that lack Interferon-\u03b3 or its receptor exhibit high resistance to experimental autoimmune myocarditis.",
+      "expected_route": "local",
+      "source_doc": "24338780",
+      "gold_docs": [
+        "24338780"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 11,
+      "question": "The genomic aberrations found in matasteses are very similar to those found in the primary tumor.",
+      "expected_route": "local",
+      "source_doc": "19736671",
+      "gold_docs": [
+        "19736671"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 12,
+      "question": "Localization of PIN1 in the Arabidopsis embryo does not require VPS9a",
+      "expected_route": "local",
+      "source_doc": "4350400",
+      "gold_docs": [
+        "4350400"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 13,
+      "question": "Thigh-length graduated compression stockings (GCS) did not reduce deep vein thrombosis in patients admitted to hospital who are immobile because of acute stroke.",
+      "expected_route": "local",
+      "source_doc": "11718220",
+      "gold_docs": [
+        "11718220"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 14,
+      "question": "Combination nicotine replacement therapies with varenicline or bupropion lead to significantly higher long-term abstinence rates at 52 weeks than varenicline monotherapy.",
+      "expected_route": "local",
+      "source_doc": "11614737",
+      "gold_docs": [
+        "11614737"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 15,
+      "question": "Teaching hospitals do not provide better care than non-teaching hospitals.",
+      "expected_route": "local",
+      "source_doc": "13906581",
+      "gold_docs": [
+        "13906581"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 16,
+      "question": "Errors in peripheral IV drug administration are most common during bolus administration and multiple-step medicine preparations.",
+      "expected_route": "local",
+      "source_doc": "16495649",
+      "gold_docs": [
+        "16495649"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 17,
+      "question": "The binding orientation of the ML-SA1 activator at hTRPML2 is different from the binding orientation of the ML-SA1 activator at hTRPML1.",
+      "expected_route": "local",
+      "source_doc": "3441524",
+      "gold_docs": [
+        "3441524"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 18,
+      "question": "Nanoparticles can be targeted against specific cell types by incorporating aptamers into lipid nanoparticles.",
+      "expected_route": "local",
+      "source_doc": "1469751",
+      "gold_docs": [
+        "1469751"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 19,
+      "question": "Ultrasound guidance significantly raises the number of traumatic procedures when attempting needle insertion.",
+      "expected_route": "local",
+      "source_doc": "15482274",
+      "gold_docs": [
+        "15482274"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 20,
+      "question": "Gene expression does not vary appreciably across genetically identical cells.",
+      "expected_route": "local",
+      "source_doc": "12804937",
+      "gold_docs": [
+        "12804937",
+        "464511"
+      ],
+      "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
+      "label_source": "beir-qrels",
+      "hard": false
+    },
+    {
+      "id": 21,
+      "question": "What is the current pricing of the Groq API per million tokens?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 22,
+      "question": "What are the free tier rate limits on the Groq API right now?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 23,
+      "question": "Which chat models are available on Groq today?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 24,
+      "question": "What changed in the most recent LangGraph release?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 25,
+      "question": "What is the context window of the newest Claude model?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 26,
+      "question": "How much does OpenAI charge per million input tokens?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 27,
+      "question": "Which vector database companies raised funding this year?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    },
+    {
+      "id": 28,
+      "question": "What is the latest version of ChromaDB?",
+      "expected_route": "web",
+      "source_doc": null,
+      "why": "Live/product fact. SciFact is a static corpus of scientific abstracts.",
+      "label_source": "hand-written",
+      "hard": false
+    }
+  ]
+}

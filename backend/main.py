@@ -119,15 +119,20 @@ async def stats():
 
     s = get_settings()
 
-    data_dir = Path(s.DATA_DIR)
-    documents = (
-        len([
-            p for p in data_dir.iterdir()
-            if p.suffix.lower() in {".md", ".txt"} and p.name.lower() != "readme.md"
-        ])
-        if data_dir.exists()
-        else 0
-    )
+    # SciFact pe "documents" ka matlab corpus ke abstracts hain, files nahi —
+    # wahan filesystem gin ke 7 bolna jhooth hoga.
+    if s.CORPUS != "concepts":
+        documents = None
+    else:
+        data_dir = Path(s.DATA_DIR)
+        documents = (
+            len([
+                p for p in data_dir.iterdir()
+                if p.suffix.lower() in {".md", ".txt"} and p.name.lower() != "readme.md"
+            ])
+            if data_dir.exists()
+            else 0
+        )
 
     try:
         chunks = collection_count()

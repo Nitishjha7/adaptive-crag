@@ -17,7 +17,10 @@ param(
     [Parameter(Position = 0)][string]$Command = "ask",
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest,
     [switch]$Reset,
-    [int]$Port = 8000
+    [int]$Port = 8000,
+    # "concepts" (default) ya "scifact" - dono alag Chroma collections me rehte
+    # hain, isliye switch karne pe re-ingest nahi karna padta.
+    [ValidateSet("", "concepts", "scifact")][string]$Corpus = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,6 +29,7 @@ $Backend = Join-Path $Root "backend"
 $Image   = "adaptive-crag-backend:dev"
 
 New-Item -ItemType Directory -Force -Path (Join-Path $Backend "vectorstore") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $Backend "beir") | Out-Null
 
 # Code + data + vectorstore mount - image sirf dependencies deti hai
 $Mounts = @(
@@ -35,20 +39,27 @@ $Mounts = @(
     "-v", "${Backend}\ingest.py:/app/ingest.py",
     "-v", "${Backend}\main.py:/app/main.py",
     "-v", "${Backend}\tests:/app/tests",
-    "-v", "${Backend}\eval:/app/eval"
+    "-v", "${Backend}\eval:/app/eval",
+    # BEIR download host pe cache rehta hai - container har baar 5k abstracts
+    # dobara download na kare.
+    "-v", "${Backend}\beir:/app/beir"
 )
 
 # .env repo root se - secrets image me bake nahi hote
 $EnvArgs = @()
 $EnvFile = Join-Path $Root ".env"
-if (Test-Path $EnvFile) { $EnvArgs = @("--env-file", $EnvFile) }
+if (Test-Path $EnvFile) { $EnvArgs += @("--env-file", $EnvFile) }
 else { Write-Host "[dev] warning: .env nahi mila - LLM call fail hogi (.env.example copy karo)" -ForegroundColor Yellow }
+
+# -e ke baad aata hai taaki --env-file ki value ko override kare, ulta nahi.
+if ($Corpus) { $EnvArgs += @("-e", "CORPUS=$Corpus") }
 
 switch ($Command) {
     "build"  { docker build -t $Image $Backend }
     "ingest" {
         $cmdArgs = @("python", "ingest.py")
         if ($Reset) { $cmdArgs += "--reset" }
+        if ($Corpus) { $cmdArgs += @("--corpus", $Corpus) }
         docker run --rm @Mounts @EnvArgs $Image @cmdArgs
     }
     "ask" {
@@ -65,11 +76,11 @@ switch ($Command) {
         docker run --rm @Mounts @EnvArgs $Image python -m pytest tests/ -q
     }
     "eval" {
-        # Asli Groq + asli DuckDuckGo hit karta hai — tests ke ulat. Rate limit
+        # Asli Groq + asli DuckDuckGo hit karta hai - tests ke ulat. Rate limit
         # bachane ke liye smoke run: .\dev.ps1 eval --limit 5
         $evalArgs = @("python", "-m", "eval.run_eval") + $Rest
         docker run --rm @Mounts @EnvArgs $Image @evalArgs
     }
     "shell"  { docker run --rm -it @Mounts @EnvArgs $Image bash }
-    default  { Write-Host "unknown command: $Command  (build | ingest | ask | test | serve | shell)" }
+    default  { Write-Host "unknown command: $Command  (build | ingest | ask | test | eval | serve | shell)" }
 }
