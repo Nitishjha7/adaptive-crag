@@ -8,7 +8,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-**Phase 1–8 ✅ — poora stack `docker compose up` se chalta hai aur measured hai. Deployment baaki.**
+**Phase 1–9 ✅ — poora stack `docker compose up` se chalta hai aur measured hai. Deployment baaki.**
 
 - ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
 - ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /
@@ -64,9 +64,16 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
   categorical hai. RESULTS.md me likha hai ki eval ko sach me hard kaise banaya jaaye.
 - ✅ **Test suite** — `backend/tests/`, 54 tests, `.\dev.ps1 test`. Dono routes, docs-replace
   invariant, search failure, guardrails ke saare case, aur API shape covered
-- ✅ **Phase 6** — React + Vite + Tailwind UI: `ChatBox` (fixed demo queries ke saath),
-  `SourceBadge`, `RelevancePill`, `TraceViewer` (node-by-node timeline). App code me hamesha
-  relative `/api/...` — dev me Vite proxy, prod me Nginx, koi hardcoded backend URL nahi
+- ✅ **Phase 6** — React + Vite + Tailwind **dashboard**: `Sidebar`, `StatCards` (documents ·
+  chunks · routing accuracy · missed fallbacks — sab `/api/stats` se, koi hardcoded number
+  nahi), `Message` (source badge + rewrite note + citations), `SidePanel` (Sources & Trace ·
+  System Info · Evaluation tabs), `TraceTimeline` (node-by-node, "Web Search (Skipped)" bhi
+  dikhta hai taaki fallback ka conditional hona saaf rahe). App code me hamesha relative
+  `/api/...` — dev me Vite proxy, prod me Nginx, koi hardcoded backend URL nahi.
+  **UI me jaan-boojh ke jo nahi hai:** koi fake "0.92 relevance score" (grader binary hai)
+  aur koi per-step timestamp (backend emit nahi karta) — detail CODE_NOTES me
+- ✅ **`GET /api/stats`** — corpus counts + `eval/results.json` ke numbers + live config.
+  Koi LLM call nahi, kyunki dashboard har page load pe ise hit karta hai
 - ✅ **Phase 7** — `docker-compose.yml`: backend + frontend, Chroma volume, healthcheck,
   Nginx `/api/` proxy. Verified: `docker compose up` ke turant baad pehli query kaam karti hai
 - ❌ Deployment (Render + Vercel) — abhi nahi hua
@@ -115,8 +122,8 @@ answer sirf verified context se grounded ho.
 Step execution logs response me — explainability ke liye. `/health` for Docker.
 
 ### Phase 6 — Frontend Demo UI (React + Vite + Tailwind)
-`ChatBox`, `SourceBadge` (Local DB / Web Fallback), `TraceViewer` (kaunsa node chala kis
-order me), `RelevancePill` (yes/no). Live demo Swagger se hamesha better lagta hai.
+Dashboard: nav rail, stat cards, chat with source badges + citations, aur right rail me
+trace / system config / eval numbers. Live demo Swagger se hamesha better lagta hai.
 
 ### Phase 7 — Docker Compose + Deployment
 `backend` + `frontend` services, `/api/` proxy, Chroma persistence volume. Deploy: Render

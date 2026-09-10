@@ -32,15 +32,19 @@ question.
 ## 2. System Architecture
 
 ```
-[ React + Vite + Tailwind Frontend ]
-  |-- Chat UI
-  |-- Source badge (Local Vector DB / Live Web Fallback)
-  \-- LangGraph execution-trace viewer (which node ran, in what order)
+[ React + Vite + Tailwind Dashboard ]
+  |-- Stat cards (documents · chunks · routing accuracy · missed fallbacks)
+  |-- Chat with source badge (Local Vector DB / Live Web Fallback) + citations
+  \-- Right rail: execution trace · system config · evaluation numbers
                            |
                            v  (async ASGI)
 [ FastAPI Backend ]
-  |-- POST /api/query        run the CRAG graph, return answer + source + logs
+  |-- POST /api/query        run the CRAG graph, return answer + sources + logs
+  |-- GET  /api/stats        corpus counts + eval results + live config (no LLM call)
   \-- GET  /health           container healthcheck
+                           |
+                           v
+[ Retrieval ]  vector (Chroma) + BM25 -> RRF fusion -> cross-encoder rerank -> top-k
                            |
                            v
 [ LangGraph StateGraph — CRAGState ]
@@ -407,7 +411,7 @@ adaptive-crag/
 │   └── Dockerfile · requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── components/{ChatBox,SourceBadge,TraceViewer,RelevancePill}.jsx
+│   │   ├── components/{Sidebar,StatCards,Message,Citations,SidePanel,TraceTimeline}.jsx
 │   │   └── App.jsx · main.jsx · index.css
 │   ├── package.json · tailwind.config.js · vite.config.js · postcss.config.js
 │   ├── nginx.conf                     # SPA fallback + /api/ proxy to backend

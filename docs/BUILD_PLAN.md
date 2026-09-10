@@ -22,7 +22,7 @@ aur kitna time lagega. Har session ke baad isko update karte rahenge (✅ mark k
 | 1 | Phase 1 + 2 | Chroma ingestion script + persistence, `config.py` (LLM + embedding factory), `CRAGState` schema, LangGraph skeleton (`retrieve` + `generate` + wiring), ek dummy query end-to-end chale | ✅ ingestion (7 docs → 22 chunks) + graph wiring verified |
 | 2 | Phase 3 | `grade_documents` binary grader + conditional edge, `transform_query` rewrite, `tavily_search` tool + `web_search_fallback` node, dono paths verify | ✅ dono routes asli Groq + live DuckDuckGo pe verified |
 | 3 | Phase 4 + 5 | Custom `validators.py` (LLM groundedness + regex PII — **`guardrails-ai` nahi**) + `validate_guardrails` node, FastAPI `POST /api/query` with step logs + `source_type` | ✅ guardrails ke 4 case + asli HTTP requests verified |
-| 4 | Phase 6 + 7 | React + Vite + Tailwind demo UI (ChatBox, SourceBadge, TraceViewer, RelevancePill), `/api/` proxy, `docker-compose.yml`, end-to-end wiring | ✅ `docker compose up` se poora stack chalta hai; dono routes UI se verified. Deployment abhi baaki |
+| 4 | Phase 6 + 7 | React + Vite + Tailwind dashboard (Sidebar, StatCards, Message, Citations, SidePanel, TraceTimeline), `/api/` proxy, `docker-compose.yml`, end-to-end wiring | ✅ `docker compose up` se poora stack chalta hai; dono routes UI se verified. Deployment abhi baaki |
 
 **Claude ka effort:** ~4 working sessions. Back-to-back karein toh 1–2 din.
 
@@ -73,7 +73,7 @@ bada risk hai.
 3. ✅ Phase 3 — `grade_documents` + conditional edge + `transform_query` + web fallback
 4. ✅ Phase 4 — output validation (groundedness + PII)
 5. ✅ Phase 5 — FastAPI `/api/query` endpoint with step logs
-6. ✅ Phase 6 — React + Vite + Tailwind demo UI (source badges, trace viewer)
+6. ✅ Phase 6 — React + Vite + Tailwind dashboard (stat cards, source badges, trace, eval tab)
 7. ✅ Phase 7 — Docker Compose · ❌ deployment (Render + Vercel) abhi baaki
 8. ❌ Eval script + INTERVIEW_NOTES me real numbers bharna
 

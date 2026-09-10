@@ -442,13 +442,17 @@ hai — code me TODO pada hai.
 
 ## frontend/ ✅ — React + Vite + Tailwind
 
+Dashboard layout: left nav rail · stat cards · chat · right detail rail.
+
 | File | Kaam |
 |---|---|
-| `src/App.jsx` | Sab compose karta hai + `fetch("/api/query")` |
-| `components/ChatBox.jsx` | Query input + 4 fixed demo query buttons |
-| `components/SourceBadge.jsx` | "Local Vector DB" (green) / "Live Web Fallback" (blue) pill |
-| `components/TraceViewer.jsx` | `logs[]` ko node-by-node timeline me render — sabse impressive part |
-| `components/RelevancePill.jsx` | Grader ka verdict (`yes`/`no`) transparently |
+| `src/App.jsx` | Layout + conversation state + `fetch("/api/query")` aur `/api/stats` |
+| `components/Sidebar.jsx` | Nav rail, logo, promo card |
+| `components/StatCards.jsx` | 4 top cards — documents · chunks · routing accuracy · missed fallbacks |
+| `components/Message.jsx` | Ek turn — user bubble ya assistant card (badge + rewrite note + citations) |
+| `components/Citations.jsx` | Sources list — filenames (local) ya clickable URLs (web) |
+| `components/SidePanel.jsx` | Tabs: Sources & Trace · System Info · Evaluation |
+| `components/TraceTimeline.jsx` | `logs[]` ko node-by-node timeline me render — sabse impressive part |
 | `vite.config.js` | dev me `/api` proxy backend pe |
 | `nginx.conf` | prod me wahi `/api` proxy + SPA fallback |
 
@@ -459,9 +463,29 @@ me Nginx. Backend URL kahin hardcode nahi hai, isliye deploy pe kuch rebuild nah
 route pata hai. Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga — wahi
 galti demo todti hai.
 
-**`TraceViewer` me correction-path nodes highlight kyun:** `transform_query` aur
-`web_search_fallback` alag rang me hain, kyunki wahi CRAG ka USP hai. Ek nazar me dikh jaata
-hai ki system ne khud correct kiya.
+### UI me kya *nahi* dikhaya, jaan-boojh ke
+
+Ye teen decisions poore project ke usool se aate hain — **screen pe koi aisa number nahi
+jiska backend me asli source na ho.**
+
+**Koi "Relevance Score: 0.92" nahi.** Grader **binary** hai — ek word (`yes`/`no`). Usse
+do-decimal percentage banana wahi jhoothi precision hai jise `README` ka "Planned
+extensions" section reject karta hai. Panel me `Relevance Verdict: yes` likha hai. Interviewer
+"92 kyun, 85 kyun nahi?" poochhe to jawab hona chahiye — aur binary pe wo sawaal aata hi nahi.
+
+**Trace me per-step timestamps nahi.** Backend per-node timing emit nahi karta, to
+`10:24:03` chhaapna number gadhna hota. Total `elapsed_ms` asli hai, wahi dikhta hai.
+
+**"Web Search (Skipped)" step deliberately dikhta hai.** Local route pe wo node chala hi
+nahi — usko greyed step ki tarah dikhana hi wo baat saaf karta hai ki fallback **conditional
+hai, default nahi**. Ye poore project ka thesis ek nazar me dikha deta hai.
+
+**Eval numbers ke saath caveat bhi dikhta hai.** Evaluation tab 20/20 ke neeche hi likhta
+hai ki "100% ka matlab labelled task aasan hai, router perfect nahi" — wahi baat jo
+`RESULTS.md` karta hai. Dashboard ko docs se ulta impression nahi dena chahiye.
+
+**Nav me "Documents" disabled hai** (`soon`) — upload API hai hi nahi. Ek dead link daal ke
+demo me uspe click ho jaana usse bura hai.
 
 **Multi-stage Dockerfile:** node se build, phir sirf `dist/` Nginx image me. Node runtime
 ship karne ki zaroorat nahi — build ke baad sirf static files bachti hain.
