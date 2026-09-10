@@ -26,7 +26,8 @@ cost and latency of a web call on every query.
 > | Phase 6 — React dashboard (stat cards, chat, citations, trace, eval + system tabs) | ✅ |
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Citations — source filenames (local) / URLs (web) | ✅ |
-> | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ built and A/B'd — **no routing benefit measured** |
+> | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ A/B'd on both corpora — flat on concepts, **+1 case on SciFact** |
+> | Second corpus — BEIR SciFact (`CORPUS=scifact`) | ✅ 500 docs → 1,717 chunks, labels from qrels |
 > | Test suite — 60 tests (`.\dev.ps1 test`) | ✅ |
 > | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
 > | Deployment (Render + Vercel) | ❌ not done |
@@ -66,16 +67,44 @@ Four things worth saying out loud, because the numbers alone flatter the system:
   swamps the route difference, and the first ordering produced a confounded
   result that looked convincing. That story is in RESULTS.md; it is the more
   useful half of this eval.
-- **Hybrid search and reranking made no measurable difference — and that is reported,
-  not buried.** They were added last, once the ambiguity tier gave the metric room to
-  move, then A/B'd behind flags. Routing 100% → 100%, stability 8/8 → 8/8, every ambiguous
-  case unchanged. The flags were not no-ops: **27 of 28 questions retrieved different
+- **Hybrid search and reranking made no measurable difference *here* — reported, not
+  buried.** A/B'd behind flags: routing 100% → 100%, stability 8/8 → 8/8, every ambiguous
+  case unchanged. The flags were not no-ops — **27 of 28 questions retrieved different
   chunks**. The retrieval changed a lot; the decision changed not at all. On a 22-chunk
-  topically-clustered corpus the verdict follows topic, not ranking — and `grade_documents`
-  concatenates the chunks, so it never sees the ordering a reranker optimises.
+  topically-clustered corpus the verdict follows topic, not ranking, and `grade_documents`
+  concatenates the chunks so it never sees the ordering a reranker optimises. The honest
+  conclusion was *"this eval cannot show a benefit"*, not *"there is none"* — and the
+  next section tests exactly that on a corpus that can.
 
 The exit code fails when missed fallbacks exceed the threshold, so a prompt or
 model change that quietly breaks routing fails the way a test does.
+
+### On a harder corpus, the numbers stop being pinned
+
+The 100% above is the ceiling problem: nothing can improve a metric already at 100%.
+Re-running the same 28 cases against **BEIR SciFact** (1,717 chunks, labels from the
+dataset's own `qrels`) gives the eval room to move — and adds **recall@k**, which the
+concepts corpus cannot support because it has no ground truth about which chunk is right.
+
+| Metric | Baseline (vector only) | Hybrid + rerank |
+|---|---|---|
+| Routing accuracy | 75.0% | **78.6%** |
+| Retrieval recall@k | 65.0% | **70.0%** |
+| Missed fallbacks | **0** | **0** |
+
+Two things to take from this, in order of importance:
+
+- **The grader made zero independent errors.** On the baseline run every case where the
+  gold document *was* retrieved routed correctly (13/13), and every case where it was
+  *missed* fell back to the web (7/7). All seven "routing failures" were retrieval
+  misses the grader detected correctly. 75% understates the grader — conditional on
+  what it received, it was right 20/20. **The bottleneck here is retrieval, not grading.**
+- **The improvement is one case, and is reported as one case.** +5pp recall on 20
+  gold-bearing cases is a single document (#10, `MISS → gold`, route `web → local`).
+  That is inside noise. What it does establish is the causal chain — better retrieval →
+  gold found → correct route — which was unobservable before. Claiming reranking *works*
+  needs the full 5k corpus and 300-query test set; that needs more RAM than this laptop
+  gives Docker.
 
 ## Tech Stack
 

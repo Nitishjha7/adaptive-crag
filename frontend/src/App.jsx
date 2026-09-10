@@ -7,6 +7,7 @@ import StatCards from "./components/StatCards.jsx";
 import DocumentsView from "./views/DocumentsView.jsx";
 import EvaluationView from "./views/EvaluationView.jsx";
 import SystemView from "./views/SystemView.jsx";
+import useHistory from "./useHistory.js";
 
 /** Fixed demo queries — `backend/data/README.md` wali, expected route ke saath.
  *  Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga, wahi
@@ -54,6 +55,10 @@ export default function App() {
   // hua hi nahi — aur wo tab aksar scroll ke neeche hota tha.
   const [view, setView] = useState("chat");
   const [draft, setDraft] = useState("");
+  // Har conversation ki apni id — history usi pe update hoti hai, warna ek hi
+  // chat ke do turns do alag entries ban jaate.
+  const [chatId, setChatId] = useState(() => Date.now().toString(36));
+  const history = useHistory();
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -92,15 +97,33 @@ export default function App() {
       }
 
       const data = await res.json();
-      setTurns((t) => [
-        ...t,
-        { role: "assistant", text: data.answer, at: Date.now(), ...data },
-      ]);
+      setTurns((t) => {
+        const next = [
+          ...t,
+          { role: "assistant", text: data.answer, at: Date.now(), ...data },
+        ];
+        // Answer aane ke baad record karo, sawaal ke baad nahi — warna ek
+        // adhoori entry (bina route ke) history me baith jaati.
+        history.record(chatId, next);
+        return next;
+      });
     } catch (err) {
       setTurns((t) => [...t, { role: "error", text: err.message, at: Date.now() }]);
     } finally {
       setBusy(false);
     }
+  }
+
+  function newChat() {
+    setTurns([]);
+    setChatId(Date.now().toString(36));
+    setView("chat");
+  }
+
+  function openPast(entry) {
+    setTurns(entry.turns);
+    setChatId(entry.id);
+    setView("chat");
   }
 
   return (
@@ -109,48 +132,52 @@ export default function App() {
         active={view}
         hasChat={turns.length > 0}
         onSelect={setView}
-        onNewChat={() => {
-          setTurns([]);
-          setView("chat");
-        }}
+        onNewChat={newChat}
+        history={history.items}
+        currentId={chatId}
+        onOpen={openPast}
+        onDelete={history.remove}
       />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="flex flex-wrap items-center gap-3 px-6 pb-4 pt-6">
+        <header className="flex flex-wrap items-center gap-3 px-6 pb-3 pt-5">
           <div className="min-w-0 flex-1">
-            <h1 className="flex items-center gap-2 text-2xl font-bold italic tracking-tight">
+            <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
               <span className="lg:hidden">
-                <Logo className="h-7 w-7" />
+                <Logo className="h-6 w-6" />
               </span>
-              Adaptive Corrective RAG{" "}
-              <span className="not-italic text-indigo-600">(CRAG)</span>
+              Adaptive Corrective RAG
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Self-grading RAG with web search fallback — grounded answers from your
-              documents, or the live web when they fall short.
+            {/* Config header me hai, tagline nahi — dekhne wale ko sabse pehle
+                ye jaanna hota hai ki kis corpus aur kis model pe chal raha hai. */}
+            <p className="mt-0.5 font-mono text-xs text-slate-400">
+              {stats
+                ? `${stats.corpus} · ${stats.chunks} chunks · ${stats.config.llm_model}`
+                : "connecting…"}
             </p>
           </div>
 
           <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
+            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs ${
               stats
-                ? "border-slate-200 bg-white text-slate-700"
+                ? "border-slate-200 bg-white text-slate-600"
                 : "border-amber-200 bg-amber-50 text-amber-700"
             }`}
           >
             <span
-              className={`h-2 w-2 rounded-full ${stats ? "bg-emerald-500" : "bg-amber-500"}`}
+              className={`h-1.5 w-1.5 rounded-full ${stats ? "bg-emerald-500" : "bg-amber-500"}`}
             />
-            {stats ? "System Online" : "Backend unreachable"}
+            {stats ? "online" : "backend unreachable"}
           </span>
 
           <a
             href="https://github.com/Nitishjha7/adaptive-crag"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50"
+            title="Source"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
               <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.9 10.9c.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.4-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.7 1.2 3.4.9.1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.1 4.7 18 5 18 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z" />
             </svg>
             GitHub
@@ -184,7 +211,7 @@ export default function App() {
               </div>
               {turns.length > 0 && (
                 <button
-                  onClick={() => setTurns([])}
+                  onClick={newChat}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50"
                 >
                   Clear Chat

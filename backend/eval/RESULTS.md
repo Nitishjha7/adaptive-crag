@@ -217,6 +217,68 @@ result in this file — see the latency section below for the first.
 
 ---
 
+## SciFact: the same A/B, on a corpus that can answer the question
+
+The concepts-corpus result above ended in *"this eval cannot show a benefit"* rather
+than *"there is none"*. Two things were blocking it: no ground truth about which
+chunk should have been retrieved, and only 22 chunks. BEIR SciFact fixes both —
+1,717 chunks and expert `qrels`, so **recall@k** exists as a metric at all.
+
+Same 28 cases, run with the flags off and on.
+
+| Metric | Baseline (vector only) | Hybrid + rerank |
+|---|---|---|
+| Routing accuracy | 75.0% (21/28) | **78.6% (22/28)** |
+| **Retrieval recall@k** | **65.0%** | **70.0%** |
+| Unnecessary fallbacks | 7 | **6** |
+| Missed fallbacks | **0** | **0** |
+| Groundedness | 89.3% | 92.9% |
+
+**Everything moved in the right direction, and the mechanism is visible per case:**
+exactly one case changed — **#10**, whose gold document went `MISS → gold`, and whose
+route followed `web → local`. Recall improved; routing improved by precisely the case
+recall fixed.
+
+### Read this honestly: one case is not a result
+
++5pp recall on 20 gold-bearing cases **is one document**. On a sample this size that
+is well inside noise, and it would be dishonest to present 65% → 70% as a reliable
+improvement. What this run establishes is narrower and more useful:
+
+- **The causal chain is real and observable.** Better retrieval → gold document found
+  → grader says local → routing correct. That chain was invisible on the concepts
+  corpus and is now instrumented end to end.
+- **The earlier negative result's explanation holds up.** It said the concepts corpus
+  could not show a benefit because it had no recall to measure. Give the same code a
+  corpus with ground truth and the metric moves. The explanation predicted the result.
+
+To claim reranking actually helps, this needs the full 5k-document corpus and the full
+300-query test set, not 20 cases on a 500-document subset. That run needs more RAM than
+this laptop gives Docker — the honest limit, stated rather than hidden.
+
+### The finding that matters more than the delta
+
+On the baseline run, the correlation between retrieval and routing was **perfect**:
+
+| Gold document | Cases | Route taken | Routed correctly |
+|---|---|---|---|
+| Retrieved | 13 | local | **13 / 13** |
+| Missed | 7 | web | 0 / 7 |
+
+**The grader made zero independent errors.** Every single routing "failure" was a
+retrieval miss that the grader detected correctly — it looked at four chunks that did
+not contain the answer and said so. That is the grading node doing exactly its job.
+
+Which means **75% routing accuracy understates the grader**. Conditional on what it was
+given, it was right 20 out of 20. The bottleneck on this corpus is retrieval, not
+grading — and that reframes where further work should go.
+
+It also explains why `missed_fallbacks` stayed at **0** in both runs. The expensive
+error — answering locally from documents that cannot support the answer — never
+happened. The router failed only in the cheap direction.
+
+---
+
 ## The cost argument, and the measurement that failed
 
 The design claims adaptive routing is cheaper than always searching. The eval
