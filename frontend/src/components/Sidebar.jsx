@@ -11,10 +11,10 @@
 // "New Chat" is list me nahi hai: wo ek **action** hai, tab nahi. Dono ko ek
 // jaisa style dene se do items ek saath highlighted dikhte the.
 const NAV = [
-  { id: "trace", label: "Sources & Trace", icon: ListIcon },
+  { id: "chat", label: "Chat", icon: ListIcon },
+  { id: "documents", label: "Documents", icon: DocIcon },
   { id: "eval", label: "Evaluation", icon: ChartIcon },
   { id: "system", label: "System Status", icon: PulseIcon },
-  { id: "documents", label: "Documents", icon: DocIcon, soon: true },
 ];
 
 function ChatIcon(p) {
@@ -85,12 +85,15 @@ export default function Sidebar({ active, onSelect, onNewChat, hasChat }) {
               disabled={soon}
               onClick={() => onSelect(id)}
               title={soon ? "Not built — there is no upload API yet" : undefined}
+              // Active tab ka style "New Chat" button se **alag** hona chahiye.
+              // Pehle dono solid indigo the, to do cheezein ek saath primary
+              // dikhti thi aur samajh nahi aata tha kaunsi actionable hai.
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
                 isActive
-                  ? "bg-indigo-600 font-medium text-white"
+                  ? "bg-white/10 font-medium text-white ring-1 ring-inset ring-white/15"
                   : soon
                     ? "cursor-not-allowed text-slate-600"
-                    : "text-slate-300 hover:bg-white/5"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
               }`}
             >
               <Icon className="h-[18px] w-[18px]" />
@@ -101,23 +104,27 @@ export default function Sidebar({ active, onSelect, onNewChat, hasChat }) {
         })}
       </nav>
 
-      <div className="mx-4 mt-8 overflow-hidden rounded-xl bg-gradient-to-b from-indigo-950/80 to-slate-900 p-4 ring-1 ring-white/10">
-        <div className="text-sm font-semibold leading-snug text-white">
-          RAG + Web Search
-          <br />
-          Smarter Answers
+      {/* Promo card `mt-auto` se neeche chipak jaata hai — pehle nav ke bilkul
+          neeche tha aur uske aage ek bada khaali gap dikhta tha. */}
+      <div className="mt-auto space-y-4 px-4 pb-5 pt-8">
+        <div className="overflow-hidden rounded-xl bg-gradient-to-b from-indigo-950/80 to-slate-900 p-4 ring-1 ring-white/10">
+          <div className="text-sm font-semibold leading-snug text-white">
+            RAG + Web Search
+            <br />
+            Smarter Answers
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-slate-400">
+            Self-grading. Self-correcting. Only searches the web when the local
+            context genuinely can't answer.
+          </p>
         </div>
-        <p className="mt-2 text-xs leading-relaxed text-slate-400">
-          Self-grading. Self-correcting. Only searches the web when the local
-          context genuinely can't answer.
-        </p>
-      </div>
 
-      <div className="mt-auto px-6 pb-6 pt-8 text-[11px] text-slate-500">
-        <p className="italic leading-relaxed">
-          “Grade the context before you trust it.”
-        </p>
-        <div className="mt-3">v0.9.0</div>
+        <div className="px-2 text-[11px] text-slate-500">
+          <p className="italic leading-relaxed">
+            “Grade the context before you trust it.”
+          </p>
+          <div className="mt-2">v0.9.0</div>
+        </div>
       </div>
     </aside>
   );

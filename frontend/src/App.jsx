@@ -4,6 +4,9 @@ import Message from "./components/Message.jsx";
 import Sidebar, { Logo } from "./components/Sidebar.jsx";
 import SidePanel from "./components/SidePanel.jsx";
 import StatCards from "./components/StatCards.jsx";
+import DocumentsView from "./views/DocumentsView.jsx";
+import EvaluationView from "./views/EvaluationView.jsx";
+import SystemView from "./views/SystemView.jsx";
 
 /** Fixed demo queries — `backend/data/README.md` wali, expected route ke saath.
  *  Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga, wahi
@@ -46,7 +49,10 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState("trace");
+  // Sidebar **poora main view** switch karta hai. Pehle wo sirf right rail ka
+  // ek chhota tab badalta tha, to "Evaluation" click karne pe lagta tha kuch
+  // hua hi nahi — aur wo tab aksar scroll ke neeche hota tha.
+  const [view, setView] = useState("chat");
   const [draft, setDraft] = useState("");
   const endRef = useRef(null);
 
@@ -100,10 +106,13 @@ export default function App() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900">
       <Sidebar
-        active={tab}
+        active={view}
         hasChat={turns.length > 0}
-        onSelect={setTab}
-        onNewChat={() => setTurns([])}
+        onSelect={setView}
+        onNewChat={() => {
+          setTurns([]);
+          setView("chat");
+        }}
       />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -152,7 +161,19 @@ export default function App() {
           <StatCards stats={stats} loading={loadingStats} />
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        {view !== "chat" && (
+          <div className="p-6">
+            {view === "eval" && <EvaluationView stats={stats} />}
+            {view === "documents" && <DocumentsView stats={stats} />}
+            {view === "system" && <SystemView stats={stats} />}
+          </div>
+        )}
+
+        <div
+          className={`grid min-h-0 flex-1 grid-cols-1 gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_360px] ${
+            view === "chat" ? "" : "hidden"
+          }`}
+        >
           <section className="flex min-h-[26rem] flex-col rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
@@ -282,13 +303,7 @@ export default function App() {
           </section>
 
           <aside className="min-w-0">
-            <SidePanel
-              tab={tab}
-              onTab={setTab}
-              latest={latest}
-              stats={stats}
-              llmNodes={LLM_NODES}
-            />
+            <SidePanel latest={latest} llmNodes={LLM_NODES} />
           </aside>
         </div>
       </main>

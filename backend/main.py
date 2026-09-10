@@ -185,3 +185,62 @@ async def stats():
             "groq_key_set": bool(s.GROQ_API_KEY),
         },
     }
+
+
+@app.get("/api/documents")
+async def documents():
+    """Kya kya index me hai — UI ka Documents view isi se banta hai.
+
+    Do alag sources, kyunki dono corpora ki shakl alag hai:
+
+    - `concepts` — filesystem se, kyunki wahan documents asli files hain aur
+      unka naam hi citation hai.
+    - BEIR — Chroma ke metadata se, kyunki wahan koi file hai hi nahi; documents
+      dataset ke andar se aate hain aur unki pehchaan `doc_id` hai.
+
+    `/health` aur `/api/stats` ki tarah **koi LLM call nahi**.
+    """
+    from pathlib import Path
+
+    from app.config import get_vectorstore
+
+    s = get_settings()
+
+    if s.CORPUS == "concepts":
+        data_dir = Path(s.DATA_DIR)
+        if not data_dir.exists():
+            return {"corpus": s.CORPUS, "documents": []}
+        return {
+            "corpus": s.CORPUS,
+            "documents": sorted(
+                (
+                    {"id": p.name, "title": p.stem.replace("_", " "), "bytes": p.stat().st_size}
+                    for p in data_dir.iterdir()
+                    if p.suffix.lower() in {".md", ".txt"} and p.name.lower() != "readme.md"
+                ),
+                key=lambda d: d["id"],
+            ),
+        }
+
+    # BEIR: metadata se unique documents nikalo. Chunks se dedupe karna padta hai —
+    # ek abstract kai chunks me toota hota hai, aur UI ko documents chahiye, chunks nahi.
+    try:
+        raw = get_vectorstore()._collection.get(include=["metadatas"])
+    except Exception:  # noqa: BLE001 — collection abhi bana hi na ho
+        return {"corpus": s.CORPUS, "documents": []}
+
+    seen = {}
+    for meta in raw.get("metadatas") or []:
+        doc_id = (meta or {}).get("source")
+        if doc_id and doc_id not in seen:
+            seen[doc_id] = {"id": doc_id, "title": (meta or {}).get("title", ""), "bytes": None}
+
+    # Poori list bhejne ka matlab nahi — 500 abstracts UI ko bhar denge. Count
+    # `/api/stats` deta hai; yahan sirf ek sample.
+    docs = list(seen.values())
+    return {
+        "corpus": s.CORPUS,
+        "total": len(docs),
+        "documents": docs[:60],
+        "truncated": len(docs) > 60,
+    }
