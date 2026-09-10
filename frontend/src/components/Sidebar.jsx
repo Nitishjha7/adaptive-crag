@@ -7,8 +7,10 @@
 // `id` seedha SidePanel ke tab id se match karna chahiye. Pehle yahan
 // "evaluation" tha jabki panel "eval" expect karta hai — nav click kuch karta
 // hi nahi tha, bina kisi error ke. Isliye ab dono jagah ek hi vocabulary hai.
+//
+// "New Chat" is list me nahi hai: wo ek **action** hai, tab nahi. Dono ko ek
+// jaisa style dene se do items ek saath highlighted dikhte the.
 const NAV = [
-  { id: "chat", label: "New Chat", icon: ChatIcon },
   { id: "trace", label: "Sources & Trace", icon: ListIcon },
   { id: "eval", label: "Evaluation", icon: ChartIcon },
   { id: "system", label: "System Status", icon: PulseIcon },
@@ -63,16 +65,25 @@ export default function Sidebar({ active, onSelect, onNewChat, hasChat }) {
         </div>
       </div>
 
+      <div className="px-3 pb-4">
+        <button
+          onClick={onNewChat}
+          disabled={!hasChat}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-default disabled:opacity-50"
+        >
+          <ChatIcon className="h-[18px] w-[18px]" />
+          New Chat
+        </button>
+      </div>
+
       <nav className="space-y-1 px-3">
         {NAV.map(({ id, label, icon: Icon, soon }) => {
-          // "New Chat" tab nahi hai, ek action hai — wo tab highlight hota hai
-          // jab conversation khaali ho.
-          const isActive = id === "chat" ? !hasChat : active === id;
+          const isActive = active === id;
           return (
             <button
               key={id}
               disabled={soon}
-              onClick={() => (id === "chat" ? onNewChat() : onSelect(id))}
+              onClick={() => onSelect(id)}
               title={soon ? "Not built — there is no upload API yet" : undefined}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
                 isActive

@@ -101,7 +101,17 @@ export default function Message({ turn }) {
             sabse saaf banata hai ki system ne khud query badli. */}
         {turn.transformed_query && (
           <div className="mx-4 mb-3 flex gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
-            <span aria-hidden="true">🔎</span>
+            <svg
+              viewBox="0 0 24 24"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
             <span>
               Rewritten for search:{" "}
               <span className="font-mono">{turn.transformed_query}</span>
