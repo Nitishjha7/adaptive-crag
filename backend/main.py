@@ -29,7 +29,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Adaptive CRAG", version="0.5.0", lifespan=lifespan)
+app = FastAPI(
+    title="Adaptive CRAG",
+    version="0.9.0",
+    lifespan=lifespan,
+)
 
 # Dev me khula. Production me frontend domain tak restrict karna hai — abhi
 # frontend ka origin pata nahi hai, isliye TODO chhoda hai (Phase 7).
