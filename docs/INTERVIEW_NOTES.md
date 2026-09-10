@@ -343,6 +343,32 @@ built from verified context, so blocking it on an infrastructure error would be 
 call. Failing closed would let a single flaky network call turn the whole system into "I
 can't tell you anything."
 
+**Q: Your corpus is seven documents. Isn't that too small to prove anything?**
+A: Yes, and that is why there is a second one. The seven-document corpus exists to make
+the demo *predictable* — the gap in it is categorical, so the correction path fires on cue
+instead of by luck. But it has two limits I couldn't argue my way out of: no ground truth
+about which chunk *should* have been retrieved, and I wrote both the documents and the eval
+labels. So I added BEIR SciFact behind a `CORPUS` switch. It ships expert relevance
+judgments, which means the `local` labels aren't mine, and it makes recall@k possible at
+all — did the pipeline actually retrieve the gold document. Each corpus is bad at what the
+other is good at, so both stayed.
+
+**Q: Why BEIR specifically, and not a Kaggle dataset or a Wikipedia dump?**
+A: Because I needed *labels*, not just volume. A raw dump gives you scale and nothing to
+score against — you'd still be writing the eval yourself, which is the bias I was trying to
+remove. BEIR is the standard retrieval benchmark suite and every dataset in it ships
+`qrels`: which document answers which query, judged by someone else. SciFact in particular
+is small enough to embed on a laptop and still large enough that ranking matters.
+
+**Q: You only ingested a subset. Doesn't that invalidate the benchmark?**
+A: It would if I'd truncated it, and that's the subtle part. Taking the first N documents
+would drop gold documents at random, and then a `local` case would be labelled "the corpus
+answers this" when the index genuinely doesn't contain the answer. In the eval that failure
+looks like *the router being wrong* — it blames the wrong component, which is the worst
+kind of measurement bug. So the subset keeps every gold document first, then fills the rest
+with non-gold filler. Filler matters too: without it every indexed document would answer
+some query and retrieval would be trivially easy. There's a test asserting both.
+
 **Q: How would you deploy this?**
 A: FastAPI backend in a Docker container on Render, Chroma persisted to a mounted volume,
 React frontend on Vercel with an `/api` proxy. Groq for the LLM, DuckDuckGo (or Tavily) for search,
@@ -592,7 +618,7 @@ leak." "Fail open, because failing closed lets one flaky call turn the system in
 | **Not deployed** | **The biggest.** No link means a portfolio project loses half its value |
 | The 100% is on an easy gap | You know this and say it first — which is what defuses it |
 | No context filter, no PDF parsing | Hybrid + reranker exist but showed no measurable routing benefit — the gap now is corpus scale, not components |
-| One author wrote corpus, labels and system | Structural bias in the eval that no amount of care removes |
+| One author wrote corpus, labels and system | Structural bias — **partly fixed.** The SciFact corpus takes its `local` labels from BEIR's own qrels, so the hard half of that eval is no longer self-written. The `web` half still is |
 | Groundedness sits at 85–95%, not investigated | You report it; you have not dug into which answers fail and why |
 | No prompt-injection handling | And the web path is where it matters |
 | No incremental re-index | Documents are ingested once; updates mean a full rebuild |

@@ -303,6 +303,54 @@ it measures routing, and reranking should help *answer* quality. Full write-up i
 
 ---
 
+### Step 12 — A second corpus, because the first one could not settle the question
+
+Step 11 ended in a negative result, and the honest reading of it was *"this eval cannot
+show a benefit"* rather than *"there is none"*. Two limits of the seven-document corpus
+were doing the blocking:
+
+- **No ground truth.** Nothing records which chunk *should* have been retrieved, so
+  retrieval quality has no metric at all.
+- **I wrote the documents and the labels.** RESULTS.md already called that structural bias
+  and said the fix is someone else writing the cases.
+
+**BEIR SciFact** fixes both. It ships `qrels` — expert judgments of which abstract supports
+which claim — so `build_scifact_scenarios.py` generates the `local` cases straight from the
+dataset. Those labels are not mine. And ground truth makes **recall@k** possible: did the
+pipeline actually retrieve the gold document? That is the number a reranker should move.
+
+The `web` half is still hand-written, and that is worth saying plainly. But it is the easy
+half — SciFact is static scientific text, so no amount of it answers "what is Groq charging
+today". The hard half now comes from the benchmark.
+
+Both corpora stayed, behind `CORPUS`, in **separate Chroma collections** so neither can
+contaminate the other's retrieval and switching needs no re-ingest. They are not
+alternatives — each is bad at what the other is good at, and
+[CORPORA.md](../backend/eval/CORPORA.md) has the table of what each can and cannot claim.
+
+**Three failures that only a real corpus produced:**
+
+**Out of memory, twice** (exit 137). Splitting the whole corpus up front produced 17,266
+chunk objects and the 3.5 GB container died. On 22 chunks this is invisible. Ingestion now
+streams — split and embed one batch of documents at a time — so peak memory no longer
+scales with the corpus.
+
+**A silent SQLite lock.** The ingest ran for five minutes and the vector store did not grow
+by a single byte. No error, no timeout, just nothing. The compose backend was still running
+with the same `vectorstore/` mounted, and Chroma's SQLite write lock was held. Large ingests
+need the stack stopped first.
+
+**`--limit` cannot mean "the first N documents."** Gold documents sit anywhere in the file;
+truncation drops some of them, and then a `local` case is labelled *"the corpus answers
+this"* while the index genuinely does not contain the answer. In the eval that shows up as
+**the router being wrong** — it blames the wrong component, which is the most expensive
+kind of measurement bug. `load_corpus(limit=N)` now keeps every gold document first and
+fills the remainder with non-gold filler; filler matters too, because without it every
+indexed document would answer some query and retrieval would be trivial. `test_corpus.py`
+asserts both halves.
+
+---
+
 ## 4. How the whole system works now
 
 ### 4.1 Component map

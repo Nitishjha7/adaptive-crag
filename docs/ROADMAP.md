@@ -8,7 +8,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
 
 ## Current Status (jo ban chuka hai)
 
-**Phase 1–9 ✅ — poora stack `docker compose up` se chalta hai aur measured hai. Deployment baaki.**
+**Phase 1–10 ✅ — poora stack `docker compose up` se chalta hai aur measured hai. Deployment baaki.**
 
 - ✅ Repo scaffold + docs (README, TECHNICAL_SPEC, SETUP, BUILD_PLAN, ROADMAP, CODE_NOTES, INTERVIEW_NOTES)
 - ✅ **Phase 1** — `requirements.txt`; `app/config.py` (`Settings` + `get_llm` / `get_embeddings` /
@@ -76,6 +76,20 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
   Koi LLM call nahi, kyunki dashboard har page load pe ise hit karta hai
 - ✅ **Phase 7** — `docker-compose.yml`: backend + frontend, Chroma volume, healthcheck,
   Nginx `/api/` proxy. Verified: `docker compose up` ke turant baad pehli query kaam karti hai
+- ✅ **Phase 10 — doosra corpus (BEIR SciFact)**, `CORPUS` env se switch. `app/tools/beir_loader.py`
+  (download + qrels), `eval/build_scifact_scenarios.py` (labels **dataset se**, mere likhe hue
+  nahi), `eval/CORPORA.md`. Naya metric: **`recall@k`** — gold doc retrieve hua ya nahi, jo
+  concepts corpus pe possible hi nahi tha (koi ground truth nahi thi). Dono corpora alag
+  Chroma collections me.
+  **Teen bugs jo bada corpus laane pe hi mile:**
+  1. **OOM ×2** (exit 137) — 17,266 chunks 3.5 GB me nahi aaye. Ingestion ab **stream** karti
+     hai (per-batch split → embed → chhod do), peak memory corpus size se azaad.
+  2. **SQLite lock contention** — `docker compose` ka backend wahi `vectorstore/` mount kiye
+     baitha tha; ingest 5 min block rahi **bina kisi error ke**, bas hang. Bada ingest chalane
+     se pehle compose band karna padta hai.
+  3. **`--limit` truncation nahi ho sakta** — gold docs cut ho jaate aur phir eval me wo
+     failure *grader ki galti* jaisa dikhta, jabki galti corpus ki hoti. Ab gold docs pehle,
+     phir filler. `test_corpus.py` assert karta hai
 - ❌ Deployment (Render + Vercel) — abhi nahi hua
 
 ---

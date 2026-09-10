@@ -11,3 +11,4 @@ faiss_index/
 vectorstore/
 .fastembed_cache/
 beir/
+.vectorstore_uicheck/
