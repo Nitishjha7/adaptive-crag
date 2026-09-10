@@ -66,18 +66,37 @@ def ensure_downloaded(name: str = "scifact") -> Path:
 def load_corpus(name: str = "scifact", limit: int = 0) -> List[Tuple[str, str, str]]:
     """`(doc_id, title, text)` triples.
 
-    `limit` sirf smoke runs ke liye — poora corpus na embed karna pade jab
-    pipeline hi test kar rahe ho.
+    **`limit` naive truncation nahi hai.** Pehle N documents lena eval ko tod
+    deta: gold docs corpus me kahin bhi ho sakte hain, aur agar wo cut ho gaye
+    to "local jaana chahiye" wale labels jhoothe ho jaate — system ke paas wo
+    jawab hai hi nahi.
+
+    Isliye limit lagne pe **pehle saare gold docs** (qrels se) rakhe jaate hain,
+    phir baaki slots filler documents se bharte hain. Filler zaroori hai —
+    unke bina retrieval trivial ho jaata, har doc kisi na kisi query ka jawab
+    hota. Yahi tareeka chhote retrieval benchmarks banane ka standard hai.
     """
     path = ensure_downloaded(name) / "corpus.jsonl"
-    out = []
+
+    if not limit:
+        out = []
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                row = json.loads(line)
+                out.append((row["_id"], row.get("title", ""), row.get("text", "")))
+        return out
+
+    gold_ids = {d for docs in load_qrels(name, "test").values() for d in docs}
+
+    kept, filler = [], []
     with path.open(encoding="utf-8") as fh:
-        for i, line in enumerate(fh):
-            if limit and i >= limit:
-                break
+        for line in fh:
             row = json.loads(line)
-            out.append((row["_id"], row.get("title", ""), row.get("text", "")))
-    return out
+            item = (row["_id"], row.get("title", ""), row.get("text", ""))
+            (kept if row["_id"] in gold_ids else filler).append(item)
+
+    remaining = max(0, limit - len(kept))
+    return kept + filler[:remaining]
 
 
 def load_queries(name: str = "scifact") -> Dict[str, str]:

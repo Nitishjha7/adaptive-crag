@@ -70,6 +70,8 @@ function valueFor(key, stats) {
   const e = stats.evaluation;
   switch (key) {
     case "documents":
+      // BEIR pe backend `null` bhejta hai — wahan "documents" filesystem files
+      // nahi, corpus ke abstracts hain, aur 7 dikhana jhooth hoga.
       return stats.documents ?? "—";
     case "chunks":
       return stats.chunks ?? "—";

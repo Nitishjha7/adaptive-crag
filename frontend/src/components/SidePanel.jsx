@@ -121,7 +121,10 @@ export default function SidePanel({ tab, onTab, latest, stats, llmNodes = [] }) 
               <Row label="Hybrid (BM25)">{stats.config.hybrid ? "on" : "off"}</Row>
               <Row label="Search provider">{stats.config.search_provider}</Row>
               <Row label="Top K">{stats.config.top_k}</Row>
-              <Row label="Documents">{stats.documents}</Row>
+              <Row label="Corpus">
+                <span className="font-mono text-xs">{stats.corpus}</span>
+              </Row>
+              <Row label="Documents">{stats.documents ?? "—"}</Row>
               <Row label="Chunks">{stats.chunks}</Row>
               <Row label="Groq key">
                 <span className={stats.config.groq_key_set ? "text-emerald-600" : "text-red-600"}>
@@ -146,6 +149,14 @@ export default function SidePanel({ tab, onTab, latest, stats, llmNodes = [] }) 
               <Row label="Missed fallbacks">{stats.evaluation.missed_fallbacks}</Row>
               <Row label="Unnecessary fallbacks">{stats.evaluation.unnecessary_fallbacks}</Row>
               <Row label="Groundedness">{stats.evaluation.groundedness_pass_pct}%</Row>
+              {/* Sirf BEIR pe milta hai — wahan qrels batate hain ki sahi doc
+                  kaunsa tha. Concepts corpus pe ground truth hai hi nahi, isliye
+                  row hi nahi dikhti (0% dikhana jhooth hoga). */}
+              {stats.evaluation.recall_at_k_pct != null && (
+                <Row label="Retrieval recall@k">
+                  {stats.evaluation.recall_at_k_pct}%
+                </Row>
+              )}
               <Row label="LLM calls (local / web)">
                 {stats.evaluation.llm_calls_local} / {stats.evaluation.llm_calls_web}
               </Row>

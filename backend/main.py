@@ -143,7 +143,10 @@ async def stats():
     # chalni chahiye. Isliye missing file pe `None`, zero nahi: "measure nahi
     # hua" aur "zero score" do alag baatein hain, aur UI ko farak pata hona chahiye.
     evaluation = None
-    results_path = BACKEND_DIR / "eval" / "results.json"
+    # Per-corpus results file — concepts aur scifact ke numbers alag hain aur
+    # unhe mix karna dono ko meaningless bana dega.
+    results_name = "results.json" if s.CORPUS == "concepts" else f"results_{s.CORPUS}.json"
+    results_path = BACKEND_DIR / "eval" / results_name
     if results_path.exists():
         try:
             summary = json.loads(results_path.read_text(encoding="utf-8"))["summary"]
@@ -158,11 +161,15 @@ async def stats():
                 "llm_calls_web": summary.get("llm_calls_web_route"),
                 "ambiguous_cases": summary.get("ambiguous_cases"),
                 "ambiguous_stability_pct": summary.get("ambiguous_stability_pct"),
+                # Sirf BEIR pe milta hai — wahan qrels se pata hai ki sahi doc
+                # kaunsa tha. Concepts corpus pe ground truth hi nahi, to None.
+                "recall_at_k_pct": summary.get("recall_at_k_pct"),
             }
         except Exception:  # noqa: BLE001 — corrupt/partial file UI na tode
             evaluation = None
 
     return {
+        "corpus": s.CORPUS,
         "documents": documents,
         "chunks": chunks,
         "evaluation": evaluation,
@@ -172,6 +179,7 @@ async def stats():
             "reranker_model": s.RERANKER_MODEL if s.USE_RERANKER else None,
             "search_provider": s.SEARCH_PROVIDER,
             "top_k": s.TOP_K,
+            "corpus": s.CORPUS,
             "hybrid": s.USE_HYBRID,
             "reranker": s.USE_RERANKER,
             "groq_key_set": bool(s.GROQ_API_KEY),
