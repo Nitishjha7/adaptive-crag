@@ -60,6 +60,8 @@ switch ($Command) {
         $cmdArgs = @("python", "ingest.py")
         if ($Reset) { $cmdArgs += "--reset" }
         if ($Corpus) { $cmdArgs += @("--corpus", $Corpus) }
+        # Baaki flags (jaise --limit) seedha pass ho jaate hain.
+        if ($Rest) { $cmdArgs += $Rest }
         docker run --rm @Mounts @EnvArgs $Image @cmdArgs
     }
     "ask" {

@@ -62,7 +62,7 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
      corpus se hai phir bhi flag hota hai, teeno runs me.
   ⚠️ 100% ka matlab "router perfect hai" nahi, "labelled task aasan hai" hai — corpus gap
   categorical hai. RESULTS.md me likha hai ki eval ko sach me hard kaise banaya jaaye.
-- ✅ **Test suite** — `backend/tests/`, 54 tests, `.\dev.ps1 test`. Dono routes, docs-replace
+- ✅ **Test suite** — `backend/tests/`, 60 tests, `.\dev.ps1 test`. Dono routes, docs-replace
   invariant, search failure, guardrails ke saare case, aur API shape covered
 - ✅ **Phase 6** — React + Vite + Tailwind **dashboard**: `Sidebar`, `StatCards` (documents ·
   chunks · routing accuracy · missed fallbacks — sab `/api/stats` se, koi hardcoded number

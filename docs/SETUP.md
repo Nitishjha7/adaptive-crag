@@ -198,7 +198,7 @@ embedded mode me chalta hai, persistence ke liye bas ek mounted volume.
 ```powershell
 .\dev.ps1 build              # sirf jab requirements.txt badle
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 54 tests
+.\dev.ps1 test               # 60 tests
 .\dev.ps1 serve -Port 8042   # akela FastAPI
 ```
 

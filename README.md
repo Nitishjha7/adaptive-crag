@@ -27,7 +27,7 @@ cost and latency of a web call on every query.
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Citations — source filenames (local) / URLs (web) | ✅ |
 > | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ built and A/B'd — **no routing benefit measured** |
-> | Test suite — 54 tests (`.\dev.ps1 test`) | ✅ |
+> | Test suite — 60 tests (`.\dev.ps1 test`) | ✅ |
 > | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
 > | Deployment (Render + Vercel) | ❌ not done |
 
@@ -153,12 +153,30 @@ don't need a rebuild:
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ingest [-Reset]    # embed backend/data/ into Chroma
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 54 tests, no API key needed
+.\dev.ps1 test               # 60 tests, no API key needed
 .\dev.ps1 eval               # 20 labelled cases (real LLM + live web calls)
 .\dev.ps1 eval --repeat 3    # + 8 ambiguous cases, scored for route stability
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit
 .\dev.ps1 serve -Port 8042   # FastAPI alone
 ```
+
+### The second corpus
+
+`CORPUS` selects what is indexed. The two are not alternatives — see
+[backend/eval/CORPORA.md](backend/eval/CORPORA.md) for what each can and cannot claim.
+
+```powershell
+.\dev.ps1 ingest -Corpus scifact -Reset --limit 1200   # BEIR SciFact
+.\dev.ps1 ask   -Corpus scifact "..."
+.\dev.ps1 eval  -Corpus scifact --scenarios eval/scenarios_scifact.json
+```
+
+`concepts` (default, 7 hand-written docs) gives a **predictable demo** — the gap is
+categorical, so the correction path fires on cue. `scifact` gives **measurable
+retrieval**: BEIR ships expert relevance judgments, so the `local` eval labels are not
+written by me, and `recall@k` — did the gold document actually get retrieved — becomes
+possible at all. Each corpus lives in its own Chroma collection; switching needs no
+re-ingest.
 
 ## Build Plan
 

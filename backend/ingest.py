@@ -89,7 +89,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--limit", type=int, default=0,
-        help="sirf pehle N documents (smoke run ke liye, BEIR pe)",
+        help="corpus subset: saare gold docs + filler, total N (0 = poora)",
     )
     args = parser.parse_args()
 
@@ -150,7 +150,7 @@ def main() -> int:
     # Ab documents ke batch pe kaam hota hai: split -> embed -> chhod do. Peak
     # memory corpus size se azaad ho jaati hai, isliye isse bade corpora bhi
     # chalenge.
-    DOC_BATCH = 200
+    DOC_BATCH = 50
     total_chunks = 0
 
     for i in range(0, len(docs), DOC_BATCH):

@@ -4,7 +4,8 @@ Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad
 interview me) yaad rahe ki har cheez kyun li gayi.
 
 **Legend:** ✅ = likha ja chuka.
-Phase 1–9 ✅ ho chuke (eval harness, citations, hybrid retrieval + rerank). Deployment abhi baaki.
+Phase 1–10 ✅ ho chuke (eval harness, citations, hybrid retrieval + rerank, BEIR SciFact corpus).
+Deployment abhi baaki.
 
 ---
 
@@ -110,7 +111,7 @@ gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 
 ---
 
-## backend/tests/ ✅ — 54 tests, `.\dev.ps1 test`
+## backend/tests/ ✅ — 60 tests, `.\dev.ps1 test`
 
 | File | Kya cover karta hai |
 |---|---|
@@ -120,6 +121,7 @@ gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 | `test_validation.py` | PII redaction, false positives, ungrounded flagging, fail-open |
 | `test_api.py` | `/health`, 422 validation, response shape |
 | `test_retrieval.py` | BM25, RRF fusion math, reranker fallback, retrieval flags |
+| `test_corpus.py` | Collection isolation, BEIR subset gold-doc guarantee, qrels score-0 filtering |
 
 **Tests me asli LLM call kyun nahi:** ye **control flow** ke test hain, model quality ke
 nahi. Asli calls slow, mehnge, key-dependent aur non-deterministic hote — yaani CI me flaky.
@@ -301,6 +303,82 @@ convincing hai — aur user ke liye bhi "ye shayad galat hai" khaali screen se b
 (network / rate limit), answer block karna galat hai — wo already verified context se bana
 hai. Exception pe "grounded maan lo" + log me note. Fail-closed hone se ek flaky call poore
 system ko "kuch nahi bata sakta" bana deta.
+
+---
+
+## backend/app/tools/beir_loader.py ✅ (Phase 10) — doosra corpus
+
+BEIR SciFact download + parse. Poora comparison [eval/CORPORA.md](../backend/eval/CORPORA.md) me.
+
+**Doosra corpus kyun chahiye tha:** `backend/data/` wale 7 docs ke saath do problem hain,
+aur dono RESULTS.md me likhi hain —
+
+1. **Koi ground truth nahi.** Kahin likha hi nahi ki kaunsa chunk *sahi* tha, isliye
+   retrieval quality measure hi nahi ho sakti thi. Yahi badi wajah thi ki hybrid+reranker
+   ka A/B flat aaya — koi metric tha hi nahi jo hil sake.
+2. **Single-author bias.** Documents bhi maine likhe, eval labels bhi. RESULTS.md khud
+   bolta hai ki iska honest fix koi aur banaye.
+
+BEIR dono theek karta hai: `qrels/test.tsv` expert relevance judgments deta hai — kaunsa
+abstract kis claim ko support karta hai. **Wo labels maine nahi banaye.**
+
+**`datasets` library kyun nahi:** BEIR ki official zip seedha download ho jaati hai aur
+format teen plain JSONL/TSV files hai. `datasets` pyarrow samet bada dependency tree
+laata, sirf teen files padhne ke liye.
+
+**`load_qrels` score 0 kyun drop karta hai:** BEIR me 0 ka matlab "judged, par relevant
+nahi" hota hai. Usko gold maan lena eval ko **silently galat** kar deta.
+
+### `--limit` truncation nahi hai — ye asli baat hai
+
+Pehle N documents lena eval ko chupke se tod deta. Gold docs corpus me kahin bhi ho sakte
+hain; jo cut ho gaye, unke `local` labels jhoothe ho jaate — system ke paas wo jawab hai
+hi nahi. Aur wo failure eval me **grader ki galti** jaisa dikhta, jabki galti corpus ki
+hoti. Ye sabse bura measurement bug hota hai: galat component ko blame karta hai.
+
+Isliye `load_corpus(limit=N)` pehle **saare gold docs** rakhta hai, phir baaki slots
+filler se bharta hai. Filler zaroori hai — uske bina har indexed doc kisi na kisi query ka
+jawab hota aur retrieval trivial ho jaati. `test_corpus.py` dono cheezein assert karta hai.
+
+---
+
+## backend/eval/build_scifact_scenarios.py ✅ (Phase 10)
+
+qrels se eval cases generate karta hai. `local` cases ke labels **dataset se** aate hain:
+agar SciFact kehta hai ki claim Q ka jawab abstract D me hai, aur D ingest hua hai, to Q
+local jaana chahiye.
+
+**`web` cases abhi bhi haath se likhe hain — ye maan lena zaroori hai.** Par wo aasan
+half hai: SciFact static scientific abstracts hain, to "aaj ka pricing" type sawaal usme
+ho hi nahi sakte. **Mushkil half (local) ab dataset se aata hai.**
+
+---
+
+## Corpus switching — `CORPUS` env var
+
+`concepts` (default) ya `scifact`. Dono **alag Chroma collections** me (`crag_docs` /
+`crag_scifact`).
+
+**Alag collections kyun, alag directory kyun nahi:** ek hi `vectorstore/` me collections
+saath reh sakti hain, to switch karne pe **re-ingest nahi karna padta** — SciFact pe wo
+minutes ka kaam hai. Aur mix hone ka koi risk nahi: SciFact ke chunks concepts ke 22
+chunks ke saath retrieval me nahi aa sakte, warna dono ke eval numbers bekaar ho jaate.
+
+Results bhi per-corpus hain (`results.json` / `results_scifact.json`), aur `/api/stats`
+wahi padhta hai jo active corpus ka ho. **Inhe average mat karna** — alag data pe alag
+cheezein measure karte hain.
+
+### Do asli bugs jo bada corpus laane pe hi mile
+
+**OOM (exit 137), do baar.** Pehle poora corpus split karke saare chunks ek list me rakhe
+jaate the. SciFact pe wo 17,266 chunks banti hai aur 3.5 GB container mar gaya. Concepts
+ke 22 chunks pe ye kabhi dikhta hi nahi. Fix: ingestion ab **stream** karti hai — documents
+ke batch pe split → embed → chhod do. Peak memory corpus size se azaad ho gayi.
+
+**SQLite lock contention.** Ingest 5 minute tak chalti rahi aur vectorstore ek byte nahi
+badha. Wajah: `docker compose` ka backend container **wahi `vectorstore/` mount** kiye
+baitha tha, aur ingest Chroma ke SQLite write lock pe block ho rahi thi. Koi error nahi
+aata — bas hang. Fix: bada ingest chalane se pehle compose band karo.
 
 ---
 
