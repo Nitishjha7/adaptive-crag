@@ -40,7 +40,18 @@ class Settings(BaseSettings):
     VECTOR_DB: str = "chroma"
     # "duckduckgo" (koi key nahi chahiye) ya "tavily" (behtar snippets, signup chahiye)
     SEARCH_PROVIDER: str = "duckduckgo"
-    COLLECTION_NAME: str = "crag_docs"
+    # --- which corpus is loaded -------------------------------------------
+    # "concepts" — 7 hand-written RAG/agent docs (22 chunks). Chhota, aur uska
+    #              gap **categorical** hai, isliye demo predictable rehta hai.
+    #              Fixed demo queries aur 20/20 wala eval isi pe hai.
+    # "scifact"  — BEIR SciFact, ~5k scientific abstracts. Itna bada ki ranking
+    #              sach me matter kare, aur uske **qrels dataset ke saath aate
+    #              hain** — labels khud likhne ki zaroorat nahi, jo eval ka wo
+    #              structural bias hata deta hai jo RESULTS.md me likha hai.
+    #
+    # Dono alag Chroma collections me rehte hain, isliye ek doosre me mix nahi
+    # hote aur switch karne pe re-ingest nahi karna padta.
+    CORPUS: str = "concepts"
     TOP_K: int = 4
 
     # --- hybrid retrieval + reranking (Phase 9) ----------------------------
