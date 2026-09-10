@@ -99,7 +99,7 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, which is why 50 tests run with no API key.
+swapped for a scripted fake in one line, which is why 54 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
@@ -360,7 +360,7 @@ this and should not be claimed as such.
 
 | | |
 |---|---|
-| **50 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags. No API key needed |
+| **54 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags. No API key needed |
 | **Routing eval** (`.\dev.ps1 eval`) | 20 labelled cases — 20/20, 0 missed fallbacks, 3 runs |
 | **Ambiguity eval** (`--repeat 3`) | 8 half-covered cases, scored for route stability |
 | **Retrieval A/B** | Same 44 cases with `USE_HYBRID`/`USE_RERANKER` off vs on — see [RESULTS](../backend/eval/RESULTS.md) |
@@ -409,7 +409,7 @@ docker compose up --build     # full stack → :3001 (UI) · :8001 (API docs)
 
 .\dev.ps1 ingest [-Reset]     # backend/data/ → Chroma
 .\dev.ps1 ask "..."           # one query, full trace, no server
-.\dev.ps1 test                # 50 tests, no API key needed
+.\dev.ps1 test                # 54 tests, no API key needed
 .\dev.ps1 eval                # 20 labelled cases — real LLM + live web
 .\dev.ps1 eval --repeat 3     # + 8 ambiguous cases, scored for stability
 .\dev.ps1 serve -Port 8042    # API alone

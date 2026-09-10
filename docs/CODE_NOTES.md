@@ -110,7 +110,7 @@ gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
 
 ---
 
-## backend/tests/ ✅ — 50 tests, `.\dev.ps1 test`
+## backend/tests/ ✅ — 54 tests, `.\dev.ps1 test`
 
 | File | Kya cover karta hai |
 |---|---|

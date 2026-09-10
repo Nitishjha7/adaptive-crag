@@ -23,11 +23,11 @@ cost and latency of a web call on every query.
 > | Phase 3 — grading, conditional edge, query transform, web fallback | ✅ both routes verified live |
 > | Phase 4 — groundedness + PII validation | ✅ |
 > | Phase 5 — FastAPI `/api/query` + `/health` | ✅ |
-> | Phase 6 — React UI (chat, source badge, relevance pill, trace viewer) | ✅ |
+> | Phase 6 — React dashboard (stat cards, chat, citations, trace, eval + system tabs) | ✅ |
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Citations — source filenames (local) / URLs (web) | ✅ |
 > | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ built and A/B'd — **no routing benefit measured** |
-> | Test suite — 50 tests (`.\dev.ps1 test`) | ✅ |
+> | Test suite — 54 tests (`.\dev.ps1 test`) | ✅ |
 > | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
 > | Deployment (Render + Vercel) | ❌ not done |
 
@@ -153,7 +153,7 @@ don't need a rebuild:
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ingest [-Reset]    # embed backend/data/ into Chroma
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 50 tests, no API key needed
+.\dev.ps1 test               # 54 tests, no API key needed
 .\dev.ps1 eval               # 20 labelled cases (real LLM + live web calls)
 .\dev.ps1 eval --repeat 3    # + 8 ambiguous cases, scored for route stability
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit
