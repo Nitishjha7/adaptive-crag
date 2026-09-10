@@ -90,7 +90,19 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
   3. **`--limit` truncation nahi ho sakta** — gold docs cut ho jaate aur phir eval me wo
      failure *grader ki galti* jaisa dikhta, jabki galti corpus ki hoti. Ab gold docs pehle,
      phir filler. `test_corpus.py` assert karta hai
+- ✅ **SciFact pe A/B chal gaya** (500 docs → 1,717 chunks). Baseline vs hybrid+rerank:
+  routing **75.0% → 78.6%**, recall@k **65% → 70%**, unnecessary fallbacks 7 → 6,
+  missed fallbacks dono me **0**.
+  - **Sirf ek case badla** (#10: gold `MISS → hit`, route `web → local`) — 20 cases pe
+    +5pp matlab ek document, yaani noise ke andar. Jo establish hua wo **mechanism** hai,
+    magnitude nahi.
+  - **Isse bada finding:** baseline pe gold doc mila to 13/13 sahi route, miss hua to
+    7/7 web. **Grader ne ek bhi apni galti nahi ki** — saare "routing failures" retrieval
+    misses the jinhe usne theek pakda. Matlab 75% grader ko under-report karti hai, aur
+    bottleneck **retrieval** hai, grading nahi.
 - ❌ Deployment (Render + Vercel) — abhi nahi hua
+- ❌ Poora 5k corpus + 300-query test set — laptop ki Docker memory (3.5 GB) me nahi aata.
+  Reranking sach me kaam karta hai ya nahi, wo isi pe pata chalega
 
 ---
 

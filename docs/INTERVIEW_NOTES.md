@@ -553,7 +553,8 @@ down with it**, because both are yours. Keep these straight:
 |---|---|
 | "It validates output with Guardrails AI" | "I dropped Guardrails AI. The hub download and version pinning were going to be the biggest time sink, and what I needed was groundedness plus PII — one temperature-0 call and four regexes, no dependency" |
 | **"Routing accuracy is 100%"** — without the condition | Always name the condition. "20/20 on a set where the corpus gap is *categorical* — concepts in, live facts out. That means the labelled task is easy, not that the router is robust. That's why I added ambiguous cases" |
-| **"I added hybrid search and reranking and retrieval improved"** | It is built — and the A/B says it changed **nothing** on routing. "I added them last so the ambiguity tier could measure them, then A/B'd behind flags. 27 of 28 questions retrieved different chunks and not one routing decision changed. On a 22-chunk topically-clustered corpus the verdict follows topic, not ranking — and the grader concatenates chunks, so it never sees the ordering a reranker optimises" |
+| **"Hybrid search and reranking improved retrieval"** | Only if you name the corpus and the size. "On the 22-chunk corpus the A/B was flat — 27 of 28 questions retrieved different chunks and not one routing decision changed. On SciFact it moved: recall 65→70%, routing 75→78.6%. But that is **one document out of twenty**, which is inside noise. What it establishes is the mechanism — better retrieval, gold document found, correct route — not that reranking reliably helps. That needs the full 5k corpus" |
+| **"Routing accuracy is 75% on SciFact"** — stopping there | True but it undersells you. Add the finding: "all seven failures were retrieval misses the grader caught correctly — it made zero independent errors. The bottleneck is retrieval, not grading" |
 | **"Adaptive routing saves latency"** | The latency measurement **failed** — Groq's throttling swamps the route difference, and one run showed the local route slower than web. "The cost argument rests on LLM calls per query, 3.0 vs 4.0, which comes from graph structure and is identical on every run" |
 | "It has citations with page numbers" | Local answers cite the source **filename**; web answers cite the URL. No page or chunk offsets |
 | "It's production ready" | "Portfolio project. It needs CORS restricted, a deploy, prompt-injection handling on the web path, and an incremental re-index pipeline" |
@@ -587,6 +588,15 @@ and it was **confounded**. Cases ran in file order, so throttling ramped into th
 bucket and the number measured position, not routing. You found it, interleaved the
 cases, and when latency *still* wouldn't separate you dropped it as a metric and moved
 the cost argument onto call counts. **That story is worth more than the 20/20.**
+
+**1a. And then you found what the number was hiding.**
+On SciFact the router scores 75%. But every case where the gold document *was*
+retrieved routed correctly (13/13), and every case where it was *missed* fell back to
+the web (7/7). **The grader made zero independent errors** — all seven "routing
+failures" were retrieval misses it detected correctly. So 75% understates the grader:
+conditional on what it received, it was right 20/20, and the bottleneck is retrieval,
+not grading. That is the kind of thing you only see if you instrument the layer *below*
+the metric you were reporting.
 
 **1b. And then you published a second one.**
 Hybrid search and reranking were added *last*, specifically so the ambiguity tier could
