@@ -4,9 +4,13 @@
  * hain (Documents upload, Settings) unhe `soon: true` mark kiya hai aur wo
  * disabled hain — ek dead link daal ke demo me uspe click ho jaana usse bura hai.
  */
+// `id` seedha SidePanel ke tab id se match karna chahiye. Pehle yahan
+// "evaluation" tha jabki panel "eval" expect karta hai — nav click kuch karta
+// hi nahi tha, bina kisi error ke. Isliye ab dono jagah ek hi vocabulary hai.
 const NAV = [
   { id: "chat", label: "New Chat", icon: ChatIcon },
-  { id: "evaluation", label: "Evaluation", icon: ChartIcon },
+  { id: "trace", label: "Sources & Trace", icon: ListIcon },
+  { id: "eval", label: "Evaluation", icon: ChartIcon },
   { id: "system", label: "System Status", icon: PulseIcon },
   { id: "documents", label: "Documents", icon: DocIcon, soon: true },
 ];
@@ -33,6 +37,13 @@ function ChartIcon(p) {
     </svg>
   );
 }
+function ListIcon(p) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  );
+}
 function PulseIcon(p) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
@@ -41,7 +52,7 @@ function PulseIcon(p) {
   );
 }
 
-export default function Sidebar({ active, onSelect, onNewChat }) {
+export default function Sidebar({ active, onSelect, onNewChat, hasChat }) {
   return (
     <aside className="hidden w-64 shrink-0 flex-col bg-[#0f1729] text-slate-300 lg:flex">
       <div className="flex items-center gap-3 px-6 pb-6 pt-7">
@@ -54,7 +65,9 @@ export default function Sidebar({ active, onSelect, onNewChat }) {
 
       <nav className="space-y-1 px-3">
         {NAV.map(({ id, label, icon: Icon, soon }) => {
-          const isActive = active === id;
+          // "New Chat" tab nahi hai, ek action hai — wo tab highlight hota hai
+          // jab conversation khaali ho.
+          const isActive = id === "chat" ? !hasChat : active === id;
           return (
             <button
               key={id}

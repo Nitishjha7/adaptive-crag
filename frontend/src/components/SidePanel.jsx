@@ -89,8 +89,21 @@ export default function SidePanel({ tab, onTab, latest, stats, llmNodes = [] }) 
           )}
 
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+            {/* Emoji ki jagah SVG: emoji font har machine pe nahi hoti aur
+                headless/Linux pe khaali box (tofu) ban jaata hai. */}
             <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-indigo-900">
-              <span aria-hidden="true">💡</span> How CRAG works
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+              >
+                <path d="M9 18h6M10 22h4" />
+                <path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
+              </svg>
+              How CRAG works
             </h3>
             <ol className="list-inside list-decimal space-y-1 text-xs leading-relaxed text-indigo-900/80">
               <li>Retrieve candidates from the vector DB and BM25, then rerank</li>

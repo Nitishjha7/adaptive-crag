@@ -22,6 +22,25 @@ const LLM_NODES = [
   "validate_guardrails",
 ];
 
+/** Empty-state card explaining one of the two routes. */
+function RouteHint({ tone, title, body }) {
+  const styles =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50/60 text-emerald-900"
+      : "border-sky-200 bg-sky-50/60 text-sky-900";
+  const dot = tone === "emerald" ? "bg-emerald-500" : "bg-sky-500";
+
+  return (
+    <div className={`rounded-lg border px-4 py-3 text-left ${styles}`}>
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <span className={`h-2 w-2 rounded-full ${dot}`} />
+        {title}
+      </div>
+      <p className="mt-1 text-xs opacity-80">{body}</p>
+    </div>
+  );
+}
+
 export default function App() {
   const [turns, setTurns] = useState([]);
   const [stats, setStats] = useState(null);
@@ -80,7 +99,12 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900">
-      <Sidebar active="chat" onSelect={setTab} onNewChat={() => setTurns([])} />
+      <Sidebar
+        active={tab}
+        hasChat={turns.length > 0}
+        onSelect={setTab}
+        onNewChat={() => setTurns([])}
+      />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <header className="flex flex-wrap items-center gap-3 px-6 pb-4 pt-6">
@@ -148,10 +172,47 @@ export default function App() {
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+              {/* Khaali chat ek bada blank void tha. Ab wahi jagah batati hai ki
+                  system karta kya hai — aur dono routes ka farak pehle hi dikha
+                  deti hai, jo poore project ka point hai. */}
               {turns.length === 0 && !busy && (
-                <div className="py-10 text-center text-sm text-slate-400">
-                  Ask a question, or pick one below — two are answered locally, two
-                  force the web fallback.
+                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                  <svg viewBox="0 0 32 32" className="h-12 w-12 opacity-70">
+                    <path
+                      d="M16 5 L27 26 H5 Z"
+                      fill="none"
+                      stroke="#6366f1"
+                      strokeWidth="2"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M16 13 L21 26 H11 Z" fill="#6366f1" opacity="0.85" />
+                  </svg>
+
+                  <h3 className="mt-4 font-semibold text-slate-700">
+                    Ask anything — it decides where to look
+                  </h3>
+                  <p className="mt-1 max-w-md text-sm text-slate-500">
+                    Every question is graded before it is answered. If the indexed
+                    documents genuinely cover it, you get a local answer. If they
+                    don't, the system rewrites the query and searches the web.
+                  </p>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <RouteHint
+                      tone="emerald"
+                      title="Local Documents"
+                      body="Graded sufficient — no web call, 3 LLM calls."
+                    />
+                    <RouteHint
+                      tone="sky"
+                      title="Web Fallback"
+                      body="Graded insufficient — query rewritten, then searched."
+                    />
+                  </div>
+
+                  <p className="mt-6 text-xs text-slate-400">
+                    Pick one of the four below — two of each.
+                  </p>
                 </div>
               )}
 

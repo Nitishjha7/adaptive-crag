@@ -9,6 +9,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Vite 6 default me sirf localhost allow karta hai aur baaki Host headers pe
+    // 403 deta hai. Ye dev server Docker ke andar chalta hai, to browser use
+    // `host.docker.internal` ya machine ke LAN IP se hit karta hai — dono block
+    // ho jaate the. Ye sirf dev server ka setting hai; production Nginx serve
+    // karta hai aur wahan iska koi asar nahi.
+    allowedHosts: true,
     proxy: {
       "/api": {
         target: process.env.VITE_BACKEND_URL || "http://localhost:8001",
