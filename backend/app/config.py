@@ -74,6 +74,22 @@ class Settings(BaseSettings):
     # Docker me ye volume pe mount hota hai, taaki index rebuild na karna pade.
     VECTORSTORE_DIR: str = str(BACKEND_DIR / "vectorstore")
     DATA_DIR: str = str(BACKEND_DIR / "data")
+    # BEIR download yahan extract hota hai. Gitignored — ~5k abstracts repo me
+    # commit karne ka koi matlab nahi, wo ek reproducible download hai.
+    BEIR_DIR: str = str(BACKEND_DIR / "beir")
+
+    @property
+    def collection_name(self) -> str:
+        """Per-corpus Chroma collection.
+
+        Alag collections isliye ki dono corpora ek doosre me **mix na ho** —
+        warna SciFact ke 10k chunks ke saath concepts wale 22 chunks retrieval
+        me ghus jaate aur dono ke eval numbers bekaar ho jaate.
+
+        Side benefit: switch karne pe re-ingest nahi karna padta, dono index
+        ek hi `vectorstore/` directory me saath rehte hain.
+        """
+        return "crag_docs" if self.CORPUS == "concepts" else f"crag_{self.CORPUS}"
 
 
 @lru_cache
@@ -126,7 +142,7 @@ def get_vectorstore():
 
     s = get_settings()
     return Chroma(
-        collection_name=s.COLLECTION_NAME,
+        collection_name=s.collection_name,
         embedding_function=get_embeddings(),
         persist_directory=s.VECTORSTORE_DIR,
     )

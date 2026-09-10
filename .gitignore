@@ -10,3 +10,4 @@ chroma_db/
 faiss_index/
 vectorstore/
 .fastembed_cache/
+beir/
