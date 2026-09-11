@@ -1,8 +1,17 @@
-# Adaptive Corrective RAG (CRAG) with Web Search Fallback
+<div align="center">
 
-An agentic RAG system built with LangGraph that **grades its own retrieval before
-answering**, rewrites the query when the local corpus falls short, and falls back
-to live web search instead of guessing.
+# Adaptive Corrective RAG
+
+**A RAG pipeline that grades its own retrieval before answering — and searches the web only when it decides the corpus falls short.**
+
+[![tests](https://github.com/Nitishjha7/adaptive-crag/actions/workflows/ci.yml/badge.svg)](https://github.com/Nitishjha7/adaptive-crag/actions/workflows/ci.yml)
+[![missed fallbacks](https://img.shields.io/badge/missed%20fallbacks-0%20on%20both%20corpora-3fb950)](#what-the-measurements-say)
+[![SciFact recall@k](https://img.shields.io/badge/SciFact%20recall%40k-70%25-0d9488)](backend/eval/RESULTS.md)
+[![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-4f46e5)](backend/app/graph/build_graph.py)
+[![Groq](https://img.shields.io/badge/Groq-gpt--oss--120b-f97316)](backend/app/config.py)
+[![license](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
+
+</div>
 
 Naive RAG trusts whatever the vector DB returns. CRAG adds a verification step: a
 grading node decides whether the retrieved chunks actually answer the question,
@@ -12,6 +21,18 @@ and only pays for a web call when they don't.
 works.** Routing accuracy, retrieval recall and answer correctness are all
 measured against labelled sets, and the results that came back negative are
 published alongside the ones that didn't.
+
+---
+
+<p align="center">
+  <img src="docs/images/architecture.svg" alt="Architecture: a question is retrieved with hybrid search and reranking, graded by an LLM, then either answered locally or corrected through query rewriting and web search before generation and guardrails" width="100%">
+</p>
+
+<p align="center">
+  <sub>Indigo is the one node the <b>model</b> controls — everything downstream is a
+  deterministic edge reading its verdict. The correction path costs one extra LLM call,
+  and only runs when the grader says the corpus is not enough.</sub>
+</p>
 
 ---
 
@@ -142,6 +163,7 @@ Backend-only dev loop (`.\dev.ps1 test`, `ingest`, `eval`, `ask`) is in
 | [TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) · [CODE_NOTES.md](docs/CODE_NOTES.md) | Architecture, state schema, file-by-file notes |
 | [RAG_FUNDAMENTALS.md](docs/RAG_FUNDAMENTALS.md) | RAG concepts, and an honest map of which pipeline stages this project skips |
 | [ROADMAP.md](docs/ROADMAP.md) · [SETUP.md](docs/SETUP.md) | What was built when; environment setup |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploying to a HuggingFace Space, and the memory measurements that ruled Render out |
 
 ---
 
@@ -149,10 +171,14 @@ Backend-only dev loop (`.\dev.ps1 test`, `ingest`, `eval`, `ask`) is in
 
 Stated rather than hidden — the System Status page says the same thing in the UI.
 
-- **Deployment.** Render's free tier was measured and ruled out: the backend
-  peaks at 464 MB on the *smallest* corpus against a 512 MB limit, has no
-  persistent disk, and sleeps. Target is a HuggingFace Space; plan and
-  prerequisites in [ROADMAP.md](docs/ROADMAP.md).
+- **Deployment — the image is built and verified, the Space is not created yet.**
+  `Dockerfile` at the repo root serves the API and the built SPA from one
+  process; it ingests the corpus at build time and asserts the index is
+  non-empty, because `vectorstore/` is gitignored and a fresh clone would
+  otherwise boot empty. Verified locally: both routes answer, `indexed_chunks: 22`.
+  Render was measured and ruled out — **698 MB peak against a 512 MB limit**, no
+  persistent disk, and it sleeps. Target is a HuggingFace Space (16 GB);
+  step-by-step in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - **The answer-correctness A/B.** Only the baseline arm ran — the treatment arm
   hit Groq's daily token cap. Whether reranking improves *answers* is still open.
 - **The full 5k SciFact corpus + 300-query set.** Needs ~8 GB to Docker; this

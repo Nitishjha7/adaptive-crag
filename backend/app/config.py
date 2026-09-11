@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     TAVILY_API_KEY: str = ""
 
+    # --- serving -----------------------------------------------------------
+    CORS_ORIGINS: str = "http://localhost:3001,http://localhost:5173"
+    """Comma-separated origins allowed to call the API.
+
+    The default is the two local dev origins, **not** `*`. The deploy image
+    serves the built frontend from this same app, so in production there is no
+    cross-origin caller at all and this list stays unused — which is exactly
+    why the permissive default was worth removing rather than keeping "just in
+    case". Set it only for a split deployment.
+    """
+
     # --- models ------------------------------------------------------------
     # Grading and generation share one model. The small grading call is
     # latency-sensitive, hence Groq (very fast inference).
@@ -76,6 +87,10 @@ class Settings(BaseSettings):
     # Where the BEIR download is extracted. Gitignored — committing ~5k abstracts
     # makes no sense when it is a reproducible download.
     BEIR_DIR: str = str(BACKEND_DIR / "beir")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     @property
     def collection_name(self) -> str:

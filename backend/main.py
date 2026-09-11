@@ -8,11 +8,13 @@ route was taken.
 """
 
 import time
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
@@ -36,12 +38,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Open in dev. The deployment plan puts the frontend and backend in one image
-# behind Nginx, which makes them same-origin and removes the need for CORS at all
-# — but `allow_origins=["*"]` still has no business in production either way.
+# The deploy image serves the built frontend from this same app, so production
+# is same-origin and this middleware never fires there. It exists for the local
+# split setup (Vite on :5173, Nginx on :3001) — which is why the default is
+# those two origins rather than `*`. Override with CORS_ORIGINS for a split
+# deployment.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: restrict to the deployed origin before shipping
+    allow_origins=get_settings().cors_origin_list,
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
@@ -272,3 +276,18 @@ async def documents():
         "documents": docs[:60],
         "truncated": len(docs) > 60,
     }
+
+
+# Mounted last, and deliberately so: a mount at "/" swallows every path beneath
+# it, so every /api route above has to be registered first or it becomes
+# unreachable.
+#
+# Only the single-service deploy image has this directory. Under docker-compose
+# Nginx serves the frontend and this block is a no-op — the check is on the
+# directory rather than an env var so there is one fewer thing to set correctly.
+#
+# The SPA keeps its view in the URL *hash* (`App.jsx`), so every route is the
+# same document and `html=True` is all the fallback needed.
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -1,0 +1,112 @@
+name: tests
+
+# The suite is LLM-free — the grader, the rewriter and the guardrails are all
+# driven by a scripted fake (`tests/conftest.py`), because these tests check
+# control flow, not model quality. So CI needs no GROQ_API_KEY and a fork's pull
+# request runs it in full.
+#
+# It is NOT retrieval-free, though: 9 tests exercise the real hybrid pipeline and
+# need a populated Chroma index. `backend/vectorstore/` is gitignored, so CI has
+# to build the index the same way the deploy image does — by running the ingest.
+# Skipping that step is how you get a green local run and a red CI run.
+#
+# What this does NOT cover: routing quality on real models. That is
+# `python -m eval.run_eval`, which needs a key and live web search.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: backend · 75 tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      # ~100 MB of ONNX weights for the embedder and the cross-encoder. Cached on
+      # the requirements hash: the models only change when a pin does.
+      - name: Cache the embedding and reranker models
+        uses: actions/cache@v4
+        with:
+          path: backend/.fastembed_cache
+          key: fastembed-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Build the Chroma index
+        working-directory: backend
+        env:
+          FASTEMBED_CACHE_PATH: .fastembed_cache
+        run: python ingest.py --corpus concepts
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          FASTEMBED_CACHE_PATH: .fastembed_cache
+        run: python -m pytest tests/ -q
+
+  frontend:
+    name: frontend · production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  deploy-image:
+    name: deploy image · builds and serves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds the image the HuggingFace Space deploys. It ingests at build time
+      # and asserts the index is non-empty, so a broken ingest fails the build
+      # rather than shipping a Space that answers everything from web search.
+      - name: Build the single-service image
+        run: docker build -f Dockerfile -t adaptive-crag:ci .
+
+      - name: Boot it and check the index shipped
+        run: |
+          docker run -d --name ci -p 7860:7860 -e GROQ_API_KEY=dummy-key-for-boot adaptive-crag:ci
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:7860/health >/dev/null 2>&1; then
+              echo "healthy after ${i}s"
+              curl -s http://localhost:7860/health
+              # 0 chunks means the image shipped an empty index — the exact
+              # failure the build-time ingest exists to prevent.
+              curl -s http://localhost:7860/health | grep -q '"indexed_chunks":22'
+              echo "index baked into the image: 22 chunks"
+              # The SPA has to come from the same origin, or the single-service
+              # image has no reason to exist.
+              test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:7860/)" = "200"
+              echo "SPA served from the same origin"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "never became healthy:"
+          docker logs ci
+          exit 1

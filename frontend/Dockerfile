@@ -3,9 +3,9 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# package files pehle — source badalne pe npm install layer cached rehti hai
-COPY package.json ./
-RUN npm install
+# package files first, so the dependency layer stays cached when source changes
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 RUN npm run build

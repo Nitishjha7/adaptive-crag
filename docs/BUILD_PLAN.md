@@ -1,127 +1,119 @@
-# Build Plan — Kaise Chalna Hai
+# Build Plan — how this was actually built
 
-Ye file batati hai ki Adaptive CRAG ko step-by-step kaise build karenge, kaun kya karega,
-aur kitna time lagega. Har session ke baad isko update karte rahenge (✅ mark karte jaana).
-
----
-
-## Working Style
-
-- **Claude (main):** ✅ **ho gaya** — phase-wise code likha (vector store, LangGraph nodes,
-  grading, fallback, validation, FastAPI, frontend), har phase ke baad run karke verify kiya.
-- **Nitish (tu):** ⬜ **abhi baaki** — code khud padhna, trace karna, "ye kyun" poochna, aur
-  khud dono paths chala ke dekhna. Ye part skip nahi karna — interview me yahi kaam aata hai.
-  Detail neeche "Nitish ka Part" me hai.
+[ROADMAP.md](ROADMAP.md) is what exists. [PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md)
+is how the system works. This file is the *process*: the order things were built in,
+the rule that decided that order, and — the part worth reading — where the time
+actually went versus where it was expected to go.
 
 ---
 
-## Build Schedule (Claude ka output)
+## The rule that set the order
 
-| Session | Phase | Deliverable | Status |
-|---|---|---|---|
-| 1 | Phase 1 + 2 | Chroma ingestion script + persistence, `config.py` (LLM + embedding factory), `CRAGState` schema, LangGraph skeleton (`retrieve` + `generate` + wiring), ek dummy query end-to-end chale | ✅ ingestion (7 docs → 22 chunks) + graph wiring verified |
-| 2 | Phase 3 | `grade_documents` binary grader + conditional edge, `transform_query` rewrite, `tavily_search` tool + `web_search_fallback` node, dono paths verify | ✅ dono routes asli Groq + live DuckDuckGo pe verified |
-| 3 | Phase 4 + 5 | Custom `validators.py` (LLM groundedness + regex PII — **`guardrails-ai` nahi**) + `validate_guardrails` node, FastAPI `POST /api/query` with step logs + `source_type` | ✅ guardrails ke 4 case + asli HTTP requests verified |
-| 4 | Phase 6 + 7 | React + Vite + Tailwind dashboard (Sidebar, Message, Citations, TraceTimeline, + Documents/Evaluation/System views), `/api/` proxy, `docker-compose.yml`, end-to-end wiring | ✅ `docker compose up` se poora stack chalta hai; dono routes UI se verified. Deployment abhi baaki |
+**Build the smallest thing that can be graded, then grade it, then decide what to
+build next.**
 
-**Claude ka effort:** ~4 working sessions. Back-to-back karein toh 1–2 din.
+The corpus came before the graph, because a controlled corpus with a *deliberate
+gap* is what makes the fallback fire predictably instead of by luck. The eval
+harness came before the retrieval work, because hybrid search and reranking are
+exactly the kind of change that feels like an improvement and has to be proved to
+be one.
 
----
+That ordering paid off twice, both times by returning a negative result:
 
-## Nitish ka Part (interview-ready banne ke liye) — ⬜ **ye abhi bacha hua hai**
-
-Code ban chuka hai. **Ye wala part nahi hua** — aur interview me exactly yahi kaam aata hai.
-Code jo maine likha wo tere naam se jaayega; agar tu trace nahi kar sakta to wahi sabse
-bada risk hai.
-
-1. [CODE_QA.md](CODE_QA.md) — **yahin se shuru kar.** 27 sawaal jawab ke saath,
-   wahi jo interviewer poochhega. Jawab dekhe bina bolna; jahan atke wahi kaam ka.
-   Aakhir me teen exercise hain: test todne wale.
-2. [CODE_NOTES.md](CODE_NOTES.md) padh — har file ka "kya / kyun"
-3. Code line-by-line trace kar, jo samajh na aaye pooch. Yahan se shuru kar (yahi core hai):
-   - `backend/app/nodes/grade_documents.py` — grader + `parse_verdict`
-   - `backend/app/graph/build_graph.py` — `decide_to_generate` conditional edge
-   - `backend/app/nodes/web_search_fallback.py` — docs replace kyun, merge kyun nahi
-   - `backend/app/schemas/crag_state.py` — `logs` pe reducer, `documents` pe kyun nahi
-4. Dono routes khud chala:
-   ```powershell
-   .\dev.ps1 ask "why does chunk overlap matter?"              # grade: yes -> local
-   .\dev.ps1 ask "what is the model context protocol?"          # grade: no  -> web
-   ```
-   Trace me har node dekh. Phir UI pe wahi kar — <http://localhost:3001>
-5. **Ek test jaan-boojh ke todh ke dekh** — samajhne ka sabse tez tareeka. Jaise
-   `web_search_fallback.py` me `"documents": snippets` ko append karne wala bana de aur
-   `.\dev.ps1 test` chala; dekh kaunsa test fail hota hai aur kyun. Phir wapas theek kar.
-6. [INTERVIEW_NOTES.md](INTERVIEW_NOTES.md) ka Q&A bolke practice kar — khaas kar trade-offs
-   aur "why not Guardrails AI" wale.
-
-**Nitish ka effort:** ~3–4 din (daily 2–3 ghante).
+- **Hybrid + cross-encoder reranking changed 27 of 28 retrievals and moved zero
+  routing decisions.** Without the eval in place first, that would have shipped as
+  an unexamined win.
+- **The first latency comparison was a throttling artifact.** It looked convincing
+  — local 13.7s vs web 18.5s — until the per-case timings showed everything after
+  case 5 slowing down regardless of route. The cost argument moved to LLM call
+  counts, which come from the shape of the graph and reproduce exactly.
 
 ---
 
-## Total Timeline
+## Order of execution
 
-| Scenario | Time |
+| # | Built | Why here |
+|---|---|---|
+| 1 | Controlled corpus + Chroma ingestion + config | Nothing downstream can be tested without an index, and the deliberate gap is what makes the fallback demonstrable |
+| 2 | LangGraph skeleton — `CRAGState`, `retrieve`, `generate` | The smallest end-to-end path |
+| 3 | `grade_documents` + conditional edge + `transform_query` + web fallback | The actual claim of the project |
+| 4 | Output validation (groundedness + PII) | Small, deterministic, and it closes the "what if the model adds its own knowledge" question |
+| 5 | FastAPI `/api/query` with step logs | Needed to exercise the graph from outside, and the trace is the demo |
+| 6 | React dashboard — chat, trace timeline, Documents / Evaluation / System | A route decision nobody can see is not a feature |
+| 7 | Docker Compose | One command to a working stack |
+| 8 | **Eval harness** | Earliest point the routing claim could be checked rather than asserted |
+| 9 | Ambiguity tier + hybrid retrieval + reranking | Only worth building once a metric existed that they could move |
+| 10 | Second corpus (BEIR SciFact) | Labels that are not mine — the answer to "you wrote both the corpus and the test set" |
+| 11 | Single-service deploy image | Last, because it should package a finished thing |
+
+---
+
+## Time-sinks — plan vs reality
+
+| What was expected to hurt | What actually happened |
 |---|---|
-| Sirf chalta hua code (Claude) | ~4 sessions / 1–2 din |
-| Code + tu confidently explain kar sake | **~4–5 din** (daily 2–3 ghante) |
-| Interview-ready MVP (dono paths solid, guardrails on, minimal UI, trace visible) | ~7–8 din |
+| **Guardrails AI setup** would be the biggest blocker | The library was never used. The fallback plan — a custom LLM groundedness check plus regex PII — took twenty minutes and added zero dependencies. It was the right call, and the interview point is identical |
+| **Grader consistency** — the model would return explanations instead of a verdict | Never happened. `gpt-oss-120b` returns a clean `yes`/`no`. `parse_verdict` is still defensive, with 11 test cases, because the failure would be silent |
+| **Fallback determinism** — live web results change between runs | Handled by the controlled corpus and its deliberate gap. The routing decision is stable even when the web text is not |
+| **Embedding model download** (~100 MB) | Cached at Docker build time, so the first request is not the one that waits |
+
+### The things nobody planned for
+
+These are where the time actually went.
+
+- **There is no Python on this machine** — only a WindowsApps stub. Everything runs
+  in Docker; `dev.ps1` exists entirely because of this.
+- **`llama-3.3-70b-versatile` does not exist on Groq any more** — a 404
+  `model_not_found`. Listing `/v1/models` and switching to `openai/gpt-oss-120b`
+  fixed it. **No mock would ever have caught this**, which is the argument for
+  running against the real API before believing anything.
+- **`ingest.py --reset` crashed inside Docker** — `vectorstore/` is a mount point,
+  so `rmtree` hit `Device or resource busy`. Clearing the contents instead of the
+  directory fixed it.
+- **The first query after `docker compose up` returned 502** — `depends_on:
+  service_started` let Nginx come up before uvicorn had bound. `service_healthy`
+  fixed it.
+- **SciFact caused two OOM kills** (exit 137) — 17,266 chunks do not fit in 3.5 GB.
+  Ingestion now streams per batch, so peak memory no longer scales with corpus size.
+- **SQLite lock contention with no error** — a running compose backend held the same
+  `vectorstore/`, and the ingest simply hung for five minutes rather than failing.
+  Large ingests need compose stopped first.
+- **`--limit` could not truncate naively** — it cut gold documents, and the eval then
+  showed those as *grader* failures when the fault was the corpus. Gold documents are
+  selected first now, filler after; `test_corpus.py` asserts it.
+- **A real Groq key reached `.env.example`** — that file is committed, `.env` is not.
+  The key was revoked, purged from the history of all three repositories, and the
+  remotes force-pushed. Verified afterwards from a fresh clone. The rule that came
+  out of it: `.env.example` holds empty placeholders, never a value.
 
 ---
 
-## Order of Execution
+## How this was built
 
-1. ✅ Phase 1 — vector store ingestion + Chroma persistence + config
-2. ✅ Phase 2 — LangGraph skeleton: `CRAGState`, `retrieve`, `generate`, edges
-3. ✅ Phase 3 — `grade_documents` + conditional edge + `transform_query` + web fallback
-4. ✅ Phase 4 — output validation (groundedness + PII)
-5. ✅ Phase 5 — FastAPI `/api/query` endpoint with step logs
-6. ✅ Phase 6 — React + Vite + Tailwind dashboard (source badges, inline trace, Documents/Evaluation/System views)
-7. ✅ Phase 7 — Docker Compose · ❌ deployment abhi baaki (target: HuggingFace Space)
-8. ✅ Eval harness (`eval/run_eval.py`) + INTERVIEW_NOTES me asli naape hue numbers —
-   routing, recall@k, groundedness, answer correctness, aur dono negative results
-9. 🟡 Answer-correctness A/B — baseline arm chal gaya, treatment arm Groq ke daily
-   token cap pe atka. Quota reset hone pe ek command:
+The code was written with heavy use of an AI coding assistant (Claude), working
+phase by phase against the order above, with each phase run and verified against the
+real Groq API and live search before moving on.
+
+What that did **not** decide: which corpus to build and where to leave the gap, that
+routing needed measuring rather than asserting, that a second corpus with
+externally-supplied labels was necessary, that reranking had to be A/B'd behind a
+flag, that the latency number was an artifact and had to be withdrawn, and that both
+negative results belonged in the README rather than a footnote.
+
+Those judgements, and the measurements that back them, are the project. They are
+documented in [CODE_QA.md](CODE_QA.md) — 27 questions about specific lines, with
+answers — and in [backend/eval/RESULTS.md](../backend/eval/RESULTS.md), which
+reports what the evaluation does not support as carefully as what it does.
+
+---
+
+## What is left
+
+1. **Deployment.** The single-service image is built and verified; the Space is not
+   created yet. Steps in [DEPLOYMENT.md](DEPLOYMENT.md).
+2. **The answer-correctness A/B treatment arm**, which stalled on Groq's daily token
+   cap. One command once quota resets:
    `.\dev.ps1 eval -Corpus scifact --out eval/results_scifact.json`
-
-Detail har phase ka [ROADMAP.md](ROADMAP.md) me hai.
-
----
-
-## Time-Sinks — plan vs reality
-
-| Jo socha tha | Jo actually hua |
-|---|---|
-| **Guardrails AI setup** sabse bada atkaav hoga | Library **li hi nahi**. Fallback plan (custom LLM groundedness check + regex PII) seedha liya — 20 min ka kaam, zero dependency. Sahi call tha |
-| **Grader consistency** — LLM explanation de dega | Ab tak nahi hua; `openai/gpt-oss-120b` saaf `yes`/`no` deta hai. Phir bhi `parse_verdict` defensive hai aur uske 11 test cases hain |
-| **Fallback determinism** — web results badalte hain | Controlled corpus + deliberate gap se handle ho gaya. Paanchon fixed queries sahi route leti hain |
-| **Embedding model download** (~100MB) | Dockerfile me build-time pe cache kiya — pehli request slow nahi hoti |
-
-### Jo socha hi nahi tha (asli atkaav yahan aaye)
-
-- **Machine pe Python hi nahi tha** — sirf WindowsApps stub. Sab kuch Docker me chalana pada;
-  `dev.ps1` isi wajah se bana.
-- **Groq pe `llama-3.3-70b-versatile` available nahi tha** — 404 `model_not_found`.
-  `/v1/models` list karke `openai/gpt-oss-120b` pe switch kiya. **Ye mocks ne kabhi nahi
-  pakda hota** — isiliye asli run zaroori tha.
-- **`ingest.py --reset` Docker me crash** — `vectorstore/` ek mount point hai, `rmtree` pe
-  `Device or resource busy`. Contents clear karne se fix.
-- **Compose me pehli query pe 502** — `depends_on: service_started` se nginx uvicorn se
-  pehle up ho jaata tha. `service_healthy` se fix.
-- 🔴 **Asli Groq key `.env.example` me chali gayi** — wo file commit hoti hai (`.env` gitignored
-  hai, `.env.example` nahi). Key commit `7dac9b5` me hai, wo push ho chuki hai, aur repo
-  **public** hai. **Ye abhi tak revoke nahi hui — sabse pehla kaam yahi hai:**
-  [console.groq.com/keys](https://console.groq.com/keys) pe jaake delete karo, nayi banao,
-  nayi sirf `.env` me daalo.
-
----
-
-## Next Step
-
-Backend + frontend + compose sab chal rahe hain. Ab do cheezein bachi hain:
-
-1. **Eval script** (`eval/scenarios.json` + runner) — abhi koi accuracy measure nahi hui,
-   isliye interview me koi number quote nahi kar sakte. Ye sabse zyada value deta hai.
-2. **Deployment** — HuggingFace Space (Docker SDK), backend + frontend ek image me.
-   Render + Vercel wala pehla plan naap ke reject kiya: peak 464 MB vs Render free ka
-   512 MB, aur free tier pe persistent disk hai hi nahi. Detail [ROADMAP.md](ROADMAP.md).
+3. **The full 5k SciFact corpus with a 300-query set** — needs roughly 8 GB of
+   Docker memory against the 3.5 GB available here. That run is what would settle
+   whether reranking helps answers rather than only retrieval.

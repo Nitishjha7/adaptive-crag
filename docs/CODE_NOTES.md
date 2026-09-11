@@ -1,195 +1,200 @@
-# Code Notes — Kya Kis Liye Hai
+# Code Notes — what each file is for
 
-Ye file har file / dependency ka **kaam aur reason** track karti hai, taaki baad me (ya
-interview me) yaad rahe ki har cheez kyun li gayi.
-
-**Legend:** ✅ = likha ja chuka.
-Phase 1–10 ✅ ho chuke (eval harness, citations, hybrid retrieval + rerank, BEIR SciFact corpus).
-Deployment abhi baaki.
+Every file and dependency, with the reason it exists. Phases 1–10 are done (eval
+harness, citations, hybrid retrieval + reranking, BEIR SciFact corpus). Deployment is
+the remaining gap.
 
 ---
 
-## backend/requirements.txt ✅
+## backend/requirements.txt
 
-| Package | Kya kaam karta hai | Kyun liya |
+| Package | What it does | Why it is here |
 |---|---|---|
-| `langgraph` | Stateful agent graph — nodes + conditional edges | CRAG ka core. Simple chain se conditional branching (relevant → generate, warna → fallback) express nahi hota; graph chahiye |
-| `langchain` / `langchain-core` | LLM abstractions, prompt templates, output parsers | Grader / rewrite / generate sab prompt chains hain. Provider swap karna easy |
-| `langchain-groq` | Groq LLM binding | Free tier + bahut fast inference — grading jaisa chhota call latency-sensitive hai |
-| `chromadb` | Embedded vector database | Local knowledge base. Zero infra (embedded), Docker volume pe persist ho jaata hai |
-| `fastembed` | Lightweight local embedding models (ONNX) | API key nahi chahiye, offline chalta hai, fast. HuggingFace se halka |
-| `tavily-python` | Tavily Search API client | **Optional upgrade** (`SEARCH_PROVIDER=tavily`). LLM-optimized snippets deta hai (raw HTML nahi), par signup chahiye |
-| ~~`guardrails-ai`~~ | — | **Nahi liya.** Hub download + version pinning time-sink tha; custom LLM groundedness check + regex PII usi kaam ko zero dependency me karta hai. Neeche `validators.py` dekh |
-| `ddgs` | DuckDuckGo search client | **Default web search provider — koi API key nahi chahiye.** Project pehle din se chalta hai |
-| `rank-bm25` | BM25 keyword scoring | Hybrid retrieval ka doosra half. Vector search exact tokens pe kamzor hai; BM25 wahan strong. Reranker `fastembed` me hi aa gaya — **koi nayi dependency nahi** |
-| `fastapi` | ASGI web framework — REST endpoint | `/api/query` gateway. Async-native, auto `/docs` |
-| `uvicorn[standard]` | ASGI server jo FastAPI run karta hai | FastAPI khud server nahi hai |
-| `pydantic` / `pydantic-settings` | Validation + typed config | Request/response models; `.env` se typed settings |
-| `python-dotenv` | `.env` load (dev) | Local dev me env vars |
+| `langgraph` | Stateful agent graph — nodes and conditional edges | The core of CRAG. A simple chain cannot express conditional branching (relevant → generate, otherwise → fallback); that needs a graph |
+| `langchain` / `langchain-core` | LLM abstractions, prompt templates, output parsers | Grading, rewriting and generation are all prompt chains. Swapping providers stays easy |
+| `langchain-groq` | Groq LLM binding | Free tier and very fast inference — a small call like grading is latency-sensitive |
+| `chromadb` | Embedded vector database | The local knowledge base. Zero infrastructure, persists to a Docker volume |
+| `fastembed` | Lightweight local embedding models (ONNX) | No API key, works offline, fast. Lighter than pulling HuggingFace transformers |
+| `tavily-python` | Tavily Search API client | **Optional upgrade** (`SEARCH_PROVIDER=tavily`). Gives LLM-optimised snippets rather than raw HTML, but needs a signup |
+| ~~`guardrails-ai`~~ | — | **Not used.** The hub download and version pinning were a time-sink; a custom LLM groundedness check plus regex PII does the same job with zero dependencies. See `validators.py` below |
+| `ddgs` | DuckDuckGo search client | **The default web search provider — no API key needed.** The project runs from day one |
+| `rank-bm25` | BM25 keyword scoring | The other half of hybrid retrieval. Vector search is weak on exact tokens; BM25 is strong there. The reranker came with `fastembed` — **no new dependency** |
+| `langchain-text-splitters` | `RecursiveCharacterTextSplitter` | Splits on paragraph and heading boundaries rather than a fixed character count |
+| `fastapi` | ASGI web framework | The `/api/query` gateway. Async-native, automatic `/docs` |
+| `uvicorn[standard]` | The ASGI server | FastAPI is not a server by itself |
+| `pydantic` / `pydantic-settings` | Validation and typed config | Request/response models; typed settings from `.env` |
+| `python-dotenv` | Loads `.env` in dev | Local environment variables |
 
 ---
 
-> `langchain-text-splitters` bhi add hua — `RecursiveCharacterTextSplitter` ingestion me
-> chahiye tha (paragraph/heading boundaries pe todta hai, fixed character count pe nahi).
+## backend/app/config.py
 
----
-
-## backend/app/config.py ✅
-
-Central config + factory functions. Koi business logic nahi.
+Central configuration and factory functions. No business logic.
 
 - `Settings(BaseSettings)` — `GROQ_API_KEY`, `TAVILY_API_KEY`, model names, `TOP_K`,
-  chunk params, paths. `.env` repo root se load hoti hai (docker-compose bhi wahi padhta hai).
-- `get_llm(temperature=0.0)` — configured `ChatGroq`. Key missing ho to saaf error message.
-- `get_embeddings()` — `FastEmbedEmbeddings` (local ONNX, koi API call nahi).
-- `get_vectorstore()` — persisted Chroma collection ka handle.
+  chunk parameters, `CORS_ORIGINS`, paths. Loaded from `.env` at the repo root, which
+  is the same file docker-compose reads.
+- `get_llm(temperature=0.0)` — a configured `ChatGroq`, with a clear error if the key
+  is missing.
+- `get_embeddings()` — `FastEmbedEmbeddings` (local ONNX, no API call).
+- `get_vectorstore()` — a handle to the persisted Chroma collection.
 
-**Kyun factory, direct import nahi:** test me mock karna easy (Phase 2 ka wiring test
-`get_llm` ko fake se replace karke hi chala tha, bina Groq key ke), aur model swap ek jagah se.
+**Why factories rather than direct imports:** they are easy to mock in tests (the
+Phase 2 wiring test ran with `get_llm` replaced by a fake, with no Groq key at all),
+and swapping a model happens in one place.
 
-**Kyun `@lru_cache`:** har node config import karta hai. Bina cache ke har call pe `.env`
-dobara parse hota aur naya embedding model load hota — slow aur bewajah.
+**Why `@lru_cache`:** every node imports config. Without caching, each call would
+re-parse `.env` and load a fresh embedding model — slow and pointless.
 
-**`ChatGroq` / `FastEmbedEmbeddings` ka import function ke andar kyun hai:** module import
-sasta rehta hai. `python -m app --help` jaisa kuch chalane pe heavy ML deps load nahi hote.
-
----
-
-## backend/data/ ✅ — controlled corpus
-
-7 markdown docs — RAG / agent engineering **concepts** (embeddings, chunking, vector DBs,
-naive-RAG failure modes, CRAG, query transformation, agent graphs & state).
-
-**Deliberate gap:** koi product/pricing/vendor detail nahi, koi recent release nahi, aur
-**MCP ka zero mention**. Ye gap hi Scenario 2 (correction path) ko predictably trigger karta
-hai — demo live randomness pe depend nahi karta.
-
-**Corpus real topics ka kyun, fictional company ka kyun nahi:** fictional hota to `grade: no`
-to aa jaata, lekin web search bhi kachra deta aur demo ka doosra half mar jaata. Gap aisa
-chahiye jo web se **genuinely answerable** ho.
-
-Fixed demo queries + expected routes `backend/data/README.md` me hai.
+**Why `ChatGroq` / `FastEmbedEmbeddings` are imported inside the functions:** it keeps
+module import cheap. Running something like `python -m app --help` does not pull in
+heavy ML dependencies.
 
 ---
 
-## backend/ingest.py ✅
+## backend/data/ — the controlled corpus
 
-Docs → chunks → embeddings → Chroma.
+Seven markdown documents covering RAG and agent engineering **concepts** — embeddings,
+chunking, vector databases, naive-RAG failure modes, CRAG, query transformation, agent
+graphs and state.
 
-- `load_documents()` — `data/*.md|txt` padhta hai, `README.md` skip karta hai (wo corpus ka
-  part nahi; usko ingest karna corpus me "yahan kya nahi hai" wala meta-text daal deta, jo
-  grader ko confuse karta).
-- `split_documents()` — `RecursiveCharacterTextSplitter`, 800/100, separators me `\n## ` sabse
-  pehle taaki heading boundaries pe toote.
-- **Idempotent** — collection bhari ho to skip. `--reset` se wipe + rebuild.
+**The deliberate gap:** no product, pricing or vendor detail, no recent releases, and
+**zero mention of MCP**. That gap is what makes the correction path trigger
+predictably, so the demo does not depend on live randomness.
 
-**Ek real bug jo yahan mila:** `--reset` pehle `shutil.rmtree(store_dir)` karta tha. Docker me
-`vectorstore/` ek **mount point** hai, aur usko remove karne pe `OSError: Device or resource
-busy` aata hai. Fix: directory nahi, uske **contents** clear karo.
+**Why real topics rather than a fictional company:** a fictional corpus would still
+produce `grade: no`, but the web search would then return nothing useful and the
+second half of the demo would die. The gap has to be **genuinely answerable from the
+web**.
 
----
-
-## backend/app/__main__.py ✅
-
-`python -m app "question"` — graph ko FastAPI ke bina invoke karke poora trace print karta hai.
-API ban chuki hai, phir bhi debugging ka sabse chhota loop yahi hai: ek process, ek invoke, poora trace.
+Fixed demo queries and their expected routes are in `backend/data/README.md`.
 
 ---
 
-## dev.ps1 ✅ (repo root)
+## backend/ingest.py
 
-Is machine pe local Python installed nahi hai — sab kuch Docker me chalta hai. Ye helper
-lamba `docker run` incantation wrap karta hai: `build` / `ingest [-Reset]` / `ask "..."` /
-`test` / `serve [-Port N]` / `shell`.
+Documents → chunks → embeddings → Chroma.
 
-Code **bind-mount** hota hai (`app/`, `data/`, `ingest.py`), isliye edit ke baad rebuild nahi
-karna padta — image sirf dependencies deti hai. `.env` `--env-file` se inject hoti hai, image
-me bake nahi hoti.
+- `load_documents()` — reads `data/*.md|txt`, skipping `README.md` (it is notes
+  *about* the corpus; ingesting it would inject "what is not in here" meta-text that
+  confuses the grader).
+- `split_documents()` — `RecursiveCharacterTextSplitter`, 800/100, with `\n## ` first
+  in the separator list so splits land on heading boundaries.
+- **Idempotent** — skips when the collection is already populated. `--reset` wipes and
+  rebuilds.
 
-`docker compose up` ab poora stack chalata hai; `dev.ps1` backend-only dev loop ke liye reh
-gaya hai (bind-mount + `test` + `ask`), jo iteration me compose se tez hai.
+**A real bug found here:** `--reset` used to call `shutil.rmtree(store_dir)`. Inside
+Docker, `vectorstore/` is a **mount point**, and removing it raises `OSError: Device
+or resource busy`. The fix is to clear the directory's **contents**, not the directory.
 
 ---
 
-## backend/tests/ ✅ — 60 tests, `.\dev.ps1 test`
+## backend/app/__main__.py
 
-| File | Kya cover karta hai |
+`python -m app "question"` invokes the graph without FastAPI and prints the full
+trace. The API exists, but this is still the smallest debugging loop: one process, one
+invoke, one complete trace.
+
+---
+
+## dev.ps1 (repo root)
+
+There is no Python installed on the machine this was built on — everything runs in
+Docker. This helper wraps the long `docker run` incantation: `build` / `ingest
+[-Reset]` / `ask "..."` / `test` / `eval` / `serve [-Port N]` / `shell`.
+
+Source is **bind-mounted** (`app/`, `data/`, `eval/`, `ingest.py`), so an edit needs no
+rebuild — the image only supplies dependencies. `.env` is injected with `--env-file`
+rather than baked into the image.
+
+`docker compose up` runs the full stack; `dev.ps1` remains the backend-only loop,
+which is faster to iterate in.
+
+---
+
+## backend/tests/ — 75 tests, `.\dev.ps1 test`
+
+| File | What it covers |
 |---|---|
-| `conftest.py` | `fake_llm` aur `fake_search` fixtures (monkeypatch se, taaki test ke baad apne aap undo ho) |
-| `test_routing.py` | dono routes, docs replace hona, search failure, ajeeb grader output |
-| `test_grading.py` | `parse_verdict` ke 11 cases |
+| `conftest.py` | The `fake_llm` and `fake_search` fixtures (via monkeypatch, so they undo themselves after each test) |
+| `test_routing.py` | Both routes, documents being replaced, search failure, malformed grader output |
+| `test_grading.py` | The 11 cases of `parse_verdict` |
 | `test_validation.py` | PII redaction, false positives, ungrounded flagging, fail-open |
 | `test_api.py` | `/health`, 422 validation, response shape |
-| `test_retrieval.py` | BM25, RRF fusion math, reranker fallback, retrieval flags |
-| `test_corpus.py` | Collection isolation, BEIR subset gold-doc guarantee, qrels score-0 filtering |
+| `test_retrieval.py` | BM25, the RRF fusion maths, reranker fallback, retrieval flags |
+| `test_corpus.py` | Collection isolation, the BEIR subset gold-document guarantee, qrels score-0 filtering |
+| `test_answer_verdict.py` | Reading a SUPPORT/CONTRADICT stand out of an answer |
 
-**Tests me asli LLM call kyun nahi:** ye **control flow** ke test hain, model quality ke
-nahi. Asli calls slow, mehnge, key-dependent aur non-deterministic hote — yaani CI me flaky.
-Grader ko scripted verdict dena hi wo cheez hai jo test karni hai: *"agar grader 'no' bole
-to kya graph sahi raasta leta hai."* Grader ki **accuracy** alag cheez hai — wo eval harness
-ka kaam hai (ROADMAP), in tests ka nahi.
+**Why no real LLM calls in the tests:** these test **control flow**, not model quality.
+Real calls are slow, cost money, need a key and are non-deterministic — that is, flaky
+in CI. Giving the grader a scripted verdict is exactly the thing under test: *"if the
+grader says 'no', does the graph take the right path?"* The grader's **accuracy** is a
+different question, and it belongs to the eval harness, not here.
 
-**Sabse important test:** `test_fallback_replaces_local_docs_instead_of_merging`. Agar reject
-kiye hue local docs web snippets ke saath context me bach gaye, to CRAG ka poora point khatam —
-aur ye baat silently toot sakti hai, isliye assert kiya hua hai.
-
----
-
-## backend/app/schemas/crag_state.py ✅
-
-`CRAGState` TypedDict — graph ka single source of truth. Har node ise partially update karta hai.
-
-- `question` — original, kabhi mutate nahi hota.
-- `transformed_query` — sirf `transform_query` node set karta hai.
-- `documents` — **overwrite** semantics (koi reducer nahi). `retrieve` set karta hai,
-  `web_search_fallback` **replace** karta hai. Yahan additive reducer *deliberately nahi*
-  lagaya: append karte to reject kiye hue local docs web snippets ke saath context me bane
-  rehte — wahi hallucination risk jise grading step hatane ke liye hai.
-- `relevance_score` — `"yes"` / `"no"`, conditional edge isi pe route karta hai.
-- `source_type` — `"vector_db"` default, fallback pe `"web_search"`. UI badge isi se.
-- `generation` — raw LLM answer.
-- `final_output` — guardrails-validated answer, yahi user ko jaata hai.
-- `logs` — har node ek line append karta hai (`Annotated[list, operator.add]`). Trace viewer isi se.
+**The most important test:** `test_fallback_replaces_local_docs_instead_of_merging`. If
+rejected local documents survived alongside the web snippets, the whole point of CRAG
+would be gone — and that can break silently, so it is asserted.
 
 ---
 
-## backend/app/graph/build_graph.py ✅ (poora graph)
+## backend/app/schemas/crag_state.py
 
-Graph wiring — nodes register, edges define, `compile()`.
+`CRAGState` is a TypedDict and the graph's single source of truth. Each node returns a
+partial update to it.
 
-### Abhi ka shape
+- `question` — the original, never mutated.
+- `transformed_query` — set only by the `transform_query` node.
+- `documents` — **overwrite** semantics (no reducer). `retrieve` sets it,
+  `web_search_fallback` **replaces** it. An additive reducer is *deliberately* absent:
+  appending would leave rejected local documents in context alongside the web
+  snippets, which is the hallucination risk the grading step exists to remove.
+- `relevance_score` — `"yes"` / `"no"`; the conditional edge routes on it.
+- `source_type` — `"vector_db"` by default, `"web_search"` after a fallback. Drives the
+  UI badge.
+- `generation` — the raw LLM answer.
+- `final_output` — the guardrail-validated answer; this is what the user sees.
+- `logs` — each node appends one line (`Annotated[list, operator.add]`). The trace
+  viewer renders this.
+
+---
+
+## backend/app/graph/build_graph.py
+
+Graph wiring — register nodes, define edges, `compile()`.
+
+### The shape
 
 - `START → retrieve → grade_documents`.
-- `grade_documents` pe conditional edge: `relevance_score == "yes"` → `generate`, warna
-  → `transform_query`.
+- A conditional edge on `grade_documents`: `relevance_score == "yes"` → `generate`,
+  otherwise → `transform_query`.
 - `transform_query → web_search_fallback → generate`.
 - `generate → validate_guardrails → END`.
 
-**Chain kyun nahi, graph kyun — ab saaf dikhta hai:** `grade_documents` ke baad kaunsa node
-chalega ye compile time pe fixed nahi hai; runtime pe state padh ke decide hota hai. Linear
-chain ye express hi nahi kar sakti.
+**Why a graph and not a chain — visible here:** which node runs after
+`grade_documents` is not fixed at compile time; it is decided at runtime by reading
+state. A linear chain cannot express that.
 
-**`decide_to_generate` alag function kyun:** routing logic aur grading logic alag rakhne se
-dono alag-alag test hote hain. Ye function deliberately trivial hai — saara faisla
-`grade_documents` me hota hai, yahan sirf uska result padha jaata hai.
+**Why `decide_to_generate` is its own function:** separating routing logic from grading
+logic means both can be tested independently. The function is deliberately trivial —
+the entire decision happens in `grade_documents`, and this only reads the result.
 
-**Default `transform_query` kyun, `generate` nahi:** agar `relevance_score` kisi wajah se
-khaali reh jaye, to safe direction correction path hai — ek extra web call bhugto, lekin
-unverified context pe answer mat bolo.
+**Why it defaults to `transform_query` rather than `generate`:** if `relevance_score`
+ends up empty for any reason, the safe direction is the correction path — pay for one
+extra web call rather than answer from unverified context.
 
-**Design choice:** fallback branch bhi wapas `generate` pe hi merge hota hai (do alag
-generate nodes nahi) — DRY, aur `generate` bas `state["documents"]` padhta hai, source
-type se farak nahi padta.
+**Design choice:** the fallback branch merges back into the same `generate` node rather
+than a second one. `generate` only reads `state["documents"]`, so the source makes no
+difference to it.
 
 ---
 
-## backend/app/nodes/retrieve.py ✅
+## backend/app/nodes/retrieve.py
 
-Graph ka entry point. **Yahan koi relevance ka faisla nahi hota** — similarity search
-hamesha k results deta hai, chahe corpus me kuch relevant ho ya na ho. Wahi naive RAG ka
-core failure mode hai; faisla `grade_documents` karta hai.
+The graph's entry point. **No relevance decision happens here** — similarity search
+always returns k results, whether or not anything in the corpus is relevant. That is
+naive RAG's core failure mode; the decision belongs to `grade_documents`.
 
-Pipeline (Phase 9 ke baad):
+Pipeline:
 
 ```
 vector search (8)  ─┐
@@ -197,432 +202,461 @@ vector search (8)  ─┐
 BM25 search (8)    ─┘
 ```
 
-- `documents` + `sources` bharta hai, `source_type = "vector_db"`.
-- Log me har stage dikhta hai: `retrieve -> 4 chunks (vector=8, bm25=8, fused=12, reranked 12->4)`.
+- Populates `documents` and `sources`, sets `source_type = "vector_db"`.
+- Every stage shows in the log:
+  `retrieve -> 4 chunks (vector=8, bm25=8, fused=12, reranked 12->4)`.
 
-**`RETRIEVAL_CANDIDATES` (8) `TOP_K` (4) se bada kyun:** warna reranker ke paas chunne ko
-kuch hai hi nahi aur wo no-op ban jaata hai.
+**Why `RETRIEVAL_CANDIDATES` (8) exceeds `TOP_K` (4):** otherwise the reranker has
+nothing to choose between and becomes a no-op.
 
-**Dono stages flags ke peeche kyun (`USE_HYBRID`, `USE_RERANKER`):** ye configurability ke
-liye nahi hai. Ye isliye hai taaki **eval dono ko off karke baseline se compare kar sake**.
-Is project me ek feature tab tak feature nahi hai jab tak uska fayda dikhaya na ja sake —
-aur routing accuracy 100% pe pinned hai, isliye inhe ambiguous cases ki stability pe judge
-kiya jaata hai. A/B result `eval/RESULTS.md` me hai.
-
----
-
-## backend/app/nodes/grade_documents.py ✅
-
-**Project ka core #1.** LLM binary relevance grader.
-
-- Prompt tight rakha — "answer with a single word: yes/no, do not explain".
-- Parse defensively: `"yes" in verdict.lower()` — LLM kabhi extra text de deta hai.
-- Temperature 0 — consistency chahiye, creativity nahi.
-- Sirf `relevance_score` + `logs` return karta hai.
-
-**Interview point:** ye ek chhota, sasta classifier call hai — poore answer generate karne
-se pehle. Yahi naive RAG se difference hai: verify-before-trust.
+**Why both stages sit behind flags (`USE_HYBRID`, `USE_RERANKER`):** not for
+configurability. It is so the **eval can turn them off and compare against a
+baseline**. In this project a feature is not a feature until its benefit can be shown
+— and since routing accuracy is pinned at 100%, these are judged on the stability of
+the ambiguous cases instead. The A/B result is in `eval/RESULTS.md`.
 
 ---
 
-## backend/app/nodes/transform_query.py ✅
+## backend/app/nodes/grade_documents.py
 
-`transform_query` — natural language question → keyword-focused web search query.
+**Core decision #1.** An LLM binary relevance grader.
 
-- User question conversational hota hai ("mujhe ye samajhna hai ki...") — search engine ke
-  liye keywords better hain.
-- Rewritten query `transformed_query` me, `web_search_fallback` use karta hai.
+- The prompt is tight — "answer with a single word: yes/no, do not explain".
+- Parsed defensively, checking `no` before `yes`, because the model occasionally adds
+  text.
+- Temperature 0 — this needs consistency, not creativity.
+- Returns only `relevance_score` and `logs`.
 
----
-
-## backend/app/nodes/web_search_fallback.py ✅
-
-**Core #2.** Tavily se live web context.
-
-- `transformed_query` (ya fallback pe original question) se `tavily_search(query, max_results=4)`.
-- Result snippets se `documents` **replace** (local irrelevant tha, isliye rakhne ka fayda nahi).
-- `source_type = "web_search"` — UI badge + logs.
-
-**Kyun replace, merge nahi:** local docs already "no" grade ho chuke — unko context me
-rakhna generation ko dilute karega aur hallucination risk badhayega.
+**The point:** this is one small, cheap classifier call made *before* generating a full
+answer. That is the difference from naive RAG — verify before trusting.
 
 ---
 
-## backend/app/nodes/generate.py ✅
+## backend/app/nodes/transform_query.py
 
-`generate` — final answer synthesis.
+Rewrites a natural-language question into a keyword-focused web search query.
 
-- Prompt: "answer ONLY from the provided context; if context insufficient, say so".
-- `state["documents"]` join karke context banata hai — local ya web, farak nahi.
-- Output `generation` me (raw, abhi guardrails-checked nahi).
-
----
-
-## backend/app/nodes/validate_guardrails.py ✅
-
-`validate_guardrails` — graph ka aakhri safety net. `final_output` yahi node bharta hai.
-
-- `guardrails/validators.py` ka `validate_answer(answer, context, question)` call.
-- Log: `"validate_guardrails -> pass=True/False (reason)"`.
-
-**Ye node kyun, jab `generate` ka prompt already "sirf context se" bolta hai:** prompt ek
-guzarish hai, guarantee nahi. Model chupke se apni training knowledge daal sakta hai. Ye
-node us answer par ek doosri, *independent* nazar hai.
+User questions are conversational ("I'd like to understand how..."), and search engines
+do better with keywords. The rewrite lands in `transformed_query`, which
+`web_search_fallback` consumes.
 
 ---
 
-## backend/app/guardrails/validators.py ✅ — custom, Guardrails AI **nahi**
+## backend/app/nodes/web_search_fallback.py
 
-> **Decision (Phase 4):** `guardrails-ai` library use *nahi* ki. Uska hub-based validator
-> download + version pinning is project ka sabse bada time-sink tha, aur interview me jo
-> matter karta hai wo library ka naam nahi — ye samajh hai ki final answer verify kyun aur
-> kaise karna hai. Do chhote checks wahi kaam karte hain, zero extra dependency me.
-> ROADMAP me ye fallback plan pehle se likha tha; wahi liya gaya.
+**Core decision #2.** Live web context.
 
-Do checks:
+- Searches with `transformed_query` (falling back to the original question).
+- **Replaces** `documents` with the result snippets — the local ones were graded
+  irrelevant, so keeping them has no upside.
+- Sets `source_type = "web_search"` for the badge and the logs.
 
-1. **Groundedness (LLM call)** — "kya answer ka har claim context se supported hai? yes/no".
-   Temperature 0, wahi defensive `parse_verdict` jo grader me hai (reuse — do jagah parsing
-   logic drift na kare).
-2. **PII (regex)** — email / card / SSN / intl phone. **Deliberately regex, LLM nahi:** PII
-   detection deterministic honi chahiye, aur ek aur LLM call latency badhata hai bina
-   bharose ke faayde ke.
-
-**Toxicity chhoda kyun:** input controlled corpus + search snippets hai, aur bina proper
-classifier ke "toxic" ka LLM check dikhawa hota. Uska naam lena aur verify na karna — dono
-me se naam *na* lena behtar hai.
-
-### Do design decisions jo interview me poochhe ja sakte hain
-
-**Ungrounded answer block nahi hota, flag hota hai.** Warning prefix jodte hain, answer
-chhupate nahi. Demo me hallucination *pakda gaya* dikhana usse gayab kar dene se zyada
-convincing hai — aur user ke liye bhi "ye shayad galat hai" khaali screen se behtar hai.
-**PII isse alag hai** — wo redact hota hai, kyunki flag karke dikhana leak hi hai.
-
-**Groundedness check fail-open hai, fail-closed nahi.** Agar check khud crash ho jaye
-(network / rate limit), answer block karna galat hai — wo already verified context se bana
-hai. Exception pe "grounded maan lo" + log me note. Fail-closed hone se ek flaky call poore
-system ko "kuch nahi bata sakta" bana deta.
+**Why replace rather than merge:** the local documents have already been graded `no`.
+Keeping them dilutes generation and reintroduces the hallucination risk the grading
+step exists to remove.
 
 ---
 
-## backend/app/tools/beir_loader.py ✅ (Phase 10) — doosra corpus
+## backend/app/nodes/generate.py
 
-BEIR SciFact download + parse. Poora comparison [eval/CORPORA.md](../backend/eval/CORPORA.md) me.
+Final answer synthesis.
 
-**Doosra corpus kyun chahiye tha:** `backend/data/` wale 7 docs ke saath do problem hain,
-aur dono RESULTS.md me likhi hain —
-
-1. **Koi ground truth nahi.** Kahin likha hi nahi ki kaunsa chunk *sahi* tha, isliye
-   retrieval quality measure hi nahi ho sakti thi. Yahi badi wajah thi ki hybrid+reranker
-   ka A/B flat aaya — koi metric tha hi nahi jo hil sake.
-2. **Single-author bias.** Documents bhi maine likhe, eval labels bhi. RESULTS.md khud
-   bolta hai ki iska honest fix koi aur banaye.
-
-BEIR dono theek karta hai: `qrels/test.tsv` expert relevance judgments deta hai — kaunsa
-abstract kis claim ko support karta hai. **Wo labels maine nahi banaye.**
-
-**`datasets` library kyun nahi:** BEIR ki official zip seedha download ho jaati hai aur
-format teen plain JSONL/TSV files hai. `datasets` pyarrow samet bada dependency tree
-laata, sirf teen files padhne ke liye.
-
-**`load_qrels` score 0 kyun drop karta hai:** BEIR me 0 ka matlab "judged, par relevant
-nahi" hota hai. Usko gold maan lena eval ko **silently galat** kar deta.
-
-### `--limit` truncation nahi hai — ye asli baat hai
-
-Pehle N documents lena eval ko chupke se tod deta. Gold docs corpus me kahin bhi ho sakte
-hain; jo cut ho gaye, unke `local` labels jhoothe ho jaate — system ke paas wo jawab hai
-hi nahi. Aur wo failure eval me **grader ki galti** jaisa dikhta, jabki galti corpus ki
-hoti. Ye sabse bura measurement bug hota hai: galat component ko blame karta hai.
-
-Isliye `load_corpus(limit=N)` pehle **saare gold docs** rakhta hai, phir baaki slots
-filler se bharta hai. Filler zaroori hai — uske bina har indexed doc kisi na kisi query ka
-jawab hota aur retrieval trivial ho jaati. `test_corpus.py` dono cheezein assert karta hai.
+- Prompt: "answer ONLY from the provided context; if the context is insufficient, say
+  so".
+- Joins `state["documents"]` into context — local or web, it makes no difference here.
+- Writes to `generation` (raw, not yet guardrail-checked).
 
 ---
 
-## backend/eval/build_scifact_scenarios.py ✅ (Phase 10)
+## backend/app/nodes/validate_guardrails.py
 
-qrels se eval cases generate karta hai. `local` cases ke labels **dataset se** aate hain:
-agar SciFact kehta hai ki claim Q ka jawab abstract D me hai, aur D ingest hua hai, to Q
-local jaana chahiye.
+The graph's last safety net, and the node that fills `final_output`.
 
-**`web` cases abhi bhi haath se likhe hain — ye maan lena zaroori hai.** Par wo aasan
-half hai: SciFact static scientific abstracts hain, to "aaj ka pricing" type sawaal usme
-ho hi nahi sakte. **Mushkil half (local) ab dataset se aata hai.**
+- Calls `validate_answer(answer, context, question)` from `guardrails/validators.py`.
+- Logs `validate_guardrails -> pass=True/False (reason)`.
 
----
-
-## Corpus switching — `CORPUS` env var
-
-`concepts` (default) ya `scifact`. Dono **alag Chroma collections** me (`crag_docs` /
-`crag_scifact`).
-
-**Alag collections kyun, alag directory kyun nahi:** ek hi `vectorstore/` me collections
-saath reh sakti hain, to switch karne pe **re-ingest nahi karna padta** — SciFact pe wo
-minutes ka kaam hai. Aur mix hone ka koi risk nahi: SciFact ke chunks concepts ke 22
-chunks ke saath retrieval me nahi aa sakte, warna dono ke eval numbers bekaar ho jaate.
-
-Results bhi per-corpus hain (`results.json` / `results_scifact.json`), aur `/api/stats`
-wahi padhta hai jo active corpus ka ho. **Inhe average mat karna** — alag data pe alag
-cheezein measure karte hain.
-
-### Do asli bugs jo bada corpus laane pe hi mile
-
-**OOM (exit 137), do baar.** Pehle poora corpus split karke saare chunks ek list me rakhe
-jaate the. SciFact pe wo 17,266 chunks banti hai aur 3.5 GB container mar gaya. Concepts
-ke 22 chunks pe ye kabhi dikhta hi nahi. Fix: ingestion ab **stream** karti hai — documents
-ke batch pe split → embed → chhod do. Peak memory corpus size se azaad ho gayi.
-
-**SQLite lock contention.** Ingest 5 minute tak chalti rahi aur vectorstore ek byte nahi
-badha. Wajah: `docker compose` ka backend container **wahi `vectorstore/` mount** kiye
-baitha tha, aur ingest Chroma ke SQLite write lock pe block ho rahi thi. Koi error nahi
-aata — bas hang. Fix: bada ingest chalane se pehle compose band karo.
+**Why this node, when `generate`'s prompt already says "only from context":** a prompt
+is a request, not a guarantee. The model can quietly add its training knowledge. This
+node is a second, *independent* look at the answer.
 
 ---
 
-## backend/app/tools/bm25_search.py ✅ (Phase 9)
+## backend/app/guardrails/validators.py — custom, **not** Guardrails AI
 
-BM25 keyword search, usi 22 chunks pe jo Chroma me hain.
+> **Decision (Phase 4):** the `guardrails-ai` library was not used. Its hub-based
+> validator download and version pinning were the project's biggest time-sink, and what
+> matters in an interview is not the library's name but understanding why and how a
+> final answer should be verified. Two small checks do the same job with zero extra
+> dependencies. The ROADMAP had written this fallback plan in advance; it was taken.
 
-**Vector search ke saath ye kyun:** dono alag cheezon me strong hain. Vector search
-*meaning* pakadta hai — "annual time off" aur "paid leave entitlement" paas aa jaate hain
-chahe ek bhi word common na ho. Par exact tokens pe wo kamzor hai: `EMP-4582` aur
-`EMP-4583` embedding space me lagbhag ek hi jagah baithte hain, kyunki unka *matlab* same
-hai. BM25 ulta hai — exact term match + IDF, isliye identifiers, codes, version numbers pe
-jeetta hai.
+Two checks:
 
-**Poora corpus load kyun karta hai:** BM25 ka IDF term ki **corpus-wide** frequency pe
-depend karta hai. Sirf top-k chunks pe BM25 chalane se IDF galat hoga aur scores bekaar.
-22 chunks pe ye trivial hai — **bade corpus pe ye approach nahi chalti**, wahan proper
-inverted index (Elasticsearch / Tantivy) chahiye. Ye limitation asli hai.
+1. **Groundedness (an LLM call)** — "is every claim in this answer supported by the
+   context? yes/no". Temperature 0, reusing the same defensive `parse_verdict` as the
+   grader, so the two parsers cannot drift apart.
+2. **PII (regex)** — email, card, SSN, international phone. **Deliberately regex, not an
+   LLM:** PII detection should be deterministic, and another LLM call adds latency
+   without a reliable gain.
 
-**Zero-score chunks drop hote hain:** BM25 me 0 ka matlab hai query ka koi term us chunk me
-hai hi nahi. Unhe rank karna fusion me sirf shor bharta hai.
+**Why toxicity was left out:** the input is a controlled corpus plus search snippets,
+and an LLM "is this toxic" check without a proper classifier is theatre. Between naming
+a capability and not verifying it, and not naming it — the second is better.
 
-**Stemming jaan-boojh ke nahi:** ek aur dependency (nltk/snowball) ka fayda 22 chunks pe
-measure hi nahi hoga, aur ye project har addition ko measure karne ke usool pe chalta hai.
+### Two decisions worth being able to defend
 
-`lru_cache` pe index banta hai; `ingest.py` ke end me `bust_cache()` call hota hai, warna
-ingestion ke baad same process me purana index chalta rehta.
+**An ungrounded answer is flagged, not blocked.** A warning prefix is added; the answer
+is not hidden. In a demo, showing a hallucination *being caught* is more convincing
+than making it disappear — and for a user, "this might be wrong" beats a blank screen.
+**PII is different** — it is redacted, because flagging while displaying is still the
+leak.
 
----
-
-## backend/app/tools/reranker.py ✅ (Phase 9)
-
-Do cheezein: cross-encoder rerank aur RRF fusion.
-
-### Retriever vs reranker — ye interview me poochha jaata hai
-
-- **Retriever = bi-encoder.** Query aur document ko *alag-alag* embed karta hai. Isliye
-  fast: document vectors pehle se bane hote hain. Par query aur document ka interaction wo
-  dekh hi nahi sakta — dono kabhi ek saath model me jaate hi nahi.
-- **Reranker = cross-encoder.** Query aur document *ek saath* model me jaate hain. Kaafi
-  accurate, par har pair pe ek forward pass — poore corpus pe namumkin.
-
-Isliye do-step: sasta retriever 8 candidates laata hai, mehnga reranker unme se 4 chunta hai.
-
-**Is project me reranker ka point answer quality nahi hai — grader ka input hai.** Agar
-sahi chunk retrieve to hua par top-k me neeche reh gaya, grader use theek se dekh nahi
-paata aur galat "no" de sakta hai.
-
-### RRF — score normalization kyun nahi
-
-Chroma cosine **distance** deta hai (chhota = behtar), BM25 unbounded positive score
-(bada = behtar). Ye alag scales hain; unhe ek dusre me convert karna corpus-specific
-tuning maangta hai, jo brittle hota hai.
-
-RRF sirf **rank** dekhta hai: `score(d) = Σ 1/(60 + rank)`. Isliye dono lists ka scale
-bilkul irrelevant ho jaata hai — yahi wajah hai ki ye hybrid search ka default fusion hai.
-
-**Reranker fail ho to original order** lautata hai, exception nahi — reranking ek
-*improvement* hai, requirement nahi. Model load fail ho jaye to retrieval chalti rehni
-chahiye, bas thodi kam accurate.
-
-Model: `Xenova/ms-marco-MiniLM-L-6-v2`, 80MB ONNX, `fastembed` me hi aata hai — **koi nayi
-dependency nahi**, aur wahi local/no-key stance jo embeddings ka hai.
+**The groundedness check fails open, not closed.** If the check itself crashes (network,
+rate limit), blocking the answer would be wrong — that answer was built from already
+verified context. On an exception it assumes grounded and notes it in the log. Failing
+closed would let one flaky call turn the whole system into "I can't tell you anything".
 
 ---
 
-## backend/app/tools/web_search.py ✅ — provider abstraction
+## backend/app/tools/beir_loader.py — the second corpus
 
-`web_search_fallback` node yahin se search karta hai; usse pata nahi hota ki neeche kaun
-hai. Provider `SEARCH_PROVIDER` env var se badalta hai, code se nahi.
+Downloads and parses BEIR SciFact. Full comparison in
+[eval/CORPORA.md](../backend/eval/CORPORA.md).
 
-**Ye layer kyun:** DuckDuckGo bina key ke chalta hai (project din ek se chalu), Tavily behtar
-snippets deta hai par signup maangta hai. Ek interface hone se switch karna ek env var ka
-kaam hai, aur test me poora search layer ek line se mock ho jaata hai.
+**Why a second corpus was needed.** The seven documents in `backend/data/` have two
+problems, both written up in RESULTS.md:
+
+1. **No ground truth.** Nothing records which chunk was *correct*, so retrieval quality
+   could not be measured at all. That is the main reason the hybrid + reranker A/B came
+   back flat — there was no metric available to move.
+2. **Single-author bias.** I wrote the documents and I wrote the eval labels. RESULTS.md
+   says outright that the honest fix is someone else writing them.
+
+BEIR fixes both: `qrels/test.tsv` carries expert relevance judgements about which
+abstract supports which claim. **Those labels are not mine.**
+
+**Why not the `datasets` library:** BEIR's official zip downloads directly and the
+format is three plain JSONL/TSV files. `datasets` would drag in a large dependency tree
+including pyarrow, to read three files.
+
+**Why `load_qrels` drops score 0:** in BEIR, 0 means "judged, and not relevant".
+Treating it as gold would make the eval **silently wrong**.
+
+### `--limit` is not truncation, and that matters
+
+Taking the first N documents would quietly break the eval. Gold documents can sit
+anywhere in the corpus; any that got cut would make their `local` labels false — the
+system genuinely does not have that answer. And in the eval that failure would look
+like a **grader** error when the fault was the corpus. That is the worst kind of
+measurement bug: it blames the wrong component.
+
+So `load_corpus(limit=N)` keeps **all gold documents** first and fills the remaining
+slots with filler. The filler is necessary — without it every indexed document would
+answer some query and retrieval would be trivial. `test_corpus.py` asserts both
+properties.
 
 ---
 
-## backend/app/tools/duckduckgo_search.py ✅ — **default provider**
+## backend/eval/build_scifact_scenarios.py
 
-`ddgs` package. **Koi API key nahi, koi signup nahi.** Interface `tavily_search` ke bilkul
-same hai — `(query, max_results) -> List[str]` — taaki provider badalne pe node me kuch na badle.
+Generates eval cases from qrels. The `local` case labels come **from the dataset**: if
+SciFact says claim Q is answered by abstract D, and D was ingested, then Q should route
+local.
 
-Trade-off saaf hai: DDG ke snippets patle hote hain aur wo bina warning ke throttle karta
-hai. Lekin zero signup ka matlab hai project pehle din se chalta hai. Key mil jaye to
+**The `web` cases are still hand-written, and that has to be acknowledged.** But they
+are the easy half: SciFact is static scientific abstracts, so a question about today's
+pricing cannot be in it. **The hard half — `local` — now comes from the dataset.**
+
+---
+
+## Corpus switching — the `CORPUS` env var
+
+Either `concepts` (default) or `scifact`, in **separate Chroma collections**
+(`crag_docs` / `crag_scifact`).
+
+**Why separate collections rather than separate directories:** collections can coexist
+in one `vectorstore/`, so switching needs **no re-ingest** — which on SciFact is minutes
+of work. And there is no risk of mixing: SciFact chunks cannot surface in retrieval
+alongside the 22 concepts chunks, which would make both sets of eval numbers worthless.
+
+Results are per-corpus too (`results.json` / `results_scifact.json`), and `/api/stats`
+reads whichever matches the active corpus. **Do not average them** — they measure
+different things on different data.
+
+### Two real bugs that only a larger corpus exposed
+
+**OOM (exit 137), twice.** The whole corpus used to be split with every chunk held in
+one list. On SciFact that is 17,266 chunks, and the 3.5 GB container died. On 22
+concepts chunks this never shows. Fix: ingestion now **streams** — split, embed and
+release a batch of documents at a time. Peak memory is now independent of corpus size.
+
+**SQLite lock contention.** An ingest ran for five minutes and the vectorstore did not
+grow by a byte. The cause: a running compose backend held the **same `vectorstore/`
+mount**, and the ingest was blocked on Chroma's SQLite write lock. No error appears —
+it simply hangs. Fix: stop compose before a large ingest.
+
+---
+
+## backend/app/tools/bm25_search.py
+
+BM25 keyword search over the same chunks that are in Chroma.
+
+**Why this alongside vector search:** they are strong at different things. Vector search
+captures *meaning* — "annual time off" and "paid leave entitlement" land close together
+without sharing a word. But it is weak on exact tokens: `EMP-4582` and `EMP-4583` sit
+almost on top of each other in embedding space, because their *meaning* is the same.
+BM25 is the inverse — exact term matching plus IDF — so it wins on identifiers, codes
+and version numbers.
+
+**Why it loads the whole corpus:** BM25's IDF depends on a term's **corpus-wide**
+frequency. Running BM25 over only the top-k chunks would make IDF wrong and the scores
+meaningless. On 22 chunks this is trivial — **the approach does not scale to a large
+corpus**, where a proper inverted index (Elasticsearch, Tantivy) is required. That
+limitation is real.
+
+**Zero-score chunks are dropped:** in BM25, 0 means no query term appears in that chunk
+at all. Ranking those only adds noise to the fusion.
+
+**Stemming is deliberately absent:** another dependency (nltk, snowball) whose benefit
+cannot be measured on 22 chunks — and this project runs on the rule that every addition
+has to be measurable.
+
+The index is built under `lru_cache`; `ingest.py` calls `bust_cache()` at the end, or a
+stale index would persist in the same process after ingestion.
+
+---
+
+## backend/app/tools/reranker.py
+
+Two things: cross-encoder reranking, and RRF fusion.
+
+### Retriever vs reranker
+
+- **Retriever = bi-encoder.** Embeds the query and document *separately*, which is what
+  makes it fast: document vectors are precomputed. But it can never see the interaction
+  between query and document, because the two never enter the model together.
+- **Reranker = cross-encoder.** Query and document go into the model *together*. Far
+  more accurate, but it costs one forward pass per pair — impossible across a corpus.
+
+Hence two stages: the cheap retriever proposes 8 candidates, the expensive reranker
+picks 4.
+
+**In this project the reranker's purpose is not answer quality — it is the grader's
+input.** If the right chunk was retrieved but left low in the top-k, the grader may not
+see it properly and can return a wrong `no`.
+
+### Why RRF does not normalise scores
+
+Chroma returns a cosine **distance** (lower is better); BM25 returns an unbounded
+positive score (higher is better). These are different scales, and converting between
+them requires corpus-specific tuning, which is brittle.
+
+RRF looks only at **rank**: `score(d) = Σ 1/(60 + rank)`. The scale of either list
+becomes irrelevant — which is exactly why it is the default fusion for hybrid search.
+
+**If the reranker fails it returns the original order** rather than raising. Reranking
+is an *improvement*, not a requirement: if the model fails to load, retrieval should
+keep working, just less accurately.
+
+Model: `Xenova/ms-marco-MiniLM-L-6-v2`, an 80 MB ONNX model that ships with
+`fastembed` — **no new dependency**, and the same local, no-key stance as the
+embeddings.
+
+---
+
+## backend/app/tools/web_search.py — the provider abstraction
+
+The `web_search_fallback` node searches through this layer and does not know what is
+underneath. The provider is chosen by the `SEARCH_PROVIDER` env var, not in code.
+
+**Why this layer exists:** DuckDuckGo works with no key (so the project runs on day
+one), while Tavily gives better snippets but requires a signup. One interface makes
+switching an env var, and lets a test replace the entire search layer in one line.
+
+---
+
+## backend/app/tools/duckduckgo_search.py — the default provider
+
+Uses the `ddgs` package. **No API key, no signup.** The interface matches
+`tavily_search` exactly — `(query, max_results) -> List[str]` — so nothing in the node
+changes when the provider does.
+
+The trade-off is explicit: DuckDuckGo's snippets are thinner and it throttles without
+warning. But zero signup means the project runs immediately. With a key,
 `SEARCH_PROVIDER=tavily`.
 
-`ddgs` aur purana `duckduckgo_search` dono import handle karte hain — package rename hua tha,
-version drift pe import nahi tootna chahiye.
+Both `ddgs` and the older `duckduckgo_search` import paths are handled — the package
+was renamed, and an import should not break on version drift.
 
 ---
 
-## backend/app/tools/tavily_search.py ✅ (optional upgrade)
+## backend/app/tools/tavily_search.py — the optional upgrade
 
-Tavily client wrapper. `tavily_search(query, max_results) -> List[str]` — sirf snippet text
-return karta hai (URL metadata abhi optional). Node ko clean interface deta hai.
+A Tavily client wrapper: `tavily_search(query, max_results) -> List[str]`, returning
+snippet text only. It gives the node a clean interface.
 
-## backend/app/tools/vector_search.py ✅
+## backend/app/tools/vector_search.py
 
-Chroma similarity search wrapper — `retrieve` node aur ingestion script dono use karte hain.
-Ek jagah k / score-threshold tuning.
-
----
-
-## backend/main.py ✅
-
-FastAPI entrypoint. Graph `lifespan` me ek baar compile hota hai (har request pe dobara
-banana bewajah kaam hai). `POST /api/query` → `answer`, `source_type`, `relevance_score`,
-`transformed_query`, `logs`, `elapsed_ms`. Frontend ka badge + trace viewer isi se banega.
-
-**`run_in_threadpool` kyun:** `graph.invoke` sync hai aur LLM/search calls pe **block** karta
-hai. Seedha `async def` me call karne se ek slow request poore event loop ko rok deti — FastAPI
-async hone ka poora fayda khatam. Threadpool me bhejne se baaki requests chalti rehti hain.
-
-**`/health` LLM call kyun nahi karta:** healthcheck sasta aur bharosemand hona chahiye. Agar
-wo LLM ping karta, to ek rate limit hi container ko unhealthy mark karwa deta aur Docker use
-restart karta rehta. Isliye sirf index count + config echo — including `groq_key_set`, jo
-setup debug karne me sabse pehle kaam aata hai.
-
-CORS: dev me `allow_origins=["*"]`. Compose me frontend Nginx se same-origin proxy karta hai,
-to wahan zaroorat nahi padti. Pehla deploy plan Vercel + Render tha — **alag domains**, isliye
-CORS ko frontend origin tak restrict karna zaroori hota. Wo plan naapne ke baad badal gaya
-(ROADMAP dekho): ab ek hi image me Nginx build serve karega aur `/api/` proxy karega, yaani
-**origin ek hi rahega aur CORS ki zaroorat hi nahi padegi**. Phir bhi `allow_origins=["*"]`
-production me chhodna galat hai, isliye deploy se pehle ise band karna hai — code me TODO pada
-hai (`backend/main.py`).
-
-**Verified (asli HTTP requests, container me):** `/health` → `{"status":"ok",
-"indexed_chunks":22,...}`; khaali question → `422`; bina Groq key ke query → `500` uss saaf
-`GROQ_API_KEY set nahi hai` message ke saath.
+A Chroma similarity-search wrapper used by both the `retrieve` node and the ingestion
+script — so k and any score threshold are tuned in one place.
 
 ---
 
-## backend/Dockerfile ✅
+## backend/main.py
 
-1. `python:3.11-slim` base.
-2. `requirements.txt` pehle copy + install (layer caching).
-3. `app/` + `main.py` copy.
-4. FastEmbed model pre-download step (optional) taaki first request slow na ho.
-5. `uvicorn main:app --host 0.0.0.0 --port 8000`.
+The FastAPI entry point. The graph is compiled once in `lifespan` (rebuilding it per
+request is wasted work). `POST /api/query` returns `answer`, `source_type`, `sources`,
+`relevance_score`, `transformed_query`, `logs` and `elapsed_ms` — which is what the
+badge and the trace viewer are built from.
+
+**Why `run_in_threadpool`:** `graph.invoke` is synchronous and **blocks** on LLM and
+search calls. Calling it directly inside an `async def` would let one slow request stall
+the entire event loop, defeating the point of an async framework. Running it in a
+threadpool keeps other requests moving.
+
+**Why `/health` makes no LLM call:** a health check has to be cheap and reliable. If it
+pinged the model, a single rate limit would mark the container unhealthy and Docker
+would restart it in a loop. So it returns the index count and a config echo — including
+`groq_key_set`, which is the first thing worth knowing when debugging a setup.
+
+**CORS.** The default is now the two local dev origins (`CORS_ORIGINS`), not `*`. The
+deploy image serves the built frontend from this same app, so production is same-origin
+and this middleware never fires there — which is exactly why the permissive default was
+worth removing rather than keeping "just in case". Set `CORS_ORIGINS` only for a split
+deployment.
+
+**Static mount.** When a `static/` directory exists — only in the single-service deploy
+image — the built SPA is mounted at `/`. It is mounted **last**, because a mount at `/`
+swallows every path beneath it and would make the API routes unreachable. The check is
+on the directory rather than an env var, so there is one fewer thing to configure
+correctly.
+
+**Verified with real HTTP requests inside the container:** `/health` →
+`{"status":"ok","indexed_chunks":22,...}`; an empty question → `422`; a query with no
+Groq key → `500` with a clear "GROQ_API_KEY is not set" message.
 
 ---
 
-## frontend/ ✅ — React + Vite + Tailwind
+## Dockerfiles
 
-Dashboard layout: left nav rail · one full-width view at a time (chat · documents ·
-evaluation · system).
+**`backend/Dockerfile`** — used by docker-compose. Python 3.11-slim; requirements copied
+and installed first for layer caching; the FastEmbed embedding and reranker models
+pulled at build time so the first request does not wait for a download; then `app/`,
+`data/`, `eval/`, `ingest.py` and `main.py`.
 
-Pehle ek right rail bhi tha aur upar chaar stat cards. Dono nikal diye. Rail har
-wo cheez dobara bol raha tha jo `Message` pehle se dikha raha tha (route, verdict,
-calls, time), aur sirf **aakhri** answer ki dikhata tha — demo me do sawaal poochh
-ke "isme grade no aaya, isme yes" dikhana mumkin hi nahi tha. Ab trace har answer
-ke neeche inline hai. Stat cards har view pe repeat ho rahe the jabki har view
-apne numbers khud likhta hai.
+**`Dockerfile` (repo root)** — the single-service deploy image. Builds the React app in a
+node stage, then serves both the API and the bundle from one FastAPI process. It
+**runs the ingest at build time** and asserts the index is non-empty, because
+`backend/vectorstore/` is gitignored: a fresh clone — which is what a HuggingFace Space
+builds from — would otherwise boot with an empty index. `backend/data/` is in git, so
+the image can build the index itself, and it can never drift from the corpus it claims
+to represent.
 
-| File | Kaam |
+**`frontend/Dockerfile`** — multi-stage: build with node, then copy only `dist/` into an
+Nginx image. There is no reason to ship a node runtime when only static files remain.
+
+---
+
+## frontend/ — React + Vite + Tailwind
+
+A dashboard: a left nav rail, and one full-width view at a time (chat, documents,
+evaluation, system).
+
+There used to be a right rail and four stat cards across the top. Both were removed. The
+rail repeated everything `Message` already showed (route, verdict, calls, time) and only
+ever displayed the **last** answer — so asking two questions and pointing at "this one
+graded no, this one yes" was impossible. The trace now sits inline under each answer.
+The stat cards repeated on every view while each view writes its own numbers anyway.
+
+| File | Role |
 |---|---|
-| `src/App.jsx` | Layout + conversation state + `fetch("/api/query")` aur `/api/stats` |
+| `src/App.jsx` | Layout, conversation state, `fetch("/api/query")` and `/api/stats` |
 | `components/Sidebar.jsx` | Nav rail, logo, recent-query list |
-| `components/Message.jsx` | Ek turn — user bubble ya assistant card (badge + rewrite note + citations) |
-| `components/Citations.jsx` | Sources list — filenames (local) ya clickable URLs (web) |
-| `views/{Chat,Documents,Evaluation,System}` | Sidebar jo full-page views switch karta hai |
-| `components/TraceTimeline.jsx` | `logs[]` ko node-by-node timeline me render, plus `chain()` aur `llmCalls()` helpers |
-| `vite.config.js` | dev me `/api` proxy backend pe |
-| `nginx.conf` | prod me wahi `/api` proxy + SPA fallback |
+| `components/Message.jsx` | One turn — user bubble or assistant card (badge, rewrite note, citations) |
+| `components/Citations.jsx` | Sources — filenames for local, clickable URLs for web |
+| `views/{Chat,Documents,Evaluation,System}` | The full-page views the sidebar switches between |
+| `components/TraceTimeline.jsx` | Renders `logs[]` as a node-by-node timeline, plus the `chain()` and `llmCalls()` helpers |
+| `vite.config.js` | Proxies `/api` to the backend in dev |
+| `nginx.conf` | The same `/api` proxy in production, plus SPA fallback |
 
-**App code me hamesha relative `/api/query` kyun:** dev me Vite proxy karta hai, production
-me Nginx. Backend URL kahin hardcode nahi hai, isliye deploy pe kuch rebuild nahi karna padta.
+**Why the app always uses a relative `/api/query`:** Vite proxies in dev, Nginx in
+production, and the deploy image serves both from one origin. No backend URL is
+hardcoded anywhere, so nothing has to be rebuilt for a deploy.
 
-**Demo queries fixed kyun:** inka expected route pehle se pata hai. Live demo me kuch bhi
-type karke ummeed karna ki fallback trigger hoga — wahi galti demo todti hai.
+**Why the demo queries are fixed:** their expected route is known in advance. Typing
+something arbitrary in a live demo and hoping the fallback triggers is how demos break.
 
-**Aur wo corpus ke saath badalti kyun hain:** pehle chaaron chips hardcoded concepts wali
-thi. `CORPUS=scifact` pe *"Why does chunk overlap matter"* chip pe hara (local) dot dikhta,
-par us corpus me wo doc hai hi nahi — asal me web route chalta. Chip apne hi demo ko
-jhutlaati. SciFact ki queries `eval/results_scifact.json` se li gayi hain: yahi cases us run
-me local route pe gaye the **aur** gold doc bhi retrieve hua tha, isliye demo pe chalenge.
-Wahi baat findings, labelling note aur Documents ke corpus note pe bhi lagu hai — sab
-`CORPUS` ke hisaab se badalte hain, warna UI screen pe dikhe numbers ke khilaf bolta hai.
+**And why they change with the corpus:** the chips used to be hardcoded concepts
+questions. Under `CORPUS=scifact`, the *"Why does chunk overlap matter"* chip would show
+a green (local) dot while that document is not in the corpus at all — the web route
+would actually run. The chip would be contradicting its own demo. The SciFact queries
+come from `eval/results_scifact.json`: these are the cases that routed local in that run
+**and** retrieved their gold document, so they will behave on a demo. The same applies
+to the findings, the labelling note, and the Documents corpus note — all of them follow
+`CORPUS`, or the UI ends up arguing with the numbers on its own screen.
 
-**Har answer apna trace khud leke chalta hai:** `Message` ke neeche ek line ka rasta —
-`retrieve / grade: no / rewrite / web search / generate / validate` — aur uske aage LLM call
-count. Local route pe `(fallback would cost 4)` bhi likha aata hai, kyunki "3 calls" akela
-kuch nahi kehta; "3, aur fallback pe 4" hi wo trade-off hai jispe conditional routing khada
-hai. Dono numbers `logs[]` se gine jaate hain, hardcode nahi. Chevron pe poora timeline.
+**Every answer carries its own trace:** a one-line path under `Message` —
+`retrieve / grade: no / rewrite / web search / generate / validate` — with the LLM call
+count after it. On the local route it also reads `(fallback would cost 4)`, because "3
+calls" alone says nothing; "3, and 4 on the fallback" is the trade-off conditional
+routing rests on. Both numbers are counted from `logs[]`, not hardcoded. The chevron
+opens the full timeline.
 
-**View URL ke hash me hai:** `#eval`, `#documents`, `#system`. Pehle `view` sirf `useState`
-tha — Evaluation khol ke refresh karo aur app chup-chaap Chat pe wapas. Hash isliye, path
-nahi: hash server tak jaata hi nahi, to Nginx me koi SPA-fallback rule nahi chahiye.
-`pushState` + `popstate` use kiya, `replaceState` nahi — replace se refresh to theek ho jaata
-hai par history entry banti nahi, to back button views ke beech chalta nahi.
+**The view lives in the URL hash:** `#eval`, `#documents`, `#system`. It used to be
+`useState` alone — open Evaluation, refresh, and the app silently returned to Chat. A
+hash rather than a path because a hash never reaches the server, so Nginx needs no
+SPA-fallback rule. It uses `pushState` + `popstate` rather than `replaceState`: replace
+fixes the refresh but creates no history entry, so the back button would not move
+between views.
 
-### UI me kya *nahi* dikhaya, jaan-boojh ke
+### What the UI deliberately does *not* show
 
-Ye teen decisions poore project ke usool se aate hain — **screen pe koi aisa number nahi
-jiska backend me asli source na ho.**
+These follow from one rule: **no number on screen without a real source behind it.**
 
-**Koi "Relevance Score: 0.92" nahi.** Grader **binary** hai — ek word (`yes`/`no`). Usse
-do-decimal percentage banana wahi jhoothi precision hai jise `README` ka "Planned
-extensions" section reject karta hai. Panel me `Relevance Verdict: yes` likha hai. Interviewer
-"92 kyun, 85 kyun nahi?" poochhe to jawab hona chahiye — aur binary pe wo sawaal aata hi nahi.
+**No "Relevance Score: 0.92".** The grader is **binary** — one word, `yes` or `no`.
+Turning that into a two-decimal percentage is exactly the fake precision this project
+rejects. The panel reads `Relevance Verdict: yes`. If asked "why 92 and not 85?", there
+has to be an answer — and on a binary verdict the question cannot arise.
 
-**Trace me per-step timestamps nahi.** Backend per-node timing emit nahi karta, to
-`10:24:03` chhaapna number gadhna hota. Total `elapsed_ms` asli hai, wahi dikhta hai.
+**No per-step timestamps in the trace.** The backend emits no per-node timing, so
+printing `10:24:03` would be inventing a number. The total `elapsed_ms` is real, and
+that is what is shown.
 
-**"Web Search (Skipped)" step deliberately dikhta hai.** Local route pe wo node chala hi
-nahi — usko greyed step ki tarah dikhana hi wo baat saaf karta hai ki fallback **conditional
-hai, default nahi**. Ye poore project ka thesis ek nazar me dikha deta hai.
+**"Web Search (skipped)" is shown on purpose.** On the local route that node never ran —
+showing it greyed out is what makes clear that the fallback is **conditional, not the
+default**. It puts the project's thesis on screen at a glance.
 
-**Eval numbers ke saath caveat bhi dikhta hai.** Evaluation tab 20/20 ke neeche hi likhta
-hai ki "100% ka matlab labelled task aasan hai, router perfect nahi" — wahi baat jo
-`RESULTS.md` karta hai. Dashboard ko docs se ulta impression nahi dena chahiye.
-
-**Nav me "Documents" disabled hai** (`soon`) — upload API hai hi nahi. Ek dead link daal ke
-demo me uspe click ho jaana usse bura hai.
-
-**Multi-stage Dockerfile:** node se build, phir sirf `dist/` Nginx image me. Node runtime
-ship karne ki zaroorat nahi — build ke baad sirf static files bachti hain.
+**The eval numbers carry their caveat.** Directly under 20/20, the Evaluation tab states
+that "100% means the labelled task is easy, not that the router is perfect" — the same
+thing `RESULTS.md` says. A dashboard should not leave an impression the docs contradict.
 
 ---
 
-## docker-compose.yml ✅
+## docker-compose.yml
 
-| Service | Kaam |
+| Service | Role |
 |---|---|
-| `backend` | FastAPI + LangGraph, `vectorstore/` volume mounted, `/health` healthcheck |
-| `frontend` | React build Nginx se serve, `/api/` backend pe proxy |
+| `backend` | FastAPI + LangGraph, `vectorstore/` mounted as a volume, `/health` healthcheck |
+| `frontend` | The React build served by Nginx, proxying `/api/` to the backend |
 
-Chroma embedded hai (alag service nahi) — persistence sirf ek mounted volume.
+Chroma is embedded, not a separate service — persistence is just a mounted volume.
 
-**Ek real bug jo yahan mila:** `depends_on` pehle `condition: service_started` tha. Usse
-nginx uvicorn ke bind karne se **pehle** up ho jaata tha, aur `docker compose up` ke turant
-baad pehli query pe **502 Bad Gateway** aata tha. Fix: `condition: service_healthy`. `/health`
-koi LLM call nahi karta, isliye wo check sasta aur bharosemand hai.
+**A real bug found here:** `depends_on` used `condition: service_started`, which let
+Nginx come up **before** uvicorn had bound, so the first query right after
+`docker compose up` returned a **502 Bad Gateway**. Fixed with
+`condition: service_healthy`. `/health` makes no LLM call, which is what makes that
+check cheap and reliable.
 
-**Ports 3001/8001 kyun, 3000/8000 nahi:** is machine pe wo doosre projects ke containers le
-rakhe hain. `.env` me `FRONTEND_PORT` / `BACKEND_PORT` se override ho jaate hain.
+**Why ports 3001/8001 rather than 3000/8000:** other projects on this machine hold those.
+Both are overridable with `FRONTEND_PORT` / `BACKEND_PORT` in `.env`.
 
 ---
 
 ## .env.example
 
-Real secrets (`.env`) `.gitignore` me. `.env.example` sirf template — batata hai konse vars
-chahiye (`GROQ_API_KEY`, `TAVILY_API_KEY`, `VECTOR_DB`) bina real values leak kiye.
+Real secrets live in `.env`, which is gitignored. `.env.example` is a template only —
+it names the variables needed (`GROQ_API_KEY`, `TAVILY_API_KEY`, `CORS_ORIGINS`,
+`VECTOR_DB`) without leaking a value.
 
----
-
-## Aage jo bhi file banegi, uska explanation yahin niche add hoga.
+**This file is committed, and that has consequences.** A real Groq key once reached it
+and was pushed to a public repository. It was revoked, purged from the history, and the
+remote force-pushed. Placeholders only, always.

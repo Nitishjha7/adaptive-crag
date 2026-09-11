@@ -1,119 +1,117 @@
-# Code Q&A — apne hi code ko defend karne ke liye
+# Code Q&A — defending the decisions
 
-Ye doc [BUILD_PLAN.md](BUILD_PLAN.md) ke **"Nitish ka Part"** ke liye hai.
+Twenty-seven questions this code invites, with answers. They are not about lines;
+they are about **decisions** — which is what anyone reading the code will actually
+ask about.
 
-Code ban chuka hai. Wo tere naam se jaayega. Interviewer code padhega nahi — wo
-tujhse poochhega *"ye line aise kyun likhi"*. Jo sawaal yahan hain, wahi wahan
-aayenge, kyunki ye code ke **faisle** hain — lines nahi.
+**How to use this:** read a question, answer it out loud **without looking**. Where
+you stall is the weak spot, and that is where a follow-up will land too. Don't
+memorise the answers — every one of them explains a *why*, and that is the part that
+survives a follow-up question.
 
-**Kaise use karna hai:** sawaal padho, jawab **dekhe bina** bolo. Jahan atke,
-wahi tera kamzor point — usi pe interviewer bhi atkayega. Jawab yaad mat karo;
-har jawab me **kyun** likha hai, wahi samajhna hai. Interviewer follow-up
-poochhega, aur ratta wahin toot jaata hai.
-
-Har sawaal ke saath file aur line di hai — jawab padhne se pehle **code kholo**.
+Each question names its file and lines. **Open the code before reading the answer.**
 
 ---
 
-## 1. `grade_documents.py` — grader
+## 1. `grade_documents.py` — the grader
 
 [backend/app/nodes/grade_documents.py](../backend/app/nodes/grade_documents.py)
 
-### Q1. Binary `yes`/`no` kyun? Cosine similarity score pe threshold laga dete, ek LLM call hi bach jaata.
+### Q1. Why a binary `yes`/`no`? A threshold on the cosine similarity score would have saved an entire LLM call.
 
-Score ko **threshold chahiye** — 0.7 pe kaato ya 0.75 pe? Wo har corpus pe alag
-hota hai aur tune karna padta hai. Binary verdict deterministic hai aur
-samjhaya ja sakta hai: koi tuned constant nahi jo kal badalna pade.
+A score **needs a threshold** — cut at 0.7, or 0.75? That differs per corpus and has
+to be tuned. A binary verdict is deterministic and explainable: there is no tuned
+constant that has to be revisited later.
 
-Aur similarity score wo sawaal poochhta hi nahi jo poochhna hai. Cosine
-similarity kehti hai *"ye text query se kitna milta-julta hai"*, jabki sawaal ye
-hai *"is text me jawab hai kya"*. Ek document topically bahut close ho sakta hai
-aur phir bhi jawab na rakhta ho — wahi naive RAG ka failure mode hai.
+More importantly, a similarity score does not ask the question that needs asking.
+Cosine similarity says *"how similar is this text to the query"*, when the question
+is *"does this text contain the answer"*. A document can be topically very close and
+still not answer anything — that is precisely naive RAG's failure mode.
 
-LLM se decimal maangna aur bhi bura hota: model calibrated probability deta hi
-nahi. `0.87` chhapna **fake precision** hoti, aur is project ka usool hai ki jo
-number naapa nahi gaya wo dikhaya nahi jaata.
+Asking the LLM for a decimal would be worse still: the model does not produce a
+calibrated probability. Printing `0.87` would be **fake precision**, and this
+project's rule is that a number that was not measured does not get displayed.
 
-### Q2. `parse_verdict` me `yes` ka check pehle rakh doon to kya tootega?
+### Q2. What breaks if `parse_verdict` checks for `yes` first?
 
 [grade_documents.py:44-47](../backend/app/nodes/grade_documents.py#L44-L47)
 
-Model kabhi `"no, because the documents mention yes..."` jaisa jawab de sakta
-hai. `yes` pehle check karoge to wo substring mil jaayega aur verdict **ulta**
-nikal aayega — "no" wale case ko "yes" padh liya.
+The model can return something like `"no, because the documents mention yes..."`.
+Check `yes` first and that substring matches, so the verdict comes out **inverted** —
+a "no" case read as "yes".
 
-Ulta order safe hai: `"yes"` string kabhi `"no"` ke andar nahi milti.
+The reverse order is safe: the string `"yes"` never appears inside `"no"`.
 
-Isi ka doosra hissa: jab kuch samajh na aaye to default **`no`** hai, `yes`
-nahi. Wajah asymmetry hai — galat `no` ka kharcha ek extra web call hai; galat
-`yes` ka matlab hai reject kiye hue context se answer banana, yaani
-hallucination. Sasti galti chuni hai.
+The other half of the same decision: when nothing parses, the default is **`no`**,
+not `yes`. The reason is asymmetry — a wrong `no` costs one extra web call; a wrong
+`yes` means answering from context that was just rejected, which is a hallucination.
+The cheap mistake is the one to choose.
 
-### Q3. Grader ka `temperature` 0.7 kar doon to?
+### Q3. What if the grader ran at `temperature` 0.7?
 
 [grade_documents.py:61-63](../backend/app/nodes/grade_documents.py#L61-L63)
 
-**Routing non-deterministic ho jaayega** — ek hi sawaal kabhi local jaayega
-kabhi web. Teen cheezein tootengi:
+**Routing would become non-deterministic** — the same question would sometimes go
+local and sometimes to the web. Three things break:
 
-1. **Demo** — chip pe click karo, har baar alag route
-2. **Debugging** — bug reproduce hi nahi hoga
-3. **Eval** — routing accuracy ka matlab khatam. Do run me alag number aayega
-   aur pata nahi chalega ki code badla ya sirf sampling
+1. **The demo** — click the same chip, get a different route
+2. **Debugging** — a bug cannot be reproduced
+3. **The eval** — routing accuracy stops meaning anything. Two runs give different
+   numbers with no way to tell whether the code changed or only the sampling
 
-Generation me thoda randomness chalta hai. **Decision me nahi.**
+Some randomness in generation is fine. **In a decision it is not.**
 
-### Q4. `documents` khaali ho to LLM call kyun nahi karte?
+### Q4. Why skip the LLM call when `documents` is empty?
 
 [grade_documents.py:54-59](../backend/app/nodes/grade_documents.py#L54-L59)
 
-Grade karne ko kuch hai hi nahi — khaali context bhej ke poochhna ki "kya isme
-jawab hai" ek bekar call hai jiska jawab pehle se pata hai. Seedha `no` lauta
-dete hain, aur fallback chal jaata hai.
+There is nothing to grade. Sending empty context and asking "does this contain the
+answer" is a call whose answer is already known. Return `no` directly and let the
+fallback run.
 
-Ye sirf optimisation nahi: agar khaali documents pe model galti se `yes` bol
-deta, to `generate` bina kisi context ke answer banata.
+This is not only an optimisation: if the model answered `yes` on empty documents,
+`generate` would produce an answer with no context at all.
 
-### Q5. Grader ko chaaron chunks ek saath dete ho ya ek-ek karke?
+### Q5. Does the grader see all four chunks at once, or one at a time?
 
 [grade_documents.py:67](../backend/app/nodes/grade_documents.py#L67) — `"\n\n---\n\n".join(documents)`
 
-Ek saath, ek hi call me. Per-chunk grading zyada granular hota (pata chalta
-kaunsa chunk kaam ka hai) par **k guna zyada LLM calls** lagti — aur is project
-ka poora cost argument call counts pe khada hai.
+All at once, in a single call. Per-chunk grading would be more granular — you would
+learn *which* chunk was useful — but it costs **k times more LLM calls**, and this
+project's whole cost argument rests on call counts.
 
-**Iska ek asli natija hai jo eval me nikla:** grader chunks ko concatenate karta
-hai, to **ordering uske liye invisible hai**. Isiliye reranking — jo ordering
-sudharta hai — routing pe koi asar nahi dikha paya. Wo `RESULTS.md` ka negative
-result hai, aur uski wajah exactly yahi line hai.
+**There is a real consequence that the eval surfaced:** because the grader
+concatenates the chunks, **ordering is invisible to it**. That is why reranking —
+which improves ordering — could not move routing at all. That negative result in
+`RESULTS.md` traces back to exactly this line.
 
 ---
 
-## 2. `build_graph.py` — conditional edge
+## 2. `build_graph.py` — the conditional edge
 
 [backend/app/graph/build_graph.py](../backend/app/graph/build_graph.py)
 
-### Q6. Chain se kaam ho jaata, graph kyun?
+### Q6. A chain would have worked. Why a graph?
 
-Kyunki `grade_documents` ke baad kaunsa node chalega ye **compile time pe fixed
-nahi hai** — runtime pe state padh ke decide hota hai. Ek linear chain ye express
-kar hi nahi sakti; usme har step ka agla step pehle se likha hota hai.
+Because which node runs after `grade_documents` is **not fixed at compile time** —
+it is decided at runtime by reading state. A linear chain cannot express that; in a
+chain every step's successor is written in advance.
 
-Yahi "Adaptive" ka matlab hai: rasta har query pe alag ban sakta hai.
+That is what "Adaptive" means here: the path can differ per query.
 
-### Q7. `decide_to_generate` itna khaali kyun hai? Ek line me kya faisla ho raha hai?
+### Q7. Why is `decide_to_generate` so empty? What decision is it actually making?
 
 [build_graph.py:30-41](../backend/app/graph/build_graph.py#L30-L41)
 
-**Jaan-boojh ke khaali hai.** Saara faisla `grade_documents` me hota hai; yahan
-sirf uska result padha jaata hai.
+**It is deliberately empty.** The whole decision happens in `grade_documents`; this
+function only reads the result.
 
-Wajah: grading logic aur routing logic alag rehne se dono **alag-alag test** ho
-sakte hain. Router ka test bina kisi LLM ke chal jaata hai — bas state me
-`relevance_score` set karo aur dekho kaunsi string aati hai. Agar grading yahin
-hoti to router test ko mock LLM chahiye hota.
+The reason: keeping grading logic and routing logic apart means they can be **tested
+separately**. The router's test runs with no LLM at all — set `relevance_score` in
+state and check which string comes back. If grading happened here, that test would
+need a mocked model.
 
-### Q8. Iska default `transform_query` kyun hai, `generate` kyun nahi?
+### Q8. Why does it default to `transform_query` rather than `generate`?
 
 [build_graph.py:41](../backend/app/graph/build_graph.py#L41)
 
@@ -121,80 +119,76 @@ hoti to router test ko mock LLM chahiye hota.
 return "generate" if state.get("relevance_score") == "yes" else "transform_query"
 ```
 
-Sirf **exact `"yes"`** pe generate hota hai. Baaki sab — `"no"`, khaali string,
-missing key, koi unexpected value — fallback pe jaata hai.
+Only an exact `"yes"` reaches generation. Everything else — `"no"`, an empty string,
+a missing key, any unexpected value — goes to the fallback.
 
-Wahi asymmetry phir se: agar `relevance_score` kisi bug ki wajah se khaali reh
-gaya, to safe direction correction path hai, na ki unverified context pe answer
-bol dena.
+The same asymmetry again: if `relevance_score` is empty because of a bug, the safe
+direction is the correction path, not answering from unverified context.
 
-### Q9. Do alag `generate` node kyun nahi — ek local ke liye, ek web ke liye?
+### Q9. Why not two `generate` nodes, one for local and one for web?
 
 [build_graph.py:68-70](../backend/app/graph/build_graph.py#L68-L70)
 
-Kyunki `generate` sirf `state["documents"]` padhta hai. Usko pata hi nahi hona
-chahiye ki context kahan se aaya — wahi ek acha contract hai. Do nodes hote to
-dono me wahi prompt aur wahi logic duplicate hoti, aur dono ko sath me badalna
-padta.
+Because `generate` only reads `state["documents"]`. It should not know where the
+context came from — that is a good contract. Two nodes would duplicate the same
+prompt and the same logic, and both would have to be changed together.
 
-Dono branches `generate` pe merge hote hain; source ka farak `source_type` field
-rakhti hai, jo sirf UI ke badge aur eval ke liye hai.
+Both branches merge at `generate`; the source difference lives in `source_type`,
+which exists only for the UI badge and the eval.
 
 ---
 
-## 3. `web_search_fallback.py` — correction path
+## 3. `web_search_fallback.py` — the correction path
 
 [backend/app/nodes/web_search_fallback.py](../backend/app/nodes/web_search_fallback.py)
 
-### Q10. **(Sabse zyada poochha jaane wala)** Web snippets ko local docs ke saath merge kyun nahi karte? Zyada context to behtar hota hai na?
+### Q10. **(The most-asked one)** Why not merge the web snippets with the local documents? Surely more context is better?
 
 [web_search_fallback.py:61-66](../backend/app/nodes/web_search_fallback.py#L61-L66)
 
-**Nahi.** Local docs abhi-abhi `"no"` grade ho chuke hain — grader ne kaha ki
-inme jawab nahi hai. Unhe context me rakhna:
+**No.** Those local documents were just graded `"no"` — the grader said they do not
+contain the answer. Keeping them in context:
 
-1. Ache web context ko **dilute** karta hai
-2. Wahi hallucination risk **wapas laata hai** jise hatane ke liye grading step
-   banaya hi gaya tha
+1. **Dilutes** the good web context
+2. **Reintroduces** exactly the hallucination risk the grading step exists to remove
 
-Poora grading step bekar ho jaata agar reject kiya hua material phir bhi prompt
-me chala jaata. Isliye `documents` **replace** hota hai, append nahi.
+The entire grading step would be pointless if rejected material still reached the
+prompt. So `documents` is **replaced**, not appended to.
 
-Ye itna central hai ki iska apna test hai — `test_routing.py` me assert karta hai
-ki fallback ke baad local docs context me nahi bache.
+This matters enough to have its own test: `test_routing.py` asserts that no local
+document survives into context after a fallback.
 
-### Q11. `sources` bhi replace karte ho. Kyun?
+### Q11. Why replace `sources` too?
 
 [web_search_fallback.py:54-56](../backend/app/nodes/web_search_fallback.py#L54-L56)
 
-Warna UI ek **web-sourced answer ke neeche local filenames cite** kar deta. Wo
-user se jhooth hai — jawab un files se bana hi nahi.
+Otherwise the UI would **cite local filenames underneath a web-sourced answer**. That
+is a lie to the user — the answer was not built from those files.
 
-Search fail hone wale path me bhi `sources: []` hai, usi wajah se.
+The search-failure path sets `sources: []` for the same reason.
 
-### Q12. `except Exception` itna broad kyun? Ye to bad practice hai.
+### Q12. Why such a broad `except Exception`? Isn't that bad practice?
 
 [web_search_fallback.py:48-59](../backend/app/nodes/web_search_fallback.py#L48-L59)
 
-Yahan deliberate hai, aur comment me likha hai. Search fail hona **recoverable**
-hai — rate limit, network, missing key, teeno ho sakte hain aur teeno pe sahi
-behaviour ek hi hai.
+It is deliberate here, and the comment says so. A failed search is **recoverable** —
+rate limiting, network, a missing key — and the correct behaviour is identical for
+all three.
 
-Crash karne se poora request 500 ho jaata aur demo ruk jaata. Iske bajaye khaali
-documents laut jaate hain, aur `generate` saaf keh deta hai ki context nahi
-mila. Log me exception type aur message dono jaate hain, to debugging nahi
-marti.
+Crashing would turn the whole request into a 500 and stop the demo. Instead the node
+returns empty documents and `generate` states plainly that no context was found. The
+exception type and message both go to the log, so debugging does not suffer.
 
-**Farak ye hai ki fail karna chup-chaap nahi hai** — trace me `FAILED` dikhta
-hai, aur UI us step ko laal tick ke saath dikhati hai.
+**The difference is that failing is not silent** — the trace shows `FAILED` and the
+UI marks that step in red.
 
-### Q13. URL snippet ke text me bhi hai aur `sources` list me bhi. Duplicate nahi hai?
+### Q13. The URL appears both in the snippet text and in the `sources` list. Isn't that duplication?
 
 [web_search_fallback.py:22-38](../backend/app/nodes/web_search_fallback.py#L22-L38)
 
-Nahi — dono alag consumer ke liye hain. Text wala URL **LLM ke liye** hai taaki
-wo answer me inline cite kar sake. List wala **UI ke liye** hai, structured
-citations ke liye. Text se hata do to inline citation mar jaati hai.
+No — they serve different consumers. The URL in the text is **for the model**, so it
+can cite inline. The list is **for the UI**, for structured citations. Remove it from
+the text and inline citation dies.
 
 ---
 
@@ -202,7 +196,7 @@ citations ke liye. Text se hata do to inline citation mar jaati hai.
 
 [backend/app/schemas/crag_state.py](../backend/app/schemas/crag_state.py)
 
-### Q14. **(Sabse gehra sawaal)** `logs` pe reducer hai, `documents` pe nahi. Kyun?
+### Q14. **(The deepest one)** `logs` has a reducer and `documents` does not. Why?
 
 [crag_state.py:72](../backend/app/schemas/crag_state.py#L72)
 
@@ -210,239 +204,231 @@ citations ke liye. Text se hata do to inline citation mar jaati hai.
 logs: Annotated[List[str], operator.add]
 ```
 
-`logs` **additive** hai — har node ek line append karta hai. Kisi node ko ye
-jaanne ki zaroorat nahi ki usse pehle kya chala, aur poora execution trace muft
-me ban jaata hai. Wahi trace UI me dikhta hai.
+`logs` is **additive** — each node appends one line. No node needs to know what ran
+before it, and the full execution trace assembles itself for free. That trace is what
+the UI renders.
 
-`documents` **overwrite** hai (default behaviour, koi reducer nahi) — aur ye
-poore project ka sabse important design decision hai. Agar yahan bhi
-`operator.add` hota, to `web_search_fallback` ke snippets local docs ke saath
-**jud** jaate. Wahi Q10 wali galti, sirf ab ek line ke reducer ki wajah se —
-chup-chaap, bina kisi node ka code badle.
+`documents` **overwrites** (the default, no reducer) — and this is the single most
+important design decision in the project. With `operator.add` here, the snippets from
+`web_search_fallback` would be **concatenated** onto the local documents. That is the
+Q10 mistake all over again, except caused by one line of reducer, silently, without
+any node's code changing.
 
-**Yaani ek Annotated line poore correction step ko bekar kar sakti hai.**
+**A single `Annotated` line can undo the entire correction step.**
 
-`sources` bhi isi wajah se overwrite hai.
+`sources` overwrites for the same reason.
 
-### Q15. `initial_state()` alag function kyun hai? Har jagah dict bana lete.
+### Q15. Why is `initial_state()` a separate function? Why not build the dict inline?
 
 [crag_state.py:76-92](../backend/app/schemas/crag_state.py#L76-L92)
 
-`logs` ka additive reducer **list par** kaam karta hai — `None` pe crash karega.
-To use `[]` se initialise karna hi padta hai. Wo ek jagah likhna, har call site
-pe nahi, yaani ek hi jagah galti ho sakti hai.
+The additive reducer on `logs` operates **on a list** — it crashes on `None`. So it
+has to be initialised to `[]`. Writing that once rather than at every call site means
+there is exactly one place to get it wrong.
 
-Doosri baat, jo demo me kaam aati hai: **har request naya `initial_state()`
-banati hai.** Koi checkpointer nahi, koi memory nahi — graph stateless hai.
-Isiliye UI ki history saaf likhti hai ki wo ek *record* hai, conversation memory
-nahi.
+The second reason shows up in the demo: **every request builds a fresh
+`initial_state()`.** There is no checkpointer and no memory — the graph is stateless.
+That is why the UI's history is labelled as a *record* rather than conversation
+memory.
 
-### Q16. `question` kabhi mutate kyun nahi hota?
+### Q16. Why is `question` never mutated?
 
-Rewrite alag key me jaata hai — `transformed_query`. Original question ko badal
-dete to trace me pata hi nahi chalta ki user ne kya poochha tha aur system ne
-usko kya bana diya. Wo farak dikhana hi fallback path ka sabse convincing hissa
-hai — UI me *"Rewritten for search: ..."* isi se aata hai.
+The rewrite goes into a separate key, `transformed_query`. Overwriting the original
+would make it impossible to see, in the trace, what the user asked versus what the
+system turned it into. Showing that difference is the most convincing part of the
+fallback path — the UI's *"Rewritten for search: ..."* comes from exactly this.
 
 ---
 
-## 5. Retrieval — hybrid + reranker
+## 5. Retrieval — hybrid and reranking
 
 [backend/app/tools/reranker.py](../backend/app/tools/reranker.py)
 
-### Q17. Bi-encoder aur cross-encoder me farak kya hai?
+### Q17. What is the difference between a bi-encoder and a cross-encoder?
 
-- **Bi-encoder (retriever):** query aur document ko **alag-alag** embed karta
-  hai. Document vectors pehle se bane hote hain, query time pe sirf ek embedding
-  + nearest-neighbour lookup. Isliye fast — aur isiliye query-document
-  interaction dekh hi nahi sakta, kyunki dono kabhi ek saath model me jaate hi
-  nahi.
-- **Cross-encoder (reranker):** dono ko **ek saath** model me daalta hai, ek
-  doosre ke context me padhta hai. Kaafi zyada accurate. Keemat: har
-  (query, document) pair pe ek forward pass — poore corpus pe chalana namumkin.
+- **Bi-encoder (the retriever):** embeds the query and the document **separately**.
+  Document vectors are computed ahead of time; at query time it is one embedding plus
+  a nearest-neighbour lookup. That is why it is fast — and also why it cannot see any
+  query-document interaction, because the two never enter the model together.
+- **Cross-encoder (the reranker):** puts both into the model **together** and reads
+  each in the context of the other. Considerably more accurate. The cost: one forward
+  pass per (query, document) pair, which is impossible across a whole corpus.
 
-Isiliye do-step: **sasta retriever candidates laata hai, mehnga reranker unme se
-best chunta hai.**
+Hence the two stages: **a cheap retriever proposes candidates, an expensive reranker
+picks the best of them.**
 
-### Q18. RRF me scores normalize kyun nahi karte?
+### Q18. Why doesn't RRF normalise the scores?
 
 [reranker.py:66-75](../backend/app/tools/reranker.py#L66-L75)
 
-Vector search cosine **distance** deta hai (0 = best) aur BM25 ek unbounded
-positive score (bada = best). Ye alag scales hain — inhe ek doosre me convert
-karna corpus-specific tuning hai, aur wahi tuning kal doosre corpus pe galat ho
-jaayegi.
+Vector search returns a cosine **distance** (0 is best) and BM25 returns an unbounded
+positive score (higher is best). Those are different scales, and converting one into
+the other is corpus-specific tuning — which will be wrong on the next corpus.
 
-RRF sirf **rank** use karta hai: `score(d) = Σ 1 / (60 + rank(d))`. Score ki
-value kya thi, isse koi farak nahi padta. Isliye kisi bhi do retrievers ko fuse
-kiya ja sakta hai bina unke scale jaane.
+RRF uses **rank only**: `score(d) = Σ 1 / (60 + rank(d))`. What the score value was
+does not matter, so any two retrievers can be fused without knowing their scales.
 
-### Q19. `rerank()` fail hone pe exception kyun nahi phenkta?
+### Q19. Why doesn't `rerank()` raise when it fails?
 
 [reranker.py:57-60](../backend/app/tools/reranker.py#L57-L60)
 
-Reranking ek **improvement** hai, requirement nahi. Model load fail ho jaye to
-retrieval phir bhi kaam karni chahiye — bas thodi kam accurate. Isliye original
-order laut jaata hai (fail open).
+Reranking is an **improvement, not a requirement**. If the model fails to load,
+retrieval should still work — just slightly less accurately. So the original order is
+returned (fail open).
 
-Ulta hota — reranker na chale to poori query fail — to ek optional component
-core path ko le doobta.
+The alternative — a failed reranker killing the whole query — lets an optional
+component take down the core path.
 
-### Q20. Reranker ka point answer quality hai ya kuch aur?
+### Q20. Is the reranker there for answer quality, or something else?
 
-Is project me **grader ka input** hai. `grade_documents` decide karta hai ki
-local context kaafi hai ya nahi. Agar retrieval sahi chunk laayi par wo top-k me
-neeche reh gaya, grader use dekh hi nahi paata aur galat `"no"` de sakta hai.
-Reranker sahi chunk ko upar laata hai.
+In this project it feeds **the grader's input**. `grade_documents` decides whether the
+local context is sufficient. If retrieval found the right chunk but left it low in the
+top-k, the grader never sees it and can return a wrong `"no"`. The reranker lifts the
+right chunk up.
 
-**Lekin** — Q5 yaad karo — grader chunks concatenate karta hai, to ordering uske
-liye invisible hai. Isiliye A/B flat aaya. Ye do baatein ek saath rakhna:
-reranker theory me grader ko madad kar sakta tha, par is grader ke design me
-nahi kar sakta.
+**But** — recall Q5 — the grader concatenates the chunks, so ordering is invisible to
+it. That is why the A/B came back flat. Hold both facts together: the reranker could
+have helped the grader in theory, and cannot help *this* grader given how it is built.
 
 ---
 
-## 6. Eval — sabse zyada follow-up yahin aayega
+## 6. The eval — where the follow-ups will land
 
-### Q21. Routing accuracy 100% hai. Iska matlab router perfect hai?
+### Q21. Routing accuracy is 100%. Does that mean the router is perfect?
 
-**Nahi, iska matlab task aasan hai.** Corpus ka gap **categorical** hai —
-concepts andar, vendor/pricing/news bahar — to zyadatar web cases ek obvious axis
-pe alag hain. Ye maine hi design kiya tha, aur maine hi labels lagaye the.
+**No, it means the task is easy.** The corpus gap is **categorical** — concepts in,
+vendor/pricing/news out — so most web cases differ along an obvious axis. I designed
+that gap, and I wrote the labels.
 
-Isiliye 8 **ambiguous** cases add kiye jinme corpus topic ko aadha cover karta
-hai, aur unhe **correctness** se nahi **stability** se score kiya jaata hai —
-kyunki unka sahi jawab genuinely debatable hai.
+Which is why 8 **ambiguous** cases were added, where the corpus half-covers the topic,
+and they are scored on **stability** rather than **correctness** — because the right
+answer for them is genuinely debatable.
 
-### Q22. Tumne khud corpus likha aur khud labels lagaye. Ye bias nahi?
+### Q22. You wrote the corpus and you wrote the labels. Isn't that bias?
 
-**Bilkul hai, aur wo likha hua hai.** Isiliye BEIR SciFact laaya gaya: wahan
-`local` cases ke labels dataset ke apne **qrels** se aate hain — expert
-judgements ki kaunsa abstract kaunse claim ka jawab deta hai. Wo labels maine
-nahi banaye.
+**Yes, and it is stated.** That is why BEIR SciFact was added: there the `local` case
+labels come from the dataset's own **qrels** — expert judgements about which abstract
+answers which claim. I did not create those labels.
 
-`web` cases abhi bhi haath se likhe hain, aur wo bhi likha hua hai — par wo aasan
-half hai: SciFact 2020-era scientific abstracts hain, to "aaj ka pricing" wale
-sawaal usme ho hi nahi sakte.
+The `web` cases are still hand-written, and that is stated too — but they are the easy
+half: SciFact is 2020-era scientific abstracts, so a question about today's pricing
+cannot possibly be in it.
 
-### Q23. Latency ka number kyun nahi dikhate?
+### Q23. Why is there no latency number?
 
-Kyunki naapa nahi ja saka, aur ye batana khud ek finding hai.
+Because it could not be measured, and saying so is itself a finding.
 
-Pehla run file order me chala — pehle saare local cases, phir web. Result:
-`local 13.7s vs web 18.5s`, local ki saaf jeet. **Artifact tha.** Per-case
-timings dikhate hain ki case 5 ke baad sab 15–22s ho gaye, route chahe koi bhi
-ho — Groq throttle kar raha tha, aur local cases pehle chale the, to poora
-slowdown unke bucket me gira.
+The first run went in file order — all the local cases, then all the web ones. Result:
+`local 13.7s vs web 18.5s`, a clean win for local. **It was an artifact.** The
+per-case timings show everything after case 5 landing at 15–22s regardless of route —
+Groq was throttling, and because the local cases ran first, the entire slowdown fell
+into their bucket.
 
-`interleave()` add kiya jo local/web alternate karta hai. Dobara chalaya:
-`local 16.2s vs web 14.9s` — web **tez**, jo structurally impossible hai kyunki
-wo strictly zyada kaam karta hai. Dono numbers noise the.
+`interleave()` was added to alternate local and web. Re-run: `local 16.2s vs web
+14.9s` — web apparently **faster**, which is structurally impossible since it does
+strictly more work. Both numbers were noise.
 
-Isliye cost argument **LLM call counts** pe khada hai (local 3, web 4), jo
-graph ki shakl se aate hain aur har run me exactly wahi rehte hain.
+So the cost argument rests on **LLM call counts** (local 3, web 4), which follow from
+the shape of the graph and reproduce exactly.
 
-### Q24. "Missed fallback" aur "unnecessary fallback" me farak?
+### Q24. What is the difference between a "missed fallback" and an "unnecessary fallback"?
 
-- **Missed fallback** — local jawab de diya jabki dena nahi chahiye tha.
-  **Mehngi galti**: user ko galat context pe bana hua confident answer milta hai.
-- **Unnecessary fallback** — web search kar liya jabki local docs kaafi the.
-  **Sasti galti**: ek extra LLM call aur thodi latency, answer phir bhi sahi.
+- **Missed fallback** — answered locally when it should not have.
+  **The expensive error**: the user gets a confident answer built on the wrong context.
+- **Unnecessary fallback** — searched the web when the local documents were enough.
+  **The cheap error**: one extra LLM call and some latency; the answer is still right.
 
-Dono corpora pe missed fallbacks **0** rahe. Router sirf sasti direction me
-galat hua — aur ye ek design choice ka natija hai (Q2, Q8), ittefaq nahi.
+Missed fallbacks are **0** on both corpora. The router only errs in the cheap
+direction — and that is the result of a design choice (Q2, Q8), not luck.
 
-### Q25. Hybrid + reranking add kiya to kya improve hua?
+### Q25. What did hybrid search and reranking actually improve?
 
-**Concepts corpus pe kuch nahi** — routing 20/20 dono me, stability 8/8 dono me.
-Par retrieval sach me badla: 28 me se **27 sawaal alag chunks** se answer hue, 0
-bilkul same.
+**Nothing on the concepts corpus** — routing 20/20 either way, stability 8/8 either
+way. But retrieval genuinely changed: **27 of 28 questions** were answered from
+different chunks, and 0 were identical.
 
-Wajah Q5 me hai: grader ordering nahi padhta, aur 22-chunk corpus pe membership
-badalne se topic shayad hi badalta hai.
+The reason is in Q5: the grader does not read ordering, and on a 22-chunk corpus a
+change in membership rarely changes the topic.
 
-**SciFact pe hila:** routing 75.0% → 78.6%, recall@k 65% → 70%. Par wo **exactly
-ek case** hai 28 me se, aur ek gold document 20 me se — noise ke andar. Jo sabit
-hua wo mechanism hai, magnitude nahi.
+**It moved on SciFact:** routing 75.0% → 78.6%, recall@k 65% → 70%. But that is
+**exactly one case** out of 28, and one gold document out of 20 — inside the noise.
+What is established is the mechanism, not the magnitude.
 
-### Q26. To reranking bekar hai?
+### Q26. So is reranking useless?
 
-Nahi — **galat metric pe naapa gaya tha.** Reranking ko *answer* pe asar dikhana
-chahiye (model kaunse passages se likhta hai), routing pe nahi. Isiliye baad me
-**answer verdict** metric add kiya: SciFact claim-verification dataset hai, to
-dataset khud batata hai ki gold abstract claim ko SUPPORT karta hai ya
-CONTRADICT — aur naapa ja sakta hai ki hamara answer wahi kehta hai ya nahi.
+No — **it was measured against the wrong metric.** Reranking should show up in the
+*answer* (which passages the model writes from), not in routing. Which is why an
+**answer verdict** metric was added afterwards: SciFact is a claim-verification
+dataset, so the dataset itself says whether the gold abstract SUPPORTS or CONTRADICTS
+the claim — and it can be measured whether our answer says the same.
 
-Wo LLM-judge nahi hai: sahi-galat ka faisla dataset karta hai, model se sirf ek
-*reading* nikaali jaati hai ki answer ne kya stand liya.
+That is not an LLM judge: the dataset decides right and wrong, and the model is used
+only to *read* what stand the answer took.
 
-### Q27. SciFact pe 78.6% hai. Grader kharab hai?
+### Q27. SciFact is 78.6%. Is the grader bad?
 
-**Ulta.** Baseline run pe correlation perfect tha:
+**The opposite.** On the baseline run the correlation was perfect:
 
-| Gold document | Cases | Route | Sahi |
+| Gold document | Cases | Route | Correct |
 |---|---|---|---|
 | Retrieved | 13 | local | **13 / 13** |
 | Missed | 7 | web | 0 / 7 |
 
-**Grader ne ek bhi apni galti nahi ki.** Har "routing failure" ek retrieval miss
-tha jise grader ne theek pakda — usne chaar chunks dekhe jinme jawab tha hi
-nahi, aur keh diya. 78.6% grader ko **under-report** karti hai; bottleneck
-retrieval hai, grading nahi.
+**The grader made zero independent errors.** Every "routing failure" was a retrieval
+miss that the grader correctly caught — it saw four chunks that did not contain the
+answer and said so. 78.6% **under-reports** the grader; the bottleneck is retrieval,
+not grading.
 
 ---
 
-## 7. Ek test jaan-boojh ke todo
+## 7. Break a test on purpose
 
-Padhne se zyada tez tareeka. Todo, dekho kya fail hota hai, phir wapas theek
-karo.
+Faster than reading. Break it, see what fails, then put it back.
 
-**Exercise 1 — docs replace ka invariant**
+**Exercise 1 — the docs-replace invariant**
 
-[web_search_fallback.py:65](../backend/app/nodes/web_search_fallback.py#L65) me:
-
-```python
-"documents": snippets,                      # abhi
-"documents": state["documents"] + snippets, # ye kar ke dekho
-```
-
-Phir `.\dev.ps1 test` chalao. Kaunsa test fail hota hai? Uska naam padho aur
-socho ki wo test **kyun** likha gaya tha. Phir wapas theek karo.
-
-**Exercise 2 — reducer**
-
-[crag_state.py:35](../backend/app/schemas/crag_state.py#L35) me `documents` ko
-`Annotated[List[str], operator.add]` bana do. Ab **koi node ka code nahi badla**
-— phir bhi wahi bug aa gaya. Test chalao.
-
-Ye samajhne ke liye sabse achha exercise hai ki state design code jitna hi
-important hai.
-
-**Exercise 3 — default direction**
-
-[build_graph.py:41](../backend/app/graph/build_graph.py#L41) me condition ko
-ulta likh do:
+In [web_search_fallback.py:65](../backend/app/nodes/web_search_fallback.py#L65):
 
 ```python
-return "generate" if state.get("relevance_score") == "yes" else "transform_query"   # abhi
-return "transform_query" if state.get("relevance_score") == "no" else "generate"    # ye kar ke dekho
+"documents": snippets,                      # as written
+"documents": state["documents"] + snippets, # try this
 ```
 
-Dono `"yes"` aur `"no"` pe **bilkul same** behave karte hain. Ab socho: agar
-`relevance_score` khaali reh gaya (koi bug, ya grader ka naya output format), to
-dono me kya hoga? Kaunsa version safe hai, aur kyun?
+Then run `.\dev.ps1 test`. Which test fails? Read its name and work out **why** it was
+written. Then put it back.
 
-Ye test se nahi pakda jaayega — koi test khaali `relevance_score` nahi bhejta.
-Isiliye ye exercise sabse kaam ki hai: kuch faisle test se nahi, sirf soch ke
-pakde jaate hain.
+**Exercise 2 — the reducer**
+
+In [crag_state.py:35](../backend/app/schemas/crag_state.py#L35), make `documents`
+`Annotated[List[str], operator.add]`. Now **no node's code has changed** — and the same
+bug is back. Run the tests.
+
+This is the best exercise for understanding that state design is as load-bearing as
+the code.
+
+**Exercise 3 — the default direction**
+
+In [build_graph.py:41](../backend/app/graph/build_graph.py#L41), invert the condition:
+
+```python
+return "generate" if state.get("relevance_score") == "yes" else "transform_query"   # as written
+return "transform_query" if state.get("relevance_score") == "no" else "generate"    # try this
+```
+
+Both behave **identically** for `"yes"` and `"no"`. Now think: if `relevance_score`
+ended up empty — a bug, or a new output format from the grader — what happens in each?
+Which version is safe, and why?
+
+No test catches this, because no test sends an empty `relevance_score`. Which is what
+makes it the most useful exercise here: some decisions are caught by thinking, not by
+the suite.
 
 ---
 
-## Agar kuch na aaye
+## If one of these does not come out
 
-Jo sawaal atka, us file ko kholo aur uske docstring padho — har faisle ki wajah
-wahin likhi hai. Phir sawaal dobara bina dekhe bolo.
+Open the file the question is about and read its docstring — the reason for each
+decision is written there. Then answer the question again without looking.
 
-Aur agar koi sawaal ka jawab **tujhe theek na lage** — wo bhi valid hai. Bol
-dena, discuss karenge. Apne hi code se disagree kar pana usse ratta maarne se
-behtar hai.
+And if an answer here seems **wrong** to you, that is valid too. Disagreeing with the
+code is worth more than reciting it.

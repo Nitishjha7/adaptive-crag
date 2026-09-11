@@ -5,32 +5,35 @@
 
 ---
 
-> ## Padhne se pehle — abhi kya sach hai
+> ## Before reading — what is true right now
 >
-> **Poora stack bana hua hai aur chal raha hai** (Phase 1–8): ingestion, graph, grading,
-> conditional routing, web fallback, groundedness + PII validation, citations, FastAPI,
-> React UI, docker-compose, aur eval harness. `docker compose up` se sab chalta hai.
-> Verified Groq (`openai/gpt-oss-120b`) + live DuckDuckGo pe.
+> **The whole stack is built and running:** ingestion, graph, grading, conditional
+> routing, web fallback, groundedness + PII validation, citations, FastAPI, React
+> dashboard, docker-compose, and the eval harness. `docker compose up` brings it all up.
+> Verified against Groq (`openai/gpt-oss-120b`) and live DuckDuckGo.
 >
-> **Measured hai, claimed nahi** — 20 labelled queries: routing **20/20**, **0 missed
-> fallbacks**. Plus 8 ambiguous cases, **8/8 route-stable** across 3 runs.
-> [RESULTS.md](../backend/eval/RESULTS.md) me poora analysis.
+> **Measured, not claimed** — 20 labelled queries: routing **20/20**, **0 missed
+> fallbacks**. Plus 8 ambiguous cases, **8/8 route-stable** across 3 runs, and a second
+> corpus (BEIR SciFact) whose labels are not mine. Full analysis in
+> [RESULTS.md](../backend/eval/RESULTS.md).
 >
-> **Interview pe seedha asar:**
-> - ✅ Bol sakta hai: *"maine CRAG loop implement kiya, chalaya, aur measure kiya."*
->   Live demo bhi de sakta hai — UI ban chuki hai.
-> - ✅ Numbers bol sakta hai — **par condition ke saath.** 20/20 ek *categorical* gap pe
->   hai (concepts in, live facts out). Matlab task aasan hai, router perfect nahi.
-> - ✅ **Do negative results tere paas hain, aur wahi sabse strong cheez hai** — latency
->   measurement fail hui, aur hybrid+reranker ka A/B **koi fayda nahi** dikha (27/28 cases
->   pe alag chunks aaye, routing ek bhi case pe nahi badla). Dono likhe hue hain.
-> - ❌ **Mat bolna:** "reranker se retrieval improve hua" ya "latency save hui" — dono
->   measure hue aur dono negative nikle. [Section 15](#15-honesty-checklist--what-not-to-claim) poori list hai.
-> - ❌ **Deployed nahi hai.** Live link nahi hai — Self-Healing SQL Agent pe hai. Ye
->   asymmetry poochhi ja sakti hai.
+> **What that means in an interview:**
+> - ✅ You can say *"I implemented the CRAG loop, ran it, and measured it"* — and demo it
+>   live, because the UI exists.
+> - ✅ You can quote the numbers — **but always with the condition.** 20/20 is on a
+>   *categorical* gap (concepts in, live facts out). That means the task is easy, not
+>   that the router is perfect. SciFact is the harder number: 78.6%.
+> - ✅ **You have two negative results, and they are the strongest thing here** — the
+>   latency measurement failed and was withdrawn, and the hybrid + reranker A/B showed
+>   **no benefit** (27 of 28 cases retrieved different chunks; not one routing decision
+>   moved). Both are written up rather than buried.
+> - ❌ **Do not say** "reranking improved retrieval" or "we saved latency" — both were
+>   measured and both came back negative.
+>   [Section 15](#15-honesty-checklist--what-not-to-claim) is the full list.
+> - ❌ **Not deployed.** There is no live link yet. Expect to be asked why.
 >
-> Section 15 (kya NOT claim karna) aur 16 (honest assessment) sabse zaroori hain —
-> interview se pehle wahi padhna.
+> Sections 15 (what not to claim) and 16 (honest assessment) matter most — read those
+> last before an interview.
 
 ---
 
@@ -64,8 +67,8 @@
 > from that instead. Every answer then goes through a validation layer that checks it is
 > actually grounded in that context, before it is returned."
 
-Ek line me: *"RAG jo apni khud ki galti pakadta hai aur khud fix karta hai — bina hamesha
-web search pe depend kiye, sirf jab zaroorat ho tab."*
+In one line: *"RAG that catches its own mistake and corrects it — without paying for a web
+search on every query, only when one is actually needed."*
 
 Say the pitch **first**, before any tech talk. It frames everything as a solution to a real
 failure mode, not a feature list.
