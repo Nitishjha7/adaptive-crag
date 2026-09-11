@@ -9,6 +9,38 @@ a grading node decides whether the retrieved chunks actually answer the question
 falls back to the web when they don't — so you get grounded answers without paying the
 cost and latency of a web call on every query.
 
+## What it looks like
+
+Every answer carries its own execution trace, collapsed to one line and
+expandable. This is the local route — note that **Web search is shown as
+skipped**, which is the whole point: the fallback is conditional, not the
+default. The LLM call count is read from the trace, and the local path names the
+cost of the path it did not take.
+
+![Chat with the execution trace expanded](docs/images/trace.png)
+
+The evaluation page leads with **who labelled the test set**, because "measured
+on a labelled set" invites exactly one question. Below it, two experiments with
+their real tables — including the one where reranking changed 27 of 28 retrievals
+and moved zero routing decisions.
+
+![Evaluation page](docs/images/evaluation.png)
+
+<details>
+<summary>Documents and System Status</summary>
+
+The indexed corpus, with the deliberate gap stated above the list — the grader's
+verdict is only legible if you can see what it was grading.
+
+![Documents page](docs/images/documents.png)
+
+Live configuration read from the running backend, and an explicit list of what
+was **not** built.
+
+![System status page](docs/images/system.png)
+
+</details>
+
 > ## Status: full stack works; measured; not deployed
 >
 > The corrective loop, the API and the UI are implemented and **verified against the
@@ -28,8 +60,9 @@ cost and latency of a web call on every query.
 > | Citations — source filenames (local) / URLs (web) | ✅ |
 > | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ A/B'd on both corpora — flat on concepts, **+1 case on SciFact** |
 > | Second corpus — BEIR SciFact (`CORPUS=scifact`) | ✅ 500 docs → 1,717 chunks, labels from qrels |
-> | Test suite — 60 tests (`.\dev.ps1 test`) | ✅ |
+> | Test suite — 75 tests (`.\dev.ps1 test`) | ✅ |
 > | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
+> | Answer correctness — SciFact SUPPORT/CONTRADICT labels | 🟡 baseline **83.3%** (90.9% given gold retrieved); A/B half-run |
 > | Deployment (HuggingFace Space) | ❌ not done — Render free measured and ruled out |
 
 ## Measured: does the router actually route?
@@ -106,6 +139,43 @@ Two things to take from this, in order of importance:
   needs the full 5k corpus and 300-query test set; that needs more RAM than this laptop
   gives Docker.
 
+### Was the answer actually right?
+
+Everything above measures the *route*. Groundedness is the only answer-level
+check, and it asks something narrower than it sounds: whether the answer matches
+the context it was handed. **An answer built from the wrong documents passes it.**
+
+SciFact is a claim-verification dataset, so it records whether the gold abstract
+**supports** or **contradicts** each claim. Twelve of the twenty local cases carry
+that label — the dataset's, not mine.
+
+| | Baseline (vector only) |
+|---|---|
+| Answer correct, end to end | **83.3%** (10 / 12) |
+| Answer correct, **given the gold document was retrieved** | **90.9%** (10 / 11) |
+| Took no position at all | 1 |
+
+The two failures are different animals. In one the gold document was never
+retrieved and the system **declined to reach a verdict** rather than inventing
+one — scored wrong, but the right behaviour on missing evidence. In the other it
+had the right document and still drew the opposite conclusion: the single genuine
+generator error in the run.
+
+Which extends the finding above one stage further down the pipeline. The grader
+made zero independent errors; given the right document, the generator was right
+ten times out of eleven. Both remaining failures trace back to the same place.
+
+This is deliberately **not LLM-as-judge**. A judge is asked "is this good?",
+which is a model's opinion wearing a number's clothes. Here the model is asked
+only what position the text takes; right and wrong come from the dataset. The
+extraction is still the weakest link, and
+[RESULTS.md](backend/eval/RESULTS.md) says so.
+
+**The A/B on this metric has not run.** The treatment arm hit Groq's daily token
+cap partway through, so only the baseline exists and nothing anywhere compares
+the two. Whether reranking improves *answers* is still an open question — which
+is the honest state of it.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -142,15 +212,18 @@ schema, node contracts, and reference implementation. See
 [docs/INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.md) for the pitch, USP deep-dives,
 trade-offs, and anticipated Q&A. See [docs/RAG_FUNDAMENTALS.md](docs/RAG_FUNDAMENTALS.md)
 for general RAG concepts, a production-RAG question bank, and an honest map of which
-pipeline stages this project has and which it deliberately does not.
+pipeline stages this project has and which it deliberately does not. And
+[docs/CODE_QA.md](docs/CODE_QA.md) is 27 questions with answers about the code
+itself — why the grader is binary, why `no` is parsed before `yes`, why the
+fallback replaces documents instead of merging them.
 
 ## Project Structure
 
 ```
 backend/    FastAPI app, LangGraph state machine, nodes, tools, guardrails
 frontend/   React + Vite + Tailwind client (chat UI, source badges, trace viewer)
-docs/       Walkthrough (start here), technical spec, code notes, interview notes,
-            RAG fundamentals, setup, build plan, roadmap
+docs/       Walkthrough (start here), code Q&A, technical spec, code notes,
+            interview notes, RAG fundamentals, setup, build plan, roadmap
 ```
 
 ## Setup
