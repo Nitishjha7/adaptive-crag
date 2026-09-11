@@ -96,7 +96,7 @@ def check_groundedness(answer: str, context: List[str]) -> bool:
 
 
 def validate_answer(answer: str, context: List[str], question: str = "") -> ValidationResult:
-    """Final answer scan. Fail hone pe answer **block nahi hota, flag hota hai**.
+    """Final scan of the answer. A failure **flags, it does not block**.
 
     Deliberately non-destructive: an ungrounded answer gets a clear warning
     attached, not suppressed. Showing a hallucination *being caught* is more

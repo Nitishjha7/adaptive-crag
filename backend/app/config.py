@@ -1,8 +1,8 @@
 """Central configuration + factory functions.
 
-Koi business logic yahan nahi hai — sirf settings load karna aur configured
-client objects banana. Har node yahin se LLM / embeddings / vectorstore uthata
-hai, taaki model swap ek jagah se ho jaye aur test me mock karna easy rahe.
+No business logic here — just loading settings and building configured client
+objects. Every node takes its LLM, embeddings and vector store from here, so
+swapping a model is a one-place change and mocking in tests is easy.
 """
 
 from functools import lru_cache
@@ -12,12 +12,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/config.py -> backend/
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-# repo root (yahan .env rehti hai, docker-compose ke saath share hoti hai)
+# repo root — where .env lives, shared with docker-compose
 REPO_ROOT = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
-    """Typed .env loader. Missing key pe crash hota hai jab pehli baar use ho."""
+    """Typed .env loader. A missing key fails at first use, not silently."""
 
     model_config = SettingsConfigDict(
         env_file=(REPO_ROOT / ".env", BACKEND_DIR / ".env"),
@@ -30,40 +30,39 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""
 
     # --- models ------------------------------------------------------------
-    # Grading aur generation dono isi model se. Chhota grading call latency-
-    # sensitive hai, isliye Groq (bahut fast inference).
+    # Grading and generation share one model. The small grading call is
+    # latency-sensitive, hence Groq (very fast inference).
     LLM_MODEL: str = "openai/gpt-oss-120b"
-    # FastEmbed ka default — chhota, ONNX, offline chalta hai, API key nahi chahiye.
+    # FastEmbed's default — small, ONNX, runs offline, no API key.
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
 
     # --- retrieval ---------------------------------------------------------
     VECTOR_DB: str = "chroma"
-    # "duckduckgo" (koi key nahi chahiye) ya "tavily" (behtar snippets, signup chahiye)
+    # "duckduckgo" (no key needed) or "tavily" (better snippets, needs a signup)
     SEARCH_PROVIDER: str = "duckduckgo"
     # --- which corpus is loaded -------------------------------------------
-    # "concepts" — 7 hand-written RAG/agent docs (22 chunks). Chhota, aur uska
-    #              gap **categorical** hai, isliye demo predictable rehta hai.
-    #              Fixed demo queries aur 20/20 wala eval isi pe hai.
-    # "scifact"  — BEIR SciFact, ~5k scientific abstracts. Itna bada ki ranking
-    #              sach me matter kare, aur uske **qrels dataset ke saath aate
-    #              hain** — labels khud likhne ki zaroorat nahi, jo eval ka wo
-    #              structural bias hata deta hai jo RESULTS.md me likha hai.
+    # "concepts" — 7 hand-written RAG/agent docs (22 chunks). Small, and its gap
+    #               is **categorical**, which keeps the demo predictable. The
+    #               fixed demo queries and the 20/20 eval run on this.
+    # "scifact"   — BEIR SciFact, ~5k scientific abstracts. Large enough for
+    #               ranking to matter, and its **qrels ship with the dataset**, so
+    #               the labels are not mine. That removes the structural bias the
+    #               concepts eval admits to in RESULTS.md.
     #
-    # Dono alag Chroma collections me rehte hain, isliye ek doosre me mix nahi
-    # hote aur switch karne pe re-ingest nahi karna padta.
+    # They live in separate Chroma collections, so they cannot contaminate each
+    # other and switching does not require a re-ingest.
     CORPUS: str = "concepts"
     TOP_K: int = 4
 
     # --- hybrid retrieval + reranking (Phase 9) ----------------------------
-    # Dono flags ke peeche hain, default ON, taaki eval inhe off karke **delta
-    # measure** kar sake. Ek feature jiska fayda dikhaya na ja sake wo is project
-    # me feature nahi hai — routing accuracy 100% pe pinned hai, isliye inhe
-    # ambiguous cases ki stability pe judge kiya jaata hai.
+    # Both behind flags, defaulting on, so the eval can turn them off and
+    # **measure the delta**. In this project a feature whose benefit cannot be
+    # shown is not a feature.
     USE_HYBRID: bool = True
     USE_RERANKER: bool = True
 
-    # Rerank se pehle kitne candidates uthane hain. TOP_K se bada hona chahiye —
-    # warna reranker ke paas chunne ko kuch hai hi nahi aur wo no-op ban jaata hai.
+    # How many candidates to fetch before reranking. Must exceed TOP_K, or the
+    # reranker has nothing to choose from and becomes a no-op.
     RETRIEVAL_CANDIDATES: int = 8
 
     RERANKER_MODEL: str = "Xenova/ms-marco-MiniLM-L-6-v2"
@@ -71,30 +70,30 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 100
 
     # --- paths -------------------------------------------------------------
-    # Docker me ye volume pe mount hota hai, taaki index rebuild na karna pade.
+    # Mounted as a volume in Docker so the index survives container restarts.
     VECTORSTORE_DIR: str = str(BACKEND_DIR / "vectorstore")
     DATA_DIR: str = str(BACKEND_DIR / "data")
-    # BEIR download yahan extract hota hai. Gitignored — ~5k abstracts repo me
-    # commit karne ka koi matlab nahi, wo ek reproducible download hai.
+    # Where the BEIR download is extracted. Gitignored — committing ~5k abstracts
+    # makes no sense when it is a reproducible download.
     BEIR_DIR: str = str(BACKEND_DIR / "beir")
 
     @property
     def collection_name(self) -> str:
-        """Per-corpus Chroma collection.
+        """One Chroma collection per corpus.
 
-        Alag collections isliye ki dono corpora ek doosre me **mix na ho** —
-        warna SciFact ke 10k chunks ke saath concepts wale 22 chunks retrieval
-        me ghus jaate aur dono ke eval numbers bekaar ho jaate.
+        Separate collections so the two corpora cannot **mix** — otherwise the 22
+        concepts chunks would surface inside SciFact retrieval and both sets of
+        eval numbers would be worthless.
 
-        Side benefit: switch karne pe re-ingest nahi karna padta, dono index
-        ek hi `vectorstore/` directory me saath rehte hain.
+        Side benefit: switching needs no re-ingest, because both indexes sit in
+        the same `vectorstore/` directory.
         """
         return "crag_docs" if self.CORPUS == "concepts" else f"crag_{self.CORPUS}"
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Ek hi Settings instance poore process me (env baar baar parse na ho)."""
+    """One Settings instance per process, so the env is parsed once."""
     return Settings()
 
 
@@ -102,16 +101,16 @@ def get_settings() -> Settings:
 def get_llm(temperature: float = 0.0):
     """Configured ChatGroq.
 
-    temperature=0 default — grading aur routing me determinism chahiye,
-    creativity nahi. `generate` node isko override kar sakta hai.
+    Defaults to temperature 0: grading and routing need determinism, not
+    creativity. The `generate` node can override it.
     """
     from langchain_groq import ChatGroq
 
     s = get_settings()
     if not s.GROQ_API_KEY:
         raise RuntimeError(
-            "GROQ_API_KEY set nahi hai. Repo root me `.env` bana (.env.example copy kar) "
-            "aur https://console.groq.com se key daal."
+            "GROQ_API_KEY is not set. Create `.env` in the repo root (copy "
+            ".env.example) and add a key from https://console.groq.com."
         )
     return ChatGroq(
         model=s.LLM_MODEL,
@@ -122,9 +121,9 @@ def get_llm(temperature: float = 0.0):
 
 @lru_cache
 def get_embeddings():
-    """FastEmbed embeddings — local ONNX model, koi API call nahi.
+    """FastEmbed embeddings — a local ONNX model, no API calls.
 
-    Pehli baar model download hota hai (~100MB), uske baad cached.
+    Downloads once (~100 MB), cached afterwards.
     """
     from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
@@ -133,10 +132,10 @@ def get_embeddings():
 
 @lru_cache
 def get_vectorstore():
-    """Persisted Chroma collection ka handle.
+    """Handle to the persisted Chroma collection.
 
-    Embedded mode — alag DB service nahi, bas ek directory. Wahi directory
-    ingestion script likhti hai aur `retrieve` node padhta hai.
+    Embedded mode — no separate database service, just a directory. The same
+    directory the ingestion script writes and the `retrieve` node reads.
     """
     from langchain_chroma import Chroma
 

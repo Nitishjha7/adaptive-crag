@@ -1,24 +1,24 @@
-"""BEIR dataset loader — abhi SciFact.
+"""BEIR dataset loader — SciFact for now.
 
-**BEIR kyun, koi random HuggingFace dump kyun nahi:** BEIR retrieval benchmarks
-ka standard suite hai, aur har dataset teen cheezein deta hai —
+**Why BEIR rather than some HuggingFace dump:** BEIR is the standard suite for
+retrieval benchmarks, and every dataset in it ships three things —
 
     corpus.jsonl    documents
     queries.jsonl   queries
-    qrels/test.tsv  **relevance judgments** (kaunsa doc kis query ka jawab deta hai)
+    qrels/test.tsv  **relevance judgments** (which document answers which query)
 
-Teesri cheez asli value hai. `backend/data/` wale corpus me maine documents bhi
-likhe aur eval labels bhi — RESULTS.md khud isko structural bias bolta hai. Yahan
-labels dataset ke saath aate hain, kisi aur ne banaye hain.
+The third is the real value. In `backend/data/` I wrote both the documents and
+the eval labels, which RESULTS.md calls out as structural bias. Here the labels
+come with the dataset; somebody else made them.
 
-**SciFact hi kyun:** ~5k abstracts — itne ki ranking sach me matter kare (22
-chunks pe reranker ka A/B flat aaya tha, wahi limit thi), aur itne kam ki laptop
-pe CPU embeddings me minute-do minute me ho jaye. TREC-COVID (171k) is machine pe
-practical nahi.
+**Why SciFact specifically:** ~5k abstracts — enough that ranking actually
+matters (the reranker A/B came out flat on 22 chunks, which was the limit), and
+few enough to embed on a laptop CPU in a couple of minutes. TREC-COVID (171k) is
+not practical on this machine.
 
-**`datasets` library kyun nahi:** BEIR ki official zip seedha download ho jaati
-hai aur format teen plain files hai. `datasets` pyarrow samet ek bada dependency
-tree laata hai, sirf teen JSONL padhne ke liye.
+**Why not the `datasets` library:** BEIR's official zip downloads directly and
+the format is three plain files. `datasets` drags in a large dependency tree,
+pyarrow included, to read three JSONL files.
 """
 
 import json
@@ -51,13 +51,13 @@ def ensure_downloaded(name: str = "scifact") -> Path:
     with urllib.request.urlopen(url, timeout=300) as resp:
         blob = resp.read()
 
-    # Zip ke andar already `<name>/` folder hota hai, isliye parent me extract
-    # karte hain — warna `beir/scifact/scifact/` ban jaata.
+    # The zip already contains a `<name>/` folder, so extract into the parent —
+    # otherwise it becomes `beir/scifact/scifact/`.
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
         zf.extractall(target.parent)
 
     if not (target / "corpus.jsonl").exists():
-        raise RuntimeError(f"[beir] extract ke baad corpus.jsonl nahi mila: {target}")
+        raise RuntimeError(f"[beir] corpus.jsonl missing after extract: {target}")
 
     print(f"[beir] ready at {target}", flush=True)
     return target
@@ -66,15 +66,16 @@ def ensure_downloaded(name: str = "scifact") -> Path:
 def load_corpus(name: str = "scifact", limit: int = 0) -> List[Tuple[str, str, str]]:
     """`(doc_id, title, text)` triples.
 
-    **`limit` naive truncation nahi hai.** Pehle N documents lena eval ko tod
-    deta: gold docs corpus me kahin bhi ho sakte hain, aur agar wo cut ho gaye
-    to "local jaana chahiye" wale labels jhoothe ho jaate — system ke paas wo
-    jawab hai hi nahi.
+    **`limit` is not naive truncation.** Taking the first N documents would
+    break the eval: gold documents sit anywhere in the file, and any that got cut
+    would leave a "should stay local" label that is simply false — the system
+    does not have that answer.
 
-    Isliye limit lagne pe **pehle saare gold docs** (qrels se) rakhe jaate hain,
-    phir baaki slots filler documents se bharte hain. Filler zaroori hai —
-    unke bina retrieval trivial ho jaata, har doc kisi na kisi query ka jawab
-    hota. Yahi tareeka chhote retrieval benchmarks banane ka standard hai.
+    So when a limit applies, **every gold document** (from qrels) is kept first
+    and the remaining slots are filled with non-gold documents. The filler
+    matters: without it every indexed document would answer some query and
+    retrieval would be trivially easy. This is the standard way to build a small
+    retrieval benchmark.
     """
     path = ensure_downloaded(name) / "corpus.jsonl"
 
@@ -107,11 +108,11 @@ def load_queries(name: str = "scifact") -> Dict[str, str]:
 
 
 def load_qrels(name: str = "scifact", split: str = "test") -> Dict[str, List[str]]:
-    """`{query_id: [relevant doc_id, ...]}` — dataset ke apne relevance judgments.
+    """`{query_id: [relevant doc_id, ...]}` — the dataset's own relevance judgments.
 
-    TSV format: `query-id  corpus-id  score`. Score 0 ka matlab "judged, par
-    relevant nahi" hota hai, isliye wo drop kar dete hain — hume sirf wo queries
-    chahiye jinka corpus me **sach me** jawab hai.
+    TSV format: `query-id  corpus-id  score`. A score of 0 means "judged, but not
+    relevant", so those are dropped — only queries whose answer is **actually** in
+    the corpus are useful here.
     """
     path = ensure_downloaded(name) / "qrels" / f"{split}.tsv"
     out: Dict[str, List[str]] = {}
@@ -130,21 +131,20 @@ def load_qrels(name: str = "scifact", split: str = "test") -> Dict[str, List[str
 def load_query_verdicts(name: str = "scifact") -> Dict[str, str]:
     """`{query_id: "SUPPORT" | "CONTRADICT"}` — dataset ka apna answer label.
 
-    SciFact claim-verification dataset hai: har claim ke saath likha hai ki gold
-    abstract usko **support karta hai ya contradict**. Ye `queries.jsonl` ke
-    `metadata` me baitha hai, aur `load_queries` use drop kar deta hai kyunki
-    routing ko uski zaroorat nahi.
+    SciFact is a claim-verification dataset: each claim records whether the gold
+    abstract **supports or contradicts** it. That sits in `queries.jsonl` under
+    `metadata`, and `load_queries` drops it because routing has no use for it.
 
-    Answer quality naapne ke liye ye zaroori hai. Ab tak eval sirf ye naapta tha
-    ki **route** sahi tha aur answer apne context se **grounded** tha. Ye dono
-    is sawaal ka jawab nahi dete ki answer **sach me sahi hai ya nahi** — aur
-    RESULTS.md khud likhta hai ki reranking ko *answer* pe asar dikhana chahiye,
-    routing pe nahi. Wahi gap ye label bharta hai, aur wo bhi LLM-judge se nahi,
-    dataset ki apni ground truth se.
+    Measuring answer quality does need it. Until this existed the eval only asked
+    whether the **route** was right and whether the answer was **grounded** in its
+    context. Neither answers whether the answer was **actually correct** — and
+    RESULTS.md says plainly that reranking should show up in the *answer*, not in
+    routing. This label fills that gap, and does it with the dataset's own ground
+    truth rather than an LLM judge.
 
-    Ek query pe kai gold docs ho sakte hain. Agar unke labels **aapas me alag**
-    hain to wo case skip ho jaata hai — mixed evidence pe "answer sahi tha ya
-    nahi" ka koi imaandar jawab nahi hai.
+    A query can have several gold documents. If their labels **disagree**, the
+    case is skipped — on mixed evidence there is no honest answer to score
+    against.
     """
     path = ensure_downloaded(name) / "queries.jsonl"
     out: Dict[str, str] = {}
