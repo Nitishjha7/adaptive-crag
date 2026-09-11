@@ -50,8 +50,13 @@ dataset, so they are not mine.
 | Routing accuracy | 20/20 | 22/28 (78.6%) |
 | **Missed fallbacks** (the expensive error) | **0** | **0** |
 | Retrieval recall@k | no ground truth | 70% |
-| Answer correctness | no ground truth | 83.3% (90.9% given gold retrieved) |
+| Answer correctness † | no ground truth | 83.3% (90.9% given gold retrieved) |
 | LLM calls per query | local 3 · web 4 | same |
+
+† Measured on the **baseline** arm (vector-only retrieval); every other SciFact
+number is the shipped hybrid + rerank config. The treatment arm of that A/B hit
+Groq's daily token cap, so the two are not yet comparable on answer quality —
+see [what is not built](#what-is-not-built).
 
 Three findings that matter more than the scores:
 
