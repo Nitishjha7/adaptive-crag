@@ -1,26 +1,26 @@
 """Output validation — groundedness + PII.
 
-**Guardrails AI library kyun nahi:** us library ka hub-based validator download
-aur version pinning is project ka sabse bada time-sink hai, aur jo cheez interview
-me matter karti hai wo library ka naam nahi — ye samajh hai ki *final answer ko
-verify kyun karna chahiye aur kaise*. Do chhote checks wahi kaam karte hain, zero
+**Why not the Guardrails AI library:** its hub-based validator downloads and
+version pinning were the single largest time sink in this project, and what
+matters is not the name of a library but understanding *why a final answer should
+be verified, and how*. Two small checks do that job, with zero
 extra dependency ke saath.
 
 Do checks:
 
 1. **Groundedness (LLM)** — kya answer ka har claim diye gaye context se supported
-   hai? Ye asli hallucination net hai. `generate` ka prompt already "sirf context
-   se" bolta hai, lekin prompt ek guzarish hai, guarantee nahi — model apni
-   training knowledge se chupke se add kar sakta hai. Ye check us par ek doosri,
-   *independent* nazar hai.
+   the context? This is the real hallucination net. The `generate` prompt
+   already says "only from the context", but a prompt is a request, not a
+   guarantee — a model can still add from its training knowledge. This is a
+   second, *independent* look at what came out.
 
-2. **PII (regex)** — email / phone / card / SSN patterns. Deliberately regex hai,
-   LLM nahi: PII detection me deterministic hona chahiye, aur ek aur LLM call
-   latency badhata hai bina kisi bharose ke faayde ke.
+2. **PII (regex)** — email / phone / card / SSN patterns. Regex on purpose, not
+   an LLM: PII detection should be deterministic, and another LLM call adds
+   latency without adding trust.
 
-Toxicity check jaan-boojh ke chhoda hai: input controlled corpus + search snippets
-hai, aur bina ek proper classifier ke "toxic" ka LLM-based check dikhawa hota —
-uska naam lena aur usse verify na karna, dono me se doosra behtar hai.
+No toxicity check, deliberately. The inputs are a controlled corpus plus search
+snippets, and without a proper classifier an LLM-based "is this toxic" check
+would be decoration — better to leave it out than to claim it and not verify it.
 """
 
 import re
@@ -46,8 +46,8 @@ GROUNDEDNESS_PROMPT = ChatPromptTemplate.from_messages(
     ]
 )
 
-# Sirf high-confidence patterns. Loose regex (jaise koi bhi 10-digit number)
-# har technical answer me false positive deta hai.
+# High-confidence patterns only. A loose regex (any 10-digit number, say) fires
+# false positives on almost every technical answer.
 PII_PATTERNS = {
     "email": re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b"),
     "credit_card": re.compile(r"\b(?:\d[ -]*?){13,16}\b"),
@@ -58,7 +58,7 @@ PII_PATTERNS = {
 
 @dataclass
 class ValidationResult:
-    """Node ke liye ek simple result object."""
+    """A simple result object for the node."""
 
     validated_output: str
     passed: bool
@@ -68,28 +68,28 @@ class ValidationResult:
 
 
 def check_pii(text: str) -> List[str]:
-    """Mile hue PII types ke naam. Values kabhi return nahi karte — unhe log me
-    likhna wahi leak hai jise rokne ki koshish kar rahe hain."""
+    """Names of the PII types found. Never the values — writing those into a log
+    is the very leak this is trying to prevent."""
     return [name for name, pattern in PII_PATTERNS.items() if pattern.search(text)]
 
 
 def check_groundedness(answer: str, context: List[str]) -> bool:
-    """Ek chhota temperature-0 LLM call. Fail-open, fail-closed nahi.
+    """A small temperature-0 LLM call. Fails open, not closed.
 
-    Agar ye check hi crash ho jaye to answer block karna galat hai — wo already
-    verified context se bana hai. Isliye exception pe `True` (grounded maan lo)
-    aur node log me note. Fail-closed hone se ek flaky network call poore system
-    ko "kuch nahi bata sakta" bana deta.
+    If the check itself crashes, blocking the answer would be wrong — the answer
+    was already built from verified context. So an exception means `True` (assume
+    grounded) and a note in the log. Failing closed would let one flaky network
+    call turn the whole system into "I cannot tell you anything".
     """
     if not context:
-        return True  # kuch context hi nahi tha — `generate` ne already bol diya hoga
+        return True  # there was no context at all — `generate` will have said so
 
     chain = GROUNDEDNESS_PROMPT | get_llm(temperature=0.0)
     verdict = chain.invoke(
         {"context": "\n\n---\n\n".join(context), "answer": answer}
     ).content
 
-    # Wahi defensive parsing jo grader me hai.
+    # The same defensive parsing the grader uses.
     from app.nodes.grade_documents import parse_verdict
 
     return parse_verdict(verdict) == "yes"
@@ -98,12 +98,13 @@ def check_groundedness(answer: str, context: List[str]) -> bool:
 def validate_answer(answer: str, context: List[str], question: str = "") -> ValidationResult:
     """Final answer scan. Fail hone pe answer **block nahi hota, flag hota hai**.
 
-    v1 me deliberately non-destructive: ungrounded answer ke saath ek saaf warning
-    jodi jaati hai, use chhupaya nahi jaata. Demo me hallucination *pakda gaya*
-    dikhana usse gayab kar dene se zyada convincing hai — aur user ke liye bhi
-    "ye shayad galat hai" khaali screen se behtar hai.
+    Deliberately non-destructive: an ungrounded answer gets a clear warning
+    attached, not suppressed. Showing a hallucination *being caught* is more
+    convincing in a demo than making it disappear — and "this may be wrong" serves
+    the user better than a blank screen.
 
-    PII alag baat hai — wo redact hota hai, kyunki flag karke dikhana leak hi hai.
+    PII is different: it gets redacted, because flagging it while still displaying
+    it is the leak.
     """
     pii_found = check_pii(answer)
     output = answer
@@ -115,9 +116,9 @@ def validate_answer(answer: str, context: List[str], question: str = "") -> Vali
     try:
         grounded = check_groundedness(output, context)
         ground_note = ""
-    except Exception as exc:  # noqa: BLE001 — fail-open, upar wali docstring dekh
+    except Exception as exc:  # noqa: BLE001 — fails open, see the docstring above
         grounded = True
-        ground_note = f" (groundedness check nahi chal paaya: {type(exc).__name__})"
+        ground_note = f" (groundedness check did not run: {type(exc).__name__})"
 
     if not grounded:
         output = (

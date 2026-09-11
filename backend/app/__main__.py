@@ -3,8 +3,8 @@
     python -m app "why does chunk overlap matter?"
     python -m app                  # default demo query
 
-Phase 5 tak API nahi hai, aur uske baad bhi debugging ke liye ye sabse chhota
-loop hai: ek process, ek invoke, poora trace print.
+The smallest possible debugging loop: one process, one invoke, the full trace
+printed.
 """
 
 import sys
@@ -26,7 +26,8 @@ def main() -> int:
     for line in final.get("logs", []):
         print(f"  {line}")
     print("--- answer " + "-" * 49)
-    # Phase 4 tak final_output nahi bharta, isliye generation pe fall back.
+    # `final_output` is only filled once guardrails run, so fall back to the
+    # raw generation.
     print(final.get("final_output") or final.get("generation") or "(none)")
     print("--- meta " + "-" * 51)
     print(f"  source_type     : {final.get('source_type')}")

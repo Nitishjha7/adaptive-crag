@@ -66,7 +66,7 @@ class TestGroundedness:
 
         assert result.passed, "infra error pe answer block nahi hona chahiye"
         assert result.validated_output == "A normal answer."
-        assert "nahi chal paaya" in result.reason
+        assert "did not run" in result.reason
 
     def test_no_context_is_trivially_grounded(self, fake_llm):
         """Context hi nahi tha -- `generate` already bol chuka hoga ki wo nahi jaanta."""

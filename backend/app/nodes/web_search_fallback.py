@@ -1,11 +1,11 @@
-"""`web_search_fallback` node — project ka core #2.
+"""`web_search_fallback` node — the correction path.
 
-Sirf tab chalta hai jab grader ne local context ko "no" bola ho. Web search
-**default nahi, fallback hai** — yahi "Adaptive" ka matlab hai.
+Runs only when the grader judged the local context insufficient. Web search is
+the **fallback, not the default** — that is what "adaptive" means here.
 
-Har query pe web search karte to har request ek network round-trip aur zyada
-tokens pay karti, aur local index ka poora fayda (fast + sasta hit) khatam ho
-jaata. Grading call wahi keemat hai jo common path ko fast rakhne ke liye di jaati hai.
+Searching on every query would make every request pay a network round trip and
+extra tokens, throwing away the whole advantage of a local index: a hit is fast
+and cheap. The grading call is the price paid to keep the common path fast.
 """
 
 import re
@@ -15,53 +15,57 @@ from app.config import get_settings
 from app.schemas.crag_state import CRAGState
 from app.tools.web_search import web_search
 
-# Search tools snippet ke end me "[source: URL]" daalte hain.
+# Search tools append "[source: URL]" to the end of each snippet.
 SOURCE_MARKER = re.compile(r"\[source:\s*([^\]]+)\]")
 
 
 def extract_urls(snippets: List[str]) -> List[str]:
-    """Snippet text me se `[source: URL]` marker nikaal ke URLs alag karta hai.
+    """Pull the URLs out of the `[source: URL]` markers in snippet text.
 
-    Search tools URL ko snippet ke text ke andar hi daalte hain, taaki LLM answer
-    me inline cite kar sake. Structured citation list ke liye wahi URL alag se
-    chahiye — isliye parse karke nikalte hain.
+    Search tools put the URL inside the snippet text so the LLM can cite it
+    inline. A structured citation list needs the same URL separately, hence this
+    parse.
 
-    URL text me bhi rehta hai (duplicate lagta hai, par hai nahi): text wala LLM
-    ke liye hai, ye list UI ke liye. Text se hatane pe inline citation mar jaati.
+    The URL stays in the text too. That looks like duplication but isn't: the one
+    in the text is for the model, this list is for the UI. Strip it from the text
+    and inline citation dies.
     """
     urls = []
     for snippet in snippets:
         match = SOURCE_MARKER.search(snippet)
         if match:
             urls.append(match.group(1).strip())
-    # Ek hi domain se do snippets aa sakte hain — order rakh ke dedupe.
+    # Two snippets can come from one domain — dedupe while keeping order.
     return list(dict.fromkeys(urls))
 
 
 def run(state: CRAGState) -> dict:
-    # transform_query se rewritten query; na mile to original question.
+    # The rewritten query from transform_query; fall back to the original.
     query = state.get("transformed_query") or state["question"]
     max_results = get_settings().TOP_K
 
     try:
         snippets = web_search(query, max_results=max_results)
-    except Exception as exc:  # noqa: BLE001 — deliberately broad, neeche dekh
-        # Search fail hona (rate limit, network, missing key) recoverable hai:
-        # `generate` khaali documents pe saaf "context nahi mila" bolta hai.
-        # Yahan crash karne se poora request 500 ho jaata aur demo ruk jaata.
+    except Exception as exc:  # noqa: BLE001 — deliberately broad, see below
+        # A failed search (rate limit, network, missing key) is recoverable, and
+        # all three want the same behaviour. `generate` will say plainly that it
+        # found no context. Raising here would 500 the whole request and stop a
+        # demo dead. The failure is not silent: it lands in the trace as FAILED
+        # and the UI renders that step as failed.
         return {
             "documents": [],
-            # Local filenames bhi hata dete hain — wo docs reject ho chuke hain,
-            # unko cite karna galat hoga.
+            # Drop the local filenames too — those documents were rejected, so
+            # citing them would be wrong.
             "sources": [],
             "source_type": "web_search",
             "logs": [f"web_search_fallback -> FAILED ({type(exc).__name__}: {exc})"],
         }
 
     return {
-        # Replace, merge nahi. Local docs abhi "no" grade ho chuke hain — unko
-        # rakhna acche web context ko dilute karta aur wahi hallucination risk
-        # wapas laata jise grading step hatane ke liye hai.
+        # Replace, not merge. The local documents were just graded "no"; keeping
+        # them would dilute the good context and bring back the hallucination
+        # risk that the grading step exists to remove. There is a test asserting
+        # they do not survive (tests/test_routing.py).
         "documents": snippets,
         "sources": extract_urls(snippets),
         "source_type": "web_search",

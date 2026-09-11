@@ -1,12 +1,12 @@
 """Tavily client wrapper.
 
-Node ko clean interface deta hai: query in, `List[str]` snippets out — wahi shape
-jo local chunks ki hai. Isliye `generate` ko farak nahi padta ki context Chroma se
-aaya ya web se.
+Gives the node a clean interface: query in, `List[str]` snippets out — the same
+shape as local chunks, so `generate` never has to know whether the context came
+from Chroma or the web.
 
-**Tavily kyun, raw scraping kyun nahi:** Tavily LLM-optimized snippet text deta hai,
-raw HTML nahi. Grounding ke liye clean text chahiye — nav bars aur cookie banners
-context window kha jaate hain aur generation ko dilute karte hain.
+**Why Tavily rather than raw scraping:** it returns LLM-optimised snippet text,
+not raw HTML. Grounding needs clean text — nav bars and cookie banners eat the
+context window and dilute generation.
 """
 
 from typing import List
@@ -15,18 +15,18 @@ from app.config import get_settings
 
 
 def tavily_search(query: str, max_results: int = 4) -> List[str]:
-    """Web snippets return karta hai. Failure pe khaali list, exception nahi.
+    """Returns web snippets; an empty list on failure rather than raising.
 
-    Network / rate-limit / key error pe crash karna galat hai: fallback path
-    already "local context kaafi nahi tha" wala degraded case hai. `generate`
-    khaali documents handle karta hai aur saaf bolta hai ki context nahi mila —
-    ye 500 se behtar user experience hai aur demo bhi nahi todta.
+    Crashing on a network, rate-limit or key error would be wrong: the fallback
+    path is already the degraded case of "local context was not enough".
+    `generate` handles empty documents and says plainly that it found no context,
+    which beats a 500 and does not stop a demo.
     """
     s = get_settings()
     if not s.TAVILY_API_KEY:
         raise RuntimeError(
-            "TAVILY_API_KEY set nahi hai. Repo root ki `.env` me daal "
-            "(https://tavily.com se free key milti hai)."
+            "TAVILY_API_KEY is not set. Add it to `.env` in the repo root "
+            "(a free key is available at https://tavily.com)."
         )
 
     from tavily import TavilyClient
@@ -35,7 +35,7 @@ def tavily_search(query: str, max_results: int = 4) -> List[str]:
     response = client.search(
         query=query,
         max_results=max_results,
-        search_depth="basic",  # "advanced" zyada accurate hai par slow + mehnga
+        search_depth="basic",  # "advanced" is more accurate but slower and pricier
     )
 
     snippets = []
@@ -43,8 +43,8 @@ def tavily_search(query: str, max_results: int = 4) -> List[str]:
         content = (item.get("content") or "").strip()
         if not content:
             continue
-        # URL saath rakhte hain — guardrails/citation ke kaam aata hai aur demo me
-        # dikhta hai ki answer sach me web se aaya.
+        # Keep the URL alongside: citations need it, and in a demo it shows the
+        # answer really did come from the web.
         url = item.get("url", "")
         snippets.append(f"{content}\n[source: {url}]" if url else content)
 

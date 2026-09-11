@@ -1,11 +1,11 @@
-"""`grade_documents` node — project ka core #1.
+"""`grade_documents` node — the core of the project.
 
-LLM binary relevance grader. Answer generate karne se **pehle** ye decide karta
-hai ki retrieved context sach me sawaal ka jawab de sakta hai ya nahi.
+An LLM binary relevance grader. **Before** anything is generated, this decides
+whether the retrieved context can actually answer the question.
 
-Yahi naive RAG se asli difference hai. Similarity search hamesha k results deta
-hai — chahe corpus me kuch relevant ho ya na ho — aur low similarity score kabhi
-LLM tak pahunchta hi nahi. Ye node wo faisla explicit banata hai.
+This is the real difference from naive RAG. Similarity search always returns k
+results whether or not anything relevant exists, and a low similarity score
+never reaches the LLM. This node makes that judgement explicit.
 """
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -29,16 +29,15 @@ GRADER_PROMPT = ChatPromptTemplate.from_messages(
 
 
 def parse_verdict(raw: str) -> str:
-    """LLM output ko "yes"/"no" me squeeze karo — defensively.
+    """Squeeze the model's output into "yes"/"no", defensively.
 
-    Prompt kitna bhi tight ho, model kabhi kabhi "Yes." ya "yes, because..." de
-    deta hai. Agar exact match pe depend karein to wo case silently `no` ban
-    jaata aur bewajah web call trigger hota.
+    However tight the prompt, a model occasionally returns "Yes." or
+    "yes, because...". Matching exactly would silently turn those into `no` and
+    trigger a pointless web call.
 
-    Order matter karta hai: pehle `no` check karo. "no" ka substring check `yes`
-    se pehle isliye ki "yes" string "no" me nahi milti, lekin ek explanation me
-    dono aa sakte hain — aur us confused case me safe default `no` hai (ek extra
-    web call, hallucination nahi).
+    Order matters: check `no` first. "yes" never appears inside "no", but an
+    explanation can contain both — and in that confused case the safe default is
+    `no` (one extra web call, not a hallucination).
     """
     v = (raw or "").strip().lower()
     if v.startswith("no") or v == "n":
@@ -52,18 +51,23 @@ def run(state: CRAGState) -> dict:
     documents = state.get("documents") or []
 
     if not documents:
-        # Kuch retrieve hi nahi hua — grade karne ko kuch nahi. Seedha fallback.
+        # Nothing was retrieved, so there is nothing to grade. Straight to fallback.
         return {
             "relevance_score": "no",
-            "logs": ["grade_documents -> no (koi document retrieve nahi hua)"],
+            "logs": ["grade_documents -> no (nothing was retrieved)"],
         }
 
-    # temperature 0 — routing deterministic hona chahiye. Ek hi query pe kabhi
-    # local, kabhi web jaana debug karna aur demo karna dono impossible bana deta.
+    # temperature 0: routing has to be deterministic. A query that sometimes goes
+    # local and sometimes web is impossible to debug and impossible to demo.
     chain = GRADER_PROMPT | get_llm(temperature=0.0)
     raw = chain.invoke(
         {
             "question": state["question"],
+            # All chunks in one call. Per-chunk grading would be more granular but
+            # costs k times the LLM calls, and the whole cost argument rests on
+            # call counts. One consequence worth knowing: joining them means
+            # ordering is invisible to the grader, which is why reranking could
+            # not move the routing numbers (see eval/RESULTS.md).
             "documents": "\n\n---\n\n".join(documents),
         }
     ).content

@@ -1,20 +1,20 @@
-"""DuckDuckGo search wrapper — **koi API key nahi chahiye**.
+"""DuckDuckGo search wrapper — **no API key required**.
 
-Default search provider. Tavily ke muqable snippets patle hote hain aur DDG bina
-warning ke throttle karta hai, lekin zero signup ka matlab hai project pehle din
-se chal jaata hai. Key mil jaye to `SEARCH_PROVIDER=tavily` se swap.
+The default provider. Its snippets are thinner than Tavily's and it throttles
+without warning, but zero signup means the project runs on day one. Swap with
+`SEARCH_PROVIDER=tavily` once a key exists.
 
-Interface `tavily_search` ke bilkul same hai — `(query, max_results) -> List[str]` —
-taaki provider badalne pe node me kuch na badle.
+The interface is identical to `tavily_search` — `(query, max_results) ->
+List[str]` — so changing provider changes nothing in the node.
 """
 
 from typing import List
 
 
 def duckduckgo_search(query: str, max_results: int = 4) -> List[str]:
-    """Web snippets return karta hai. Same shape jo local chunks ki hai."""
-    # `ddgs` naya package name hai (pehle `duckduckgo-search` tha). Dono support
-    # karte hain taaki version drift pe import na toote.
+    """Returns web snippets in the same shape as local chunks."""
+    # `ddgs` is the current package name (it was `duckduckgo-search`). Support
+    # both so a version drift does not break the import.
     try:
         from ddgs import DDGS
     except ImportError:  # pragma: no cover

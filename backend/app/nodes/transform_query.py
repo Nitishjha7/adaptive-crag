@@ -1,10 +1,10 @@
 """`transform_query` node — natural language question -> keyword search query.
 
-Sirf fallback path pe chalta hai. User conversational likhta hai ("can you help
-me understand how X works"); search engine ko keywords chahiye. Filler hatane se
-wahi terms bachte hain jo documents ke beech farak karte hain.
+Runs only on the fallback path. People write conversationally ("can you help me
+understand how X works"); search engines want keywords. Dropping the filler
+leaves the terms that actually discriminate between documents.
 
-Ye ek chhota LLM call hai — poore answer generate karne ke muqable sasta.
+This is a small LLM call — cheap next to generating a whole answer.
 """
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -33,8 +33,8 @@ def run(state: CRAGState) -> dict:
         {"question": question}
     ).content.strip().strip('"')
 
-    # Model kabhi khaali ya bakwaas lauta de to original question hi behtar hai —
-    # ek kharab rewrite se poora fallback path bekaar ho jaata hai.
+    # If the model returns nothing usable, the original question is the better
+    # query — one bad rewrite wastes the entire fallback path.
     rewritten = raw if raw else question
 
     return {

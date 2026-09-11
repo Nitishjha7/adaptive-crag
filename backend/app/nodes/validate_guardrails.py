@@ -1,11 +1,11 @@
-"""`validate_guardrails` node — graph ka aakhri safety net.
+"""`validate_guardrails` node — the graph's last safety net.
 
-`generate` ka prompt bolta hai "sirf context se jawab do". Wo ek guzarish hai,
-guarantee nahi — model chupke se apni training knowledge daal sakta hai. Ye node
-us answer par ek doosri, independent nazar hai: kya har claim sach me context se
-supported hai, aur kya koi PII leak ho raha hai.
+The `generate` prompt says "answer only from the context". That is a request,
+not a guarantee — a model can still slip in its training knowledge. This node
+takes a second, independent look at the answer: is every claim actually
+supported by the context, and is any PII leaking?
 
-Yahi node `final_output` bharta hai — wahi field API return karti hai.
+It fills `final_output`, which is the field the API returns.
 """
 
 from app.guardrails.validators import validate_answer

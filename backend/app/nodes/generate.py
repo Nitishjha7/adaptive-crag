@@ -1,8 +1,8 @@
-"""`generate` node — verified context se final answer.
+"""`generate` node — the final answer, from verified context.
 
-Dono branches (local-hit aur web-fallback) yahin merge hote hain. Ye node sirf
-`state["documents"]` padhta hai — usse farak nahi padta ki wo chunks Chroma se
-aaye ya Tavily se. Isliye ek hi prompt maintain karna padta hai, do nahi.
+Both branches (local hit and web fallback) merge here. This node reads only
+`state["documents"]` and does not care whether those chunks came from Chroma or
+from a search API, so there is one prompt to maintain rather than two.
 """
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -31,9 +31,10 @@ def run(state: CRAGState) -> dict:
     question = state["question"]
 
     if not documents:
-        # Defensive: retrieval khaali aayi (empty collection / ingestion nahi chali).
-        # Yahan LLM call karna paisa waste hai aur model ko apni training knowledge
-        # se bolne ka nyota — jo poore project ke khilaf hai.
+        # Defensive: retrieval came back empty (empty collection, or ingestion
+        # never ran). Calling the LLM here would waste a call and invite the model
+        # to answer from its training knowledge, which is what this project exists
+        # to prevent.
         return {
             "generation": (
                 "No context was available to answer this question — the knowledge base "
@@ -43,7 +44,7 @@ def run(state: CRAGState) -> dict:
         }
 
     context = "\n\n---\n\n".join(documents)
-    # temperature 0 — answer context se grounded hona chahiye, creative nahi.
+    # temperature 0 — the answer should be grounded in the context, not creative.
     chain = GENERATE_PROMPT | get_llm(temperature=0.0)
     answer = chain.invoke({"context": context, "question": question}).content.strip()
 

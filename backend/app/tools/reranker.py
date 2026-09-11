@@ -1,28 +1,28 @@
 """Cross-encoder reranking.
 
-**Retriever aur reranker ka asli farak** (ye interview me poochha jaata hai):
+**The real difference between a retriever and a reranker** (a common interview
+question):
 
-- Retriever ek **bi-encoder** hai — query aur document ko *alag-alag* embed karta
-  hai. Isliye fast: document vectors pehle se bane hote hain, query time pe sirf
-  ek embedding aur ek nearest-neighbour lookup. Lekin query aur document ke beech
-  ka interaction wo dekh hi nahi sakta, kyunki dono kabhi ek saath model me
-  jaate hi nahi.
-- Reranker ek **cross-encoder** hai — query aur document ko *ek saath* model me
-  daalta hai. Model dono ko ek doosre ke context me padhta hai, isliye kaafi
-  zyada accurate. Keemat: har (query, document) pair pe ek forward pass. Poore
-  corpus pe chalana namumkin hai.
+- A retriever is a **bi-encoder** — it embeds the query and the document
+  *separately*. That is why it is fast: document vectors are precomputed, and
+  query time costs one embedding plus a nearest-neighbour lookup. It also means
+  it cannot see any interaction between query and document, because the two never
+  enter the model together.
+- A reranker is a **cross-encoder** — it puts query and document through the
+  model *together*, so the model reads each in the context of the other. Much
+  more accurate, at the cost of one forward pass per (query, document) pair,
+  which makes running it over a whole corpus impossible.
 
-Isiliye ye do-step design hai: **sasta retriever candidates laata hai, mehnga
-reranker unme se best chunta hai.**
+Hence the two-step design: **a cheap retriever fetches candidates, an expensive
+reranker picks the best of them.**
 
-**Is project me reranker ka point answer quality nahi hai — grader ka input hai.**
-`grade_documents` decide karta hai ki local context kaafi hai ya nahi. Agar
-retrieval sahi chunk laayi par wo top-k me neeche reh gaya, grader use dekh hi
-nahi paata aur galat "no" de sakta hai. Reranker sahi chunk ko upar laata hai,
-yaani grader ko behtar input milta hai.
+**In this project the reranker is aimed at the grader's input, not at answer
+quality.** `grade_documents` decides whether the local context is sufficient. If
+retrieval found the right chunk but left it below the top-k cut, the grader never
+sees it and can return a wrong "no". The reranker pulls that chunk up.
 
-Model: `Xenova/ms-marco-MiniLM-L-6-v2` — 80MB ONNX, local, koi API key nahi.
-Wahi stance jo embeddings ka hai.
+Model: `Xenova/ms-marco-MiniLM-L-6-v2` — 80 MB ONNX, local, no API key. Same
+stance as the embeddings.
 """
 
 from functools import lru_cache
@@ -33,7 +33,7 @@ from app.config import get_settings
 
 @lru_cache
 def get_cross_encoder():
-    """Reranker model. Pehli baar ~80MB download; Docker build me pre-cached hai."""
+    """The reranker model. ~80 MB on first download; pre-cached in the image."""
     from fastembed.rerank.cross_encoder import TextCrossEncoder
 
     return TextCrossEncoder(model_name=get_settings().RERANKER_MODEL)
@@ -42,11 +42,11 @@ def get_cross_encoder():
 def rerank(
     query: str, candidates: List[Tuple[str, str]], k: Optional[int] = None
 ) -> List[Tuple[str, str]]:
-    """`(text, source)` candidates ko query ke hisaab se dobara rank karke top-k do.
+    """Re-rank `(text, source)` candidates against the query and return top-k.
 
-    Failure pe original order lauta dete hain, exception nahi — reranking ek
-    *improvement* hai, requirement nahi. Model load fail ho jaye to retrieval
-    phir bhi kaam karni chahiye, bas thodi kam accurate.
+    On failure it returns the original order rather than raising: reranking is an
+    *improvement*, not a requirement. If the model fails to load, retrieval should
+    still work — just a little less accurately.
     """
     k = k or get_settings().TOP_K
     if not candidates:
@@ -66,21 +66,20 @@ def rerank(
 def reciprocal_rank_fusion(
     rankings: List[List[Tuple[str, str]]], k_rrf: int = 60
 ) -> List[Tuple[str, str]]:
-    """Kai ranked lists ko ek me merge karo — Reciprocal Rank Fusion.
+    """Merge several ranked lists into one — Reciprocal Rank Fusion.
 
     `score(d) = sum over lists of 1 / (k_rrf + rank(d))`
 
-    **Score normalization kyun nahi:** vector search cosine *distance* deta hai
-    (0 = best) aur BM25 ek unbounded positive score (bada = best). Ye alag
-    scales hain, aur unhe ek dusre me convert karna corpus-specific tuning
-    maangta — jo brittle hota hai.
+    **Why no score normalisation:** vector search returns cosine *distance*
+    (0 = best) and BM25 returns an unbounded positive score (higher = best).
+    Different scales, and converting one into the other needs corpus-specific
+    tuning, which is brittle.
 
-    RRF sirf **rank** dekhta hai, score nahi. Isliye dono lists ka scale
-    bilkul irrelevant ho jaata hai. Isi wajah se ye hybrid search ka default
-    fusion hai.
+    RRF looks only at **rank**, never at score, so the scale of either list stops
+    mattering. That is why it is the default fusion for hybrid search.
 
-    `k_rrf=60` standard value hai (original RRF paper). Ye top ranks ka asar
-    thoda dabata hai taaki ek list akeli poora result set na chura le.
+    `k_rrf=60` is the value from the original RRF paper. It damps the influence of
+    the very top ranks so one list cannot run away with the whole result set.
     """
     scores: dict = {}
     keep: dict = {}

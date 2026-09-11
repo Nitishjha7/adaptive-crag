@@ -1,20 +1,16 @@
-"""`retrieve` node — local knowledge base se context.
+"""`retrieve` node — context from the local knowledge base.
 
-Graph ka entry point. Yahan **koi relevance ka faisla nahi hota** — similarity
-search hamesha k results deta hai, chahe corpus me kuch relevant ho ya na ho.
-Wahi naive RAG ka core failure mode hai; uska faisla agla node
-(`grade_documents`) karta hai.
-
-Pipeline (Phase 9 ke baad):
+The graph's entry point. **No relevance decision happens here.** Similarity
+search always returns k results whether or not anything relevant exists, which
+is naive RAG's core failure mode. Judging them is the next node's job.
 
     vector search  ─┐
                     ├─ RRF fusion ─→ rerank ─→ top-k
     BM25 search    ─┘
 
-Dono stages flags ke peeche hain (`USE_HYBRID`, `USE_RERANKER`). Ye sirf
-configurability ke liye nahi hai — ye isliye hai taaki eval dono ko off karke
-baseline se compare kar sake. Is project me ek feature tab tak feature nahi hai
-jab tak uska fayda dikhaya na ja sake.
+Both stages sit behind flags (`USE_HYBRID`, `USE_RERANKER`). Not for
+configurability — so the eval can turn them off and compare against a baseline.
+In this project a feature is not a feature until its benefit can be shown.
 """
 
 from typing import List, Tuple
@@ -25,8 +21,8 @@ from app.tools.vector_search import similarity_search_with_sources
 
 
 def _gather_candidates(question: str, settings) -> Tuple[List[Tuple[str, str]], List[str]]:
-    """Candidates ikattha karo. `(pairs, log_parts)` lautata hai."""
-    # Reranker ko chunne ke liye TOP_K se zyada chahiye, warna wo no-op hai.
+    """Gather candidates. Returns `(pairs, log_parts)`."""
+    # The reranker needs more than TOP_K to choose from, or it is a no-op.
     n = settings.RETRIEVAL_CANDIDATES if settings.USE_RERANKER else settings.TOP_K
 
     vector_hits = similarity_search_with_sources(question, k=n)
@@ -41,8 +37,8 @@ def _gather_candidates(question: str, settings) -> Tuple[List[Tuple[str, str]], 
     bm25_hits = bm25_search(question, k=n)
     log_parts.append(f"bm25={len(bm25_hits)}")
 
-    # BM25 ne kuch nahi diya (query ka koi term corpus me nahi) to fuse karne ka
-    # matlab nahi — ek khaali list RRF me kuch add nahi karti.
+    # BM25 found nothing (no query term appears in the corpus), so there is
+    # nothing to fuse — an empty list contributes nothing to RRF.
     if not bm25_hits:
         return vector_hits, log_parts
 
@@ -67,8 +63,8 @@ def run(state: CRAGState) -> dict:
         candidates = candidates[: s.TOP_K]
 
     documents = [text for text, _ in candidates]
-    # Order rakh ke dedupe — 4 chunks aksar 2 hi files se aate hain, aur pehla
-    # source sabse relevant chunk ka hai.
+    # Dedupe while keeping order — four chunks often come from two files, and
+    # the first source belongs to the most relevant chunk.
     sources = list(dict.fromkeys(source for _, source in candidates))
 
     return {

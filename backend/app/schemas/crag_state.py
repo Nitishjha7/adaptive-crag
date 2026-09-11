@@ -1,19 +1,22 @@
-"""CRAGState — graph ka single source of truth.
+"""CRAGState — the graph's single source of truth.
 
-Har node poora state nahi lautata, sirf jo keys badalni hai wahi partial dict me
-lautata hai. LangGraph un updates ko merge karta hai.
+Nodes return a partial dict holding only the keys they changed, and LangGraph
+merges those updates in.
 
-Merge behaviour per-key **reducer** se decide hoti hai:
+How a merge behaves is decided per key by its **reducer**:
 
-- `logs` pe additive reducer — har node ek line append karta hai, kisi node ko
-  ye jaanne ki zaroorat nahi ki usse pehle kya chala. Poora execution trace
-  free me ban jaata hai (yahi frontend ka TraceViewer render karega).
+- `logs` has an additive reducer — every node appends one line, and no node has
+  to know what ran before it. A full execution trace falls out for free, and it
+  is what the UI renders under each answer.
 
-- `documents` pe **overwrite** (default) — deliberate choice. `retrieve` local
-  chunks set karta hai; fallback pe `web_search_fallback` unko **replace** karta
-  hai, append nahi. Local docs "no" grade ho chuke hote hain — unhe context me
-  rakhna generation ko dilute karta aur wahi hallucination risk wapas laata jise
-  grading step hatane ke liye hai.
+- `documents` **overwrites** (the default, no reducer) — and this is deliberate.
+  `retrieve` sets the local chunks; on the fallback path `web_search_fallback`
+  **replaces** them rather than appending. The local documents have just been
+  graded "no"; keeping them in context would dilute the good context and bring
+  back the hallucination risk the grading step exists to remove.
+
+  That makes this the highest-leverage line in the file: adding `operator.add`
+  here would reintroduce the bug without changing a single node.
 """
 
 import operator
@@ -25,59 +28,62 @@ from typing_extensions import TypedDict
 class CRAGState(TypedDict, total=False):
     # --- input -------------------------------------------------------------
     question: str
-    """Original user query. Kabhi mutate nahi hota — rewrite alag key me jaata hai."""
+    """The original user query. Never mutated — the rewrite goes in its own key,
+    so the trace can show what the user asked and what the system turned it into."""
 
-    # --- set by transform_query (Phase 3) ----------------------------------
+    # --- set by transform_query --------------------------------------------
     transformed_query: str
-    """Keyword-focused web search query. Sirf fallback path pe bharti hai."""
+    """Keyword-focused web search query. Only filled on the fallback path."""
 
     # --- working context ---------------------------------------------------
     documents: List[str]
-    """Working context. `retrieve` bharta hai, `web_search_fallback` replace karta hai."""
+    """Working context. Set by `retrieve`, replaced by `web_search_fallback`."""
 
-    # --- set by grade_documents (Phase 3) ----------------------------------
+    # --- set by grade_documents --------------------------------------------
     relevance_score: str
-    """"yes" | "no" — conditional edge isi pe route karta hai."""
+    """"yes" | "no" — what the conditional edge routes on."""
 
     source_type: str
-    """"vector_db" | "web_search" — UI ka source badge isi se."""
+    """"vector_db" | "web_search" — drives the source badge in the UI."""
 
     sources: List[str]
-    """Citations — local path pe filenames, web path pe URLs.
+    """Citations — filenames on the local path, URLs on the web path.
 
-    `documents` ke saath-saath chalta hai, uske andar nahi. Isse `documents`
-    `List[str]` hi rehta hai aur `generate` ka contract nahi tootta: wo sirf
-    context padhta hai, use pata nahi hona chahiye ki wo kahan se aaya.
+    Travels alongside `documents` rather than inside it, so `documents` stays a
+    plain `List[str]` and `generate`'s contract holds: it reads context and does
+    not need to know where that context came from.
 
-    `documents` ki tarah ye bhi **overwrite** hota hai (koi reducer nahi) —
-    fallback pe local filenames web URLs se replace ho jaate hain, warna UI ek
-    web-sourced answer ke neeche local files cite kar deta."""
+    Overwrites for the same reason `documents` does — otherwise the UI would
+    cite local filenames under a web-sourced answer."""
 
     # --- output ------------------------------------------------------------
     generation: str
-    """Raw LLM answer, abhi guardrails-checked nahi."""
+    """The raw LLM answer, not yet guardrail-checked."""
 
     final_output: str
-    """Guardrails-validated answer — yahi user ko jaata hai."""
+    """The guardrail-validated answer — this is what reaches the user."""
 
     guardrail_passed: bool
-    """Guardrails clean nikle ya nahi (groundedness + PII, dono milake).
+    """Whether the guardrails came back clean (groundedness and PII together).
 
-    Ye `logs` me bhi likha jaata hai, par wahan se parse karna string matching
-    hai — eval harness ko groundedness rate measure karna hai, aur usko ek
-    structured field chahiye jo log ka wording badalne pe na toote.
-    """
+    Also written into `logs`, but parsing it back out of a log line is string
+    matching. The eval harness needs a structured field that does not break when
+    the wording of a log changes."""
 
     # --- trace -------------------------------------------------------------
     logs: Annotated[List[str], operator.add]
-    """Node-by-node execution trace. Additive — har node ek line append karta hai."""
+    """Node-by-node execution trace. Additive — each node appends one line."""
 
 
 def initial_state(question: str) -> CRAGState:
-    """Fresh state banata hai ek query ke liye.
+    """Builds a fresh state for one query.
 
-    Ek hi jagah se initialise karna zaroori hai: `logs` ka additive reducer list
-    par kaam karta hai, to usko `[]` se start karna hi padta hai (None pe crash).
+    Initialising in one place matters: the additive reducer on `logs` operates on
+    a list and would crash on `None`, so it has to start as `[]`.
+
+    Every request builds a new one. There is no checkpointer and no memory — the
+    graph is stateless, which is why the UI's history is labelled a record rather
+    than conversation memory.
     """
     return {
         "question": question,

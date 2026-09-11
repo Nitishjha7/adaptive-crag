@@ -1,7 +1,7 @@
 """Chroma similarity search wrapper.
 
-`retrieve` node aur ingestion script dono isi ke through jaate hain — k /
-score-threshold tuning ek hi jagah rehti hai, do jagah drift nahi hoti.
+Both the `retrieve` node and the ingestion script go through this, so k and any
+threshold tuning live in one place instead of drifting apart in two.
 """
 
 from typing import List, Optional, Tuple
@@ -10,11 +10,11 @@ from app.config import get_settings, get_vectorstore
 
 
 def similarity_search(query: str, k: Optional[int] = None) -> List[str]:
-    """Top-k chunks ka plain text return karta hai.
+    """Plain text of the top-k chunks.
 
-    Node ko Document objects nahi chahiye — `CRAGState.documents` List[str] hai,
-    taaki web snippets aur local chunks ek hi shape me rahein aur `generate` ko
-    source se farak na pade.
+    The node does not want Document objects: `CRAGState.documents` is a
+    `List[str]` so web snippets and local chunks share one shape and `generate`
+    never has to care which it got.
     """
     k = k or get_settings().TOP_K
     docs = get_vectorstore().similarity_search(query, k=k)
@@ -22,12 +22,12 @@ def similarity_search(query: str, k: Optional[int] = None) -> List[str]:
 
 
 def similarity_search_with_scores(query: str, k: Optional[int] = None):
-    """Debugging / eval ke liye — (text, distance) pairs.
+    """For debugging and eval — (text, distance) pairs.
 
-    Chroma cosine me **distance** deta hai (0 = identical), similarity nahi.
-    Ye production path me use nahi hota: relevance ka faisla LLM grader karta
-    hai, koi score threshold nahi — threshold tune karna corpus-specific aur
-    brittle hota hai.
+    Chroma returns cosine **distance** (0 = identical), not similarity.
+
+    Not used on the production path. Relevance is decided by the LLM grader, not
+    a score threshold — thresholds are corpus-specific and brittle.
     """
     k = k or get_settings().TOP_K
     return [
@@ -39,14 +39,14 @@ def similarity_search_with_scores(query: str, k: Optional[int] = None):
 def similarity_search_with_sources(
     query: str, k: Optional[int] = None
 ) -> List[Tuple[str, str]]:
-    """Top-k chunks `(text, source)` pairs ki tarah.
+    """Top-k chunks as `(text, source)` pairs.
 
-    `source` wo filename hai jo ingestion ne metadata me daala tha
-    (`ingest.py` -> `metadata={"source": path.name}`). Wo metadata pehle se store
-    ho raha tha, bas kabhi padha nahi jaata tha — citations ke liye wahi chahiye.
+    `source` is the filename ingestion wrote into metadata
+    (`ingest.py` -> `metadata={"source": path.name}`). That metadata was already
+    being stored, just never read — citations need it.
 
-    Alag function hai, `similarity_search` badla nahi, kyunki wo eval aur tests
-    dono me use hota hai aur unko sirf text chahiye.
+    A separate function rather than a change to `similarity_search`, because
+    that one is used by the eval and the tests, which only want text.
     """
     k = k or get_settings().TOP_K
     docs = get_vectorstore().similarity_search(query, k=k)
@@ -54,5 +54,5 @@ def similarity_search_with_sources(
 
 
 def collection_count() -> int:
-    """Kitne chunks index me hain — ingestion verify karne ke liye."""
+    """How many chunks are in the index — used to verify ingestion."""
     return get_vectorstore()._collection.count()

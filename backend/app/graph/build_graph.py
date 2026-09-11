@@ -1,7 +1,5 @@
 r"""LangGraph StateGraph wiring.
 
-Phase 4 shape (poora graph):
-
     START -> retrieve -> grade_documents -> [conditional]
                                              |-- "yes" --> generate
                                              \-- "no"  --> transform_query
@@ -9,9 +7,9 @@ Phase 4 shape (poora graph):
                                                             -> generate
              generate -> validate_guardrails -> END
 
-**Chain kyun nahi, graph kyun:** yahan wo saaf dikhta hai. `grade_documents` ke
-baad kaunsa node chalega ye compile time pe fixed nahi — runtime pe state padh ke
-decide hota hai. Ek linear chain ye express hi nahi kar sakti.
+**Why a graph and not a chain:** the node that runs after `grade_documents` is
+not fixed at compile time — it is chosen at runtime by reading state. A linear
+chain cannot express that.
 """
 
 from langgraph.graph import END, START, StateGraph
@@ -28,21 +26,22 @@ from app.schemas.crag_state import CRAGState
 
 
 def decide_to_generate(state: CRAGState) -> str:
-    """Routing function — conditional edge isi ka return value use karta hai.
+    """Routing function — the conditional edge dispatches on its return value.
 
-    Deliberately trivial rakha hai: saara faisla `grade_documents` me hota hai,
-    yahan sirf uska result padha jaata hai. Routing logic aur grading logic alag
-    rakhne se dono alag-alag test ho sakte hain.
+    Deliberately trivial: the decision is made in `grade_documents`, and this
+    only reads the result. Keeping routing and grading apart lets each be tested
+    on its own — the router's tests need no LLM at all.
 
-    Default `transform_query` hai (yaani fallback), `generate` nahi — agar
-    relevance_score kisi wajah se khaali ho, to safe direction correction path
-    hai, na ki unverified context pe answer bol dena.
+    Note what the default is. Only an exact "yes" generates; everything else —
+    "no", an empty string, a missing key — takes the correction path. If
+    `relevance_score` is ever empty because of a bug, the safe direction is to
+    go and check rather than to answer from unverified context.
     """
     return "generate" if state.get("relevance_score") == "yes" else "transform_query"
 
 
 def build_crag_graph():
-    """Compiled graph return karta hai. Module load pe ek baar call hota hai."""
+    """Returns the compiled graph. Called once at module load."""
     g = StateGraph(CRAGState)
 
     g.add_node("retrieve", retrieve.run)
@@ -61,12 +60,12 @@ def build_crag_graph():
         {"generate": "generate", "transform_query": "transform_query"},
     )
 
-    # Correction path
+    # The correction path
     g.add_edge("transform_query", "web_search_fallback")
     g.add_edge("web_search_fallback", "generate")
 
-    # Dono branches yahin merge hote hain — do alag generate nodes nahi, kyunki
-    # `generate` sirf state["documents"] padhta hai, source se farak nahi padta.
+    # Both branches merge here. Not two generate nodes: `generate` only reads
+    # state["documents"] and should not know where the context came from.
     g.add_edge("generate", "validate_guardrails")
     g.add_edge("validate_guardrails", END)
 
