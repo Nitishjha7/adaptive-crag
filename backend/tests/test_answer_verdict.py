@@ -1,17 +1,17 @@
-"""Answer-verdict extraction ka defensive parsing.
+"""Defensive parsing of the answer-verdict extraction.
 
-Wahi problem jo `grade_documents.parse_verdict` me hai, ek naye axis pe. Model se
-ek word maanga jaata hai aur wo kabhi kabhi jumla de deta hai.
+The same problem as `grade_documents.parse_verdict`, on a new axis: the model is
+asked for one word and sometimes returns a sentence.
 
-Yahan ek extra trap hai jo grader me nahi tha: **"does not support" jaise phrase
-me "support" substring maujood hai.** Agar `SUPPORT` ka check pehle chale, to
-"the answer does not support the claim" ulta `SUPPORT` padh liya jaayega — aur
-metric chup-chaap ulti ho jaayegi. Isiliye `CONTRADICT` pehle check hota hai,
-aur ye tests wahi order lock karte hain.
+There is an extra trap here that the grader did not have: **a phrase like "does
+not support" contains the substring "support".** If `SUPPORT` were checked first,
+"the answer does not support the claim" would be read as `SUPPORT` and the metric
+would quietly invert. Hence `CONTRADICT` is checked first, and these tests lock
+that order in.
 
-`UNCLEAR` ko `CONTRADICT` me merge nahi kiya gaya. Jo answer koi stand hi na le,
-wo galat answer se alag cheez hai — dono ko ek ginna wahi "not measured vs
-scored zero" wali galti hogi jisse ye project bachta aaya hai.
+`UNCLEAR` is not merged into `CONTRADICT`. An answer that takes no position is a
+different thing from a wrong one, and counting them together would be the same
+"not measured vs scored zero" mistake this project keeps avoiding.
 """
 
 import pytest
@@ -31,11 +31,11 @@ from eval.answer_verdict import parse_verdict
         ("contradict", "CONTRADICT"),
         ("CONTRADICT.", "CONTRADICT"),
         ("UNCLEAR", "UNCLEAR"),
-        # Stand hi nahi liya -> UNCLEAR, CONTRADICT nahi
+        # Took no position -> UNCLEAR, not CONTRADICT
         ("", "UNCLEAR"),
         (None, "UNCLEAR"),
         ("I cannot tell from this answer", "UNCLEAR"),
-        # Asli trap: "support" substring ke bawajood verdict ulta hai
+        # The real trap: the verdict is inverted despite the "support" substring
         ("the answer does not support the claim", "CONTRADICT"),
         ("NOT SUPPORT", "CONTRADICT"),
     ],
@@ -45,11 +45,10 @@ def test_parse_verdict(raw, expected):
 
 
 def test_contradict_is_checked_before_support():
-    """Order-dependence explicit — ye wahi bug hai jo chup-chaap metric ulti karta.
+    """Order-dependence made explicit — the bug that would quietly invert the metric.
 
-    Grader wale parser me bhi yahi sabak hai (`no` pehle, `yes` baad me), aur
-    dono jagah wajah ek hi hai: ek verdict ka naam doosre ke text me chhupa
-    baitha hai.
+    The grader's parser carries the same lesson (`no` before `yes`), and for the
+    same reason in both places: one verdict's name hides inside the other's text.
     """
     assert parse_verdict("does not support") == "CONTRADICT"
     assert parse_verdict("supports") == "SUPPORT"

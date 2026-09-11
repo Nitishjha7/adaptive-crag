@@ -1,7 +1,7 @@
-"""Graph routing — CRAG ka asli dil.
+"""Graph routing — the heart of CRAG.
 
-Ye tests wo baat pakadte hain jise todna sabse aasan hai aur dhoondhna sabse
-mushkil: kaunsa raasta liya gaya, aur state me kya bacha.
+These tests catch the thing that is easiest to break and hardest to notice: which
+path was taken, and what survived in state.
 """
 
 from app.schemas.crag_state import initial_state
@@ -9,7 +9,7 @@ from tests.conftest import node_order
 
 
 def test_happy_path_stays_local(graph, fake_llm, fake_search):
-    """Grader 'yes' bole -> seedha generate. Web ko haath bhi nahi lagna chahiye."""
+    """Grader says 'yes' -> straight to generate. Web must not be touched."""
     fake_llm.verdict = "yes"
 
     final = graph.invoke(initial_state("Why does chunk overlap matter?"))
@@ -21,8 +21,8 @@ def test_happy_path_stays_local(graph, fake_llm, fake_search):
         "validate_guardrails",
     ]
     assert final["source_type"] == "vector_db"
-    assert fake_search == [], "local hit pe web search bilkul nahi chalna chahiye"
-    assert final["documents"], "retrieve ne kuch nahi diya"
+    assert fake_search == [], "web search must not run on a local hit"
+    assert final["documents"], "retrieve returned nothing"
 
 
 def test_correction_path_goes_to_web(graph, fake_llm, fake_search):
@@ -42,32 +42,32 @@ def test_correction_path_goes_to_web(graph, fake_llm, fake_search):
     ]
     assert final["source_type"] == "web_search"
     assert final["transformed_query"] == "model context protocol spec"
-    # web search ko *rewritten* query milni chahiye, original nahi
+    # web search must receive the *rewritten* query, not the original
     assert fake_search == ["model context protocol spec"]
 
 
 def test_fallback_replaces_local_docs_instead_of_merging(graph, fake_llm, fake_search):
-    """Poore project ka sabse important assertion.
+    """The most important assertion in the project.
 
-    Local docs abhi "no" grade hue hain. Agar wo web snippets ke saath context me
-    bache reh gaye, to CRAG ka poora point khatam — wahi hallucination risk wapas
-    aa gaya jise grading step hatane ke liye hai.
+    The local documents were just graded "no". If they survived in context
+    alongside the web snippets, the whole point of CRAG is gone — the very
+    hallucination risk the grading step exists to remove is back.
     """
     fake_llm.verdict = "no"
 
     final = graph.invoke(initial_state("What is the Model Context Protocol?"))
 
-    assert len(final["documents"]) == 2, "sirf web snippets bachne chahiye"
+    assert len(final["documents"]) == 2, "only the web snippets should remain"
     assert all(d.startswith("WEB SNIPPET") for d in final["documents"]), (
-        "reject kiye hue local docs abhi bhi context me hain -- replace nahi hua"
+        "rejected local docs are still in context -- they were merged, not replaced"
     )
 
 
 def test_search_failure_does_not_crash_the_graph(graph, fake_llm, monkeypatch):
-    """Search fail ho jaye (rate limit / network) to graph chalte rehna chahiye.
+    """If search fails (rate limit, network), the graph must keep running.
 
-    Fallback path already ek degraded case hai. Yahan 500 dena demo bhi todta hai
-    aur user ko kuch batata bhi nahi.
+    The fallback path is already the degraded case. A 500 here breaks the demo and
+    tells the user nothing.
     """
     import app.nodes.web_search_fallback as node
 
@@ -81,15 +81,16 @@ def test_search_failure_does_not_crash_the_graph(graph, fake_llm, monkeypatch):
 
     assert "FAILED" in final["logs"][3]
     assert final["documents"] == []
-    # generate ko yahan LLM call karni hi nahi chahiye -- context hai hi nahi
+    # generate must not make an LLM call here -- there is no context at all
     assert "skipped (no documents" in final["logs"][4]
     assert "No context" in final["generation"]
 
 
 def test_empty_relevance_score_routes_to_correction(graph, fake_llm, fake_search):
-    """Grader kuch ajeeb lauta de to safe direction correction path hai.
+    """If the grader returns something odd, the safe direction is the correction
+    path.
 
-    Unverified context pe answer bolne se ek extra web call bhugatna behtar hai.
+    Paying for one extra web call beats answering from unverified context.
     """
     fake_llm.verdict = "maybe? I'm not sure"
 
@@ -100,26 +101,26 @@ def test_empty_relevance_score_routes_to_correction(graph, fake_llm, fake_search
 
 
 def test_local_route_cites_source_filenames(graph, fake_llm, fake_search):
-    """Local answers ke saath citations aani chahiye.
+    """Local answers must arrive with citations.
 
-    Metadata me `source` filename ingestion ke time se store ho raha tha, par
-    kabhi padha nahi jaata tha — answer tak pahunchta hi nahi tha.
+    The `source` filename had been stored in metadata since ingestion but was
+    never read — it never reached the answer.
     """
     fake_llm.verdict = "yes"
 
     final = graph.invoke(initial_state("Why does chunk overlap matter?"))
 
-    assert final["sources"], "local route pe koi citation nahi aayi"
+    assert final["sources"], "no citations came back on the local route"
     assert all(s.endswith(".md") for s in final["sources"]), final["sources"]
     assert len(final["sources"]) == len(set(final["sources"])), "duplicate sources"
 
 
 def test_fallback_replaces_sources_too(graph, fake_llm, monkeypatch):
-    """Sabse important citation assertion.
+    """The most important citation assertion.
 
-    `documents` ki tarah `sources` bhi replace hone chahiye. Agar local filenames
-    bache reh gaye, to UI ek web-sourced answer ke neeche local files cite karega —
-    yaani user ko galat jagah bhejega.
+    Like `documents`, `sources` must be replaced. If local filenames survived, the
+    UI would cite local files under a web-sourced answer — sending the user to the
+    wrong place.
     """
     import app.nodes.web_search_fallback as node
 
@@ -145,8 +146,8 @@ def test_fallback_replaces_sources_too(graph, fake_llm, monkeypatch):
 
 
 def test_search_failure_clears_sources(graph, fake_llm, monkeypatch):
-    """Search fail ho to koi citation nahi — local wale bhi nahi, kyunki wo
-    reject ho chuke hain aur unpe koi answer nahi bana."""
+    """If search fails there are no citations — not even the local ones, because
+    they were rejected and no answer was built on them."""
     import app.nodes.web_search_fallback as node
 
     def _boom(query, max_results=4):

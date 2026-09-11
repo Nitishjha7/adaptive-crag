@@ -1,9 +1,9 @@
-"""Multi-corpus support — collection isolation aur BEIR subset logic.
+"""Multi-corpus support — collection isolation and the BEIR subset logic.
 
-Ye tests **network hit nahi karte**. BEIR download ek 5k-abstract zip hai; usko
-har test run me kheenchna slow bhi hai aur flaky bhi. Jo cheez yahan test karni
-hai wo download nahi, **logic** hai: kya sahi collection chunni jaati hai, aur
-kya subset lene pe gold docs bachte hain.
+These tests **do not touch the network**. The BEIR download is a 5k-abstract zip;
+pulling it on every test run would be both slow and flaky. What needs testing is
+not the download but the **logic**: is the right collection chosen, and do the
+gold documents survive a subset?
 """
 
 import json
@@ -12,11 +12,11 @@ import pytest
 
 
 class TestCollectionIsolation:
-    """Dono corpora alag Chroma collections me rehne chahiye.
+    """The two corpora must live in separate Chroma collections.
 
-    Ye cosmetic nahi hai: mix ho gaye to SciFact ke 17k chunks concepts wale 22
-    chunks ke saath retrieval me aa jaate, aur **dono ke eval numbers bekaar**
-    ho jaate.
+    Not cosmetic: if they mixed, SciFact's 17k chunks would surface alongside the
+    22 concepts chunks in retrieval and **both sets of eval numbers would be
+    worthless**.
     """
 
     def test_concepts_and_scifact_get_different_collections(self):
@@ -35,17 +35,17 @@ class TestCollectionIsolation:
 
 
 class TestBeirSubset:
-    """`limit` gold docs ko drop nahi karna chahiye.
+    """`limit` must not drop gold documents.
 
-    Naive truncation (pehle N documents) eval ko chupke se tod deta hai: gold
-    doc cut ho gaya to "local jaana chahiye" label jhootha ho jaata, kyunki
-    system ke paas wo jawab hai hi nahi. Wo failure eval me **grader ki galti**
-    jaisa dikhta, jabki galti corpus ki hoti.
+    Naive truncation (the first N documents) breaks the eval silently: if a gold
+    document is cut, its "should stay local" label becomes false, because the
+    system does not have that answer. In the eval that failure looks like **the
+    grader being wrong** when the corpus was wrong.
     """
 
     @pytest.fixture
     def fake_beir(self, tmp_path, monkeypatch):
-        """Chhota fake BEIR dataset — koi download nahi."""
+        """A tiny fake BEIR dataset — no download."""
         import app.tools.beir_loader as loader
 
         root = tmp_path / "scifact"
@@ -76,8 +76,8 @@ class TestBeirSubset:
         assert len(ids) == 3
 
     def test_subset_still_includes_filler(self, fake_beir):
-        """Sirf gold docs ingest karna retrieval ko trivial bana deta -- har
-        document kisi na kisi query ka jawab hota."""
+        """Ingesting only gold documents would make retrieval trivial -- every
+        document would answer some query."""
         ids = [d for d, _, _ in fake_beir.load_corpus("scifact", limit=4)]
         assert any(d not in {"d8"} for d in ids)
 
@@ -85,8 +85,8 @@ class TestBeirSubset:
         assert len(fake_beir.load_corpus("scifact")) == 10
 
     def test_qrels_drop_zero_scored_judgements(self, fake_beir):
-        """Score 0 ka matlab "judged, par relevant nahi" hota hai. Usko gold
-        maan lena eval ko silently galat kar dega."""
+        """A score of 0 means "judged, but not relevant". Treating it as gold
+        would make the eval silently wrong."""
         qrels = fake_beir.load_qrels("scifact", "test")
 
         assert qrels["q1"] == ["d8"], qrels

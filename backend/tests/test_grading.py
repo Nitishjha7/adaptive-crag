@@ -1,8 +1,8 @@
 """Grader ka defensive output parsing.
 
 Prompt kitna bhi tight ho, LLM kabhi kabhi extra text de deta hai. Agar exact
-match pe depend karein to har aisa case chupke se `no` ban jaata aur bewajah web
-call trigger hota — ya usse bura, `yes` ban jaata.
+on an exact match, every such case would quietly become `no` and trigger a
+pointless web call — or worse, become `yes`.
 """
 
 import pytest
@@ -22,7 +22,7 @@ from app.nodes.grade_documents import parse_verdict
         ("n", "no"),
         ("", "no"),
         (None, "no"),
-        # Confused output -> safe default `no`: ek extra web call, hallucination nahi
+        # Confused output -> safe default `no`: one extra web call, not a hallucination
         ("I cannot determine that", "no"),
         ("no, the documents do not say yes to this", "no"),
     ],

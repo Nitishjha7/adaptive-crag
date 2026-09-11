@@ -1,9 +1,10 @@
-"""Hybrid retrieval + reranking (Phase 9).
+"""Hybrid retrieval and reranking.
 
-Ye tests **structure** check karte hain, ranking quality nahi. "Reranker behtar
-chunks laata hai" ek measurement claim hai — wo eval ka kaam hai
-(`eval/RESULTS.md`), unit test ka nahi. Yahan sirf ye dekha jaata hai ki fusion
-ka math sahi hai, flags sach me kaam karte hain, aur failure path graceful hai.
+These tests check **structure**, not ranking quality. "The reranker finds better
+chunks" is a measurement claim, and that belongs to the eval
+(`eval/RESULTS.md`), not to a unit test. What is checked here: the fusion maths
+is right, the flags actually change the pipeline, and the failure path is
+graceful.
 """
 
 import pytest
@@ -17,8 +18,8 @@ class TestTokenizer:
         assert tokenize("Chunk OVERLAP matters!") == ["chunk", "overlap", "matters"]
 
     def test_keeps_alphanumerics_together(self):
-        """Identifiers ek token rehne chahiye — yahi wo case hai jahan BM25
-        vector search se behtar hai."""
+        """Identifiers must stay one token — this is the case where BM25 beats
+        vector search."""
         assert "bge" in tokenize("BAAI/bge-small-en-v1.5")
         assert "v1" in tokenize("BAAI/bge-small-en-v1.5")
 
@@ -26,18 +27,18 @@ class TestTokenizer:
 class TestBM25:
     def test_finds_the_right_doc_by_keyword(self):
         hits = bm25_search("chunk overlap", k=3)
-        assert hits, "BM25 ne kuch nahi diya"
+        assert hits, "BM25 returned nothing"
         assert any("chunking" in source for _, source in hits)
 
     def test_returns_text_source_pairs(self):
-        """Shape vector search jaisi honi chahiye, warna fusion me mix nahi kar sakte."""
+        """The shape must match vector search, or the two cannot be fused."""
         for item in bm25_search("embeddings", k=2):
             assert isinstance(item, tuple) and len(item) == 2
             assert all(isinstance(x, str) for x in item)
 
     def test_nonsense_query_returns_nothing_not_garbage(self):
-        """BM25 me score 0 ka matlab hai koi term match nahi hua. Aise chunks
-        rank karna fusion me sirf shor daalta hai, isliye wo drop hote hain."""
+        """In BM25 a score of 0 means no term matched at all. Ranking those would
+        only add noise to the fusion, so they are dropped."""
         assert bm25_search("zzzzqqqq xkcdplover", k=4) == []
 
 
@@ -58,11 +59,11 @@ class TestRRF:
         assert [t for t, _ in reciprocal_rank_fusion([a, b])] == ["x", "y"]
 
     def test_ignores_score_scale_entirely(self):
-        """Ye wo property hai jiski wajah se RRF chuna gaya: vector distance
-        (chhota = behtar) aur BM25 score (bada = behtar) ko normalize kiye bina
-        merge karna. RRF sirf rank padhta hai, isliye scale matter hi nahi karta."""
+        """The property RRF was chosen for: merging vector distance (lower is
+        better) with a BM25 score (higher is better) without normalising either.
+        RRF reads only rank, so the scales stop mattering."""
         one = [("a", "s"), ("b", "s")]
-        # Same ranking, koi score kahin hai hi nahi — result identical hona chahiye
+        # Same ranking, no scores anywhere — the result must be identical
         assert reciprocal_rank_fusion([one]) == reciprocal_rank_fusion([one])
 
     def test_empty_lists_are_safe(self):
@@ -79,8 +80,8 @@ class TestReranker:
         assert rerank("anything", [], k=4) == []
 
     def test_failure_falls_back_to_original_order(self, monkeypatch):
-        """Reranking ek improvement hai, requirement nahi. Model load fail ho
-        jaye to retrieval chalti rehni chahiye — bas thodi kam accurate."""
+        """Reranking is an improvement, not a requirement. If the model fails to
+        load, retrieval must keep working — just a little less accurately."""
         import app.tools.reranker as mod
 
         def _boom():
@@ -93,8 +94,8 @@ class TestReranker:
 
 
 class TestRetrieveNodeFlags:
-    """Flags sach me pipeline badalte hain — ye zaroori hai kyunki eval inhi se
-    baseline vs hybrid+rerank compare karta hai."""
+    """The flags really do change the pipeline — which matters, because the eval
+    uses them to compare baseline against hybrid + rerank."""
 
     @pytest.mark.parametrize(
         "hybrid,reranker,expect_in_log",
@@ -119,8 +120,7 @@ class TestRetrieveNodeFlags:
         assert out["sources"]
 
     def test_baseline_and_hybrid_both_return_usable_context(self, monkeypatch):
-        """Dono configurations kaam karni chahiye — warna A/B comparison hi
-        impossible hai."""
+        """Both configurations have to work, or the A/B comparison is impossible."""
         import app.config as config
         import app.nodes.retrieve as retrieve_node
 

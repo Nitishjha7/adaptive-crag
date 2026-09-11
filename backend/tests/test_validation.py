@@ -19,14 +19,14 @@ class TestPII:
 
     def test_technical_text_is_not_a_false_positive(self):
         """Regex tight rakhne ka test. Loose pattern (koi bhi lamba number) har
-        technical answer pe trip karta — dimensions, chunk sizes, version numbers."""
+        technical answer — dimensions, chunk sizes, version numbers."""
         text = "The model produces 384-dimensional vectors with chunk size 800 and overlap 100."
         assert check_pii(text) == []
 
 
 class TestGroundedness:
     def test_ungrounded_answer_is_flagged_not_hidden(self, fake_llm):
-        """Answer chhupaya nahi jaata — warning ke saath dikhaya jaata hai.
+        """The answer is not hidden — it is shown with a warning attached.
 
         Hallucination *pakda gaya* dikhna usse gayab kar dene se zyada useful hai,
         aur user ke liye "ye shayad galat hai" khaali screen se behtar hai.
@@ -37,7 +37,7 @@ class TestGroundedness:
 
         assert not result.grounded
         assert not result.passed
-        assert "Some claim." in result.validated_output, "original answer chhupana nahi chahiye"
+        assert "Some claim." in result.validated_output, "the original answer must not be hidden"
         assert result.validated_output.startswith("\u26a0\ufe0f")
 
     def test_grounded_answer_passes_through_unchanged(self, fake_llm):
@@ -50,10 +50,10 @@ class TestGroundedness:
         assert result.validated_output == answer
 
     def test_check_failure_fails_open(self, monkeypatch):
-        """Check khud crash ho jaye to answer block nahi hona chahiye.
+        """If the check itself crashes, the answer must not be blocked.
 
         Wo already verified context se bana hai. Fail-closed hone se ek flaky
-        network call poore system ko "kuch nahi bata sakta" bana deta.
+        network call would turn the whole system into "I cannot tell you anything".
         """
         import app.guardrails.validators as validators
 
@@ -64,11 +64,11 @@ class TestGroundedness:
 
         result = validate_answer("A normal answer.", context=["ctx"], question="")
 
-        assert result.passed, "infra error pe answer block nahi hona chahiye"
+        assert result.passed, "an infrastructure error must not block the answer"
         assert result.validated_output == "A normal answer."
         assert "did not run" in result.reason
 
     def test_no_context_is_trivially_grounded(self, fake_llm):
-        """Context hi nahi tha -- `generate` already bol chuka hoga ki wo nahi jaanta."""
+        """There was no context at all -- `generate` will already have said so."""
         result = validate_answer("I don't have enough context.", context=[], question="")
         assert result.grounded

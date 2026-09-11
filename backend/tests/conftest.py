@@ -1,13 +1,12 @@
-"""Shared fixtures — LLM ko fake se replace karte hain.
+"""Shared fixtures — the LLM is replaced with a fake.
 
-**Yahan asli LLM call kyun nahi:** ye tests control flow ka test hain, model ki
-quality ka nahi. Asli calls slow hote, paise lagte, API key maangte, aur
-non-deterministic hote — yaani CI me flaky. Grader ko scripted verdict dena hi
-wo cheez hai jo hume test karni hai: "agar grader 'no' bole to kya graph sahi
-raasta leta hai".
+**Why no real LLM calls here:** these tests exercise control flow, not model
+quality. Real calls would be slow, cost money, require an API key and be
+non-deterministic — flaky in CI. Scripting the grader's verdict is exactly the
+thing under test: "if the grader says no, does the graph take the right path?"
 
-Grader ki *accuracy* alag cheez hai — wo eval harness ka kaam hai (roadmap),
-in tests ka nahi.
+The grader's *accuracy* is a different question, and it belongs to the eval
+harness, not to these tests.
 """
 
 import pytest
@@ -31,7 +30,7 @@ class FakeLLM:
         self.grounded = "yes"         # groundedness check
 
     def factory_for(self, attr: str):
-        """`get_llm` ka replacement banata hai jo `attr` wala reply lautaye."""
+        """Build a `get_llm` replacement that returns the reply held in `attr`."""
         return lambda temperature=0.0: RunnableLambda(
             lambda _prompt: _Msg(getattr(self, attr))
         )
@@ -39,10 +38,10 @@ class FakeLLM:
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    """Saare LLM call sites ko patch karta hai aur controller object deta hai.
+    """Patch every LLM call site and hand back a controller object.
 
-    monkeypatch use karte hain taaki test ke baad apne aap undo ho jaye — warna
-    ek test ka patch agle test me leak karta.
+    monkeypatch so it unwinds after the test — otherwise one test's patch leaks
+    into the next.
     """
     import app.guardrails.validators as validators
     import app.nodes.generate as generate
@@ -59,10 +58,10 @@ def fake_llm(monkeypatch):
 
 @pytest.fixture
 def fake_search(monkeypatch):
-    """Web search ko deterministic snippets se replace karta hai.
+    """Replace web search with deterministic snippets.
 
-    Asli search network pe depend karta hai aur results roz badalte hain — routing
-    test uspe nahi tik sakta. Ek alag test asli search ko cover karta hai.
+    Real search depends on the network and its results change daily — a routing
+    test cannot stand on that. A separate test covers real search.
     """
     import app.nodes.web_search_fallback as node
 

@@ -8,14 +8,14 @@ from fastapi.testclient import TestClient
 def client():
     import main
 
-    # TestClient lifespan chalata hai, isliye graph compile ho jaata hai.
+    # TestClient runs the lifespan, so the graph gets compiled.
     with TestClient(main.app) as c:
         yield c
 
 
 def test_health_makes_no_llm_call(client):
-    """Healthcheck sasta hona chahiye. Agar ye LLM ping karta, to ek rate limit
-    hi container ko unhealthy mark karwa deta aur Docker restart loop me chala jaata."""
+    """A healthcheck has to be cheap. If it pinged the LLM, one rate limit would
+    mark the container unhealthy and Docker would restart it in a loop."""
     r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
@@ -49,13 +49,13 @@ def test_response_shape(client, fake_llm, fake_search):
 
 
 class TestStats:
-    """`/api/stats` dashboard ko feed karta hai. Har number asli source se aana
-    chahiye — yahi wo endpoint hai jahan hardcoded demo values chupke se aa
+    """`/api/stats` feeds the dashboard. Every number has to come from a real
+    source — this is the endpoint where hardcoded demo values would quietly
     jaati hain."""
 
     def test_counts_come_from_the_real_corpus(self, client):
         body = client.get("/api/stats").json()
-        assert body["documents"] > 0, "corpus files gine nahi gaye"
+        assert body["documents"] > 0, "corpus documents were not counted"
         assert body["chunks"] > 0, "vectorstore khaali hai -- `ingest.py` chalaya?"
 
     def test_config_is_echoed_not_invented(self, client):
@@ -65,10 +65,10 @@ class TestStats:
         assert isinstance(cfg["hybrid"], bool)
 
     def test_evaluation_is_none_when_not_run(self, client, monkeypatch, tmp_path):
-        """Eval kabhi chala hi na ho to `null` aana chahiye, `0` nahi.
+        """If the eval never ran, this must be `null`, not `0`.
 
-        "Measure nahi hua" aur "score zero hai" do alag baatein hain, aur UI ko
-        farak pata hona chahiye -- warna dashboard ek jhoothi 0% accuracy dikha dega.
+        "Not measured" and "scored zero" are different claims, and the UI has to
+        be able to tell them apart -- otherwise the dashboard shows a false 0%.
         """
         import app.config as config
 
@@ -78,6 +78,6 @@ class TestStats:
         assert body["evaluation"] is None
 
     def test_makes_no_llm_call(self, client):
-        """Dashboard har page load pe ise hit karta hai -- ek LLM call yahan
+        """The dashboard hits this on every page load -- one LLM call here
         rate limit ko UI ke saath baandh deta."""
         assert client.get("/api/stats").status_code == 200
