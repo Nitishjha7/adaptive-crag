@@ -107,7 +107,9 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
     7/7 web. **Grader ne ek bhi apni galti nahi ki** — saare "routing failures" retrieval
     misses the jinhe usne theek pakda. Matlab 75% grader ko under-report karti hai, aur
     bottleneck **retrieval** hai, grading nahi.
-- ❌ Deployment (Render + Vercel) — abhi nahi hua
+- ❌ Deployment — abhi nahi hua. Render free tier naap ke **reject** kiya (peak 464 MB
+  vs 512 MB limit, persistent disk nahi, sleep hota hai); target HuggingFace Spaces hai.
+  Poora plan aur teen prerequisites neeche "Deployment Plan" me
 - ❌ Poora 5k corpus + 300-query test set — laptop ki Docker memory (3.5 GB) me nahi aata.
   Reranking sach me kaam karta hai ya nahi, wo isi pe pata chalega
 
@@ -187,20 +189,50 @@ concrete numbers (measured grading accuracy, fallback precision) add karte rehna
 
 ## Deployment Plan (free tier)
 
+**Pehla plan Render + Vercel tha. Naapne ke baad wo hata diya — Render free tier me ye
+app fit nahi hoti.** Ye guess nahi hai; `docker stats` se liye gaye numbers hain, concepts
+corpus (22 chunks) pe:
+
+| | Memory |
+|---|---|
+| Backend idle, boot ke baad | 266 MB |
+| Ek local query ke baad (hybrid + reranker load ho chuke) | 457 MB |
+| Ek web query ke baad (peak) | **464 MB** |
+| Backend image | 1.32 GB |
+| Frontend image | 102 MB |
+| Vectorstore on disk | 12 MB |
+
+Render free = **512 MB**, yaani **48 MB headroom** — ek bhi concurrent request pe OOM.
+Aur ye sabse chhote corpus ka number hai; SciFact (1,717 chunks) isse upar jaata hai.
+Do aur cheezein Render free pe todti hain: **persistent disk nahi hota** (to Chroma volume
+mount ho hi nahi sakta), aur 15 min baad **sleep** ho jaata hai.
+
+**Isliye target: [HuggingFace Spaces](https://huggingface.co/spaces)** — 16 GB RAM free,
+Docker support, aur ek ML demo ka natural ghar hai.
+
 | Piece | Kahan | Kyun |
 |---|---|---|
-| Backend (FastAPI) | [Render](https://render.com) / [Railway](https://railway.app) | Docker deploy, free tier |
-| Vector DB | Chroma persistent volume / [Chroma Cloud](https://www.trychroma.com) | Local persistence kaafi hai |
-| LLM | [Groq](https://console.groq.com) | Free, very fast inference |
-| Web search | DuckDuckGo (default) — koi key nahi. [Tavily](https://tavily.com) optional | Signup ke bina chalta hai |
-| Frontend | [Vercel](https://vercel.com) / [Netlify](https://netlify.com) | Free static, GitHub auto-deploy |
+| Poora stack (ek image) | HuggingFace Spaces (Docker SDK) | 16 GB RAM, persistent, sleep nahi |
+| Vector DB | Chroma — **image me bake karke** | 12 MB hai; volume ki zaroorat hi nahi |
+| LLM | [Groq](https://console.groq.com) | Free, fast. Key HF **Secrets** me |
+| Web search | DuckDuckGo (default) — koi key nahi | Signup ke bina chalta hai |
+
+### Karne se pehle teen kaam
+
+1. **Backend + frontend ko ek image me merge karo.** Nginx static build serve kare aur
+   `/api/` backend pe proxy kare — wahi jo abhi compose me ho raha hai. Isse **CORS ki
+   zaroorat hi khatam** ho jaati hai, kyunki origin ek hi rehta hai.
+2. **CORS band karo** — `backend/main.py:42` pe `allow_origins=["*"]` hai aur TODO pada
+   hai. Step 1 ke baad ise apne origin tak seemit karo.
+3. **Vectorstore image me bake karo** — `backend/vectorstore` 12 MB ka hai, `.dockerignore`
+   se nikaal do taaki COPY ho jaaye. Warna Space har restart pe khaali index se boot hoga.
 
 **Gotchas:**
-- Render free tier sleep hota hai — demo se pehle URL warm kar lena.
-- Groq rate limits — demo ke liye fixed queries (`backend/data/README.md`).
+- Groq rate limits — demo ke liye fixed queries (UI ke chips).
 - **`.env` kabhi commit mat karna — aur `.env.example` me kabhi asli key mat daalna.** Wo
-  file commit hoti hai.
-- Embedding model pehli baar download hota hai — Docker layer me cache.
+  file commit hoti hai. HF pe key **Settings → Secrets** me jaati hai, Dockerfile me nahi.
+- Embedding aur reranker model pehli baar download hote hain — Docker layer me cache karo,
+  warna har cold start pe download hoga.
 
 ---
 

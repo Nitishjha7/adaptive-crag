@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -51,7 +52,24 @@ from app.graph.build_graph import build_crag_graph
 from app.schemas.crag_state import initial_state
 
 HERE = Path(__file__).parent
-DEFAULT_SCENARIOS = HERE / "scenarios.json"
+
+
+def default_scenarios() -> Path:
+    """Scenarios file `CORPUS` ke saath chalti hai.
+
+    Pehle ye hardcoded `scenarios.json` (concepts) tha. Uska nateeja ek chupa
+    hua measurement bug tha: `CORPUS=scifact` set karke eval chalao, to index
+    SciFact ka hota tha par sawaal concepts ke. Eval crash nahi karta — wo
+    chup-chaap bekaar routing numbers chhaap deta hai, aur wo galti *router ki*
+    lagti hai jabki galti setup ki thi.
+
+    Yahi wo tarah ka bug hai jisse ye project sabse zyada bachna chahta hai:
+    galat component ko blame karne wali measurement. Isliye default corpus se
+    nikalta hai; `--scenarios` se abhi bhi override ho sakta hai.
+    """
+    corpus = os.getenv("CORPUS", "concepts").strip() or "concepts"
+    name = "scenarios.json" if corpus == "concepts" else f"scenarios_{corpus}.json"
+    return HERE / name
 
 # source_type -> label. Graph "vector_db"/"web_search" bolta hai, scenarios
 # "local"/"web" — mapping ek jagah rakhi hai taaki dono vocabularies alag reh
@@ -443,7 +461,9 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Measure CRAG routing on labelled queries.")
-    p.add_argument("--scenarios", default=str(DEFAULT_SCENARIOS))
+    p.add_argument("--scenarios", default="",
+                   help="scenarios JSON; default follows CORPUS "
+                        "(concepts -> scenarios.json, scifact -> scenarios_scifact.json)")
     p.add_argument("--out", default="", help="write per-case JSON results here")
     p.add_argument("--limit", type=int, default=0, help="run only the first N cases")
     p.add_argument("--only", choices=["local", "web"], default="",
@@ -459,7 +479,12 @@ def main() -> int:
                    help="run only the labelled local/web cases")
     args = p.parse_args()
 
-    cases = json.loads(Path(args.scenarios).read_text(encoding="utf-8"))["cases"]
+    scenarios_path = Path(args.scenarios) if args.scenarios else default_scenarios()
+    if not scenarios_path.exists():
+        print(f"[eval] scenarios file not found: {scenarios_path}", file=sys.stderr)
+        return 2
+    print(f"[eval] corpus={os.getenv('CORPUS', 'concepts')}  scenarios={scenarios_path.name}")
+    cases = json.loads(scenarios_path.read_text(encoding="utf-8"))["cases"]
     if args.only:
         cases = [c for c in cases if c["expected_route"] == args.only]
     if args.skip_ambiguous:

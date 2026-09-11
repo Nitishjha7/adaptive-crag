@@ -8,6 +8,8 @@
 #   .\dev.ps1 test               # pytest suite (no API key needed)
 #   .\dev.ps1 eval               # routing eval - ASLI Groq + DuckDuckGo calls
 #   .\dev.ps1 eval --limit 5     # smoke run, rate limit bachane ke liye
+#   .\dev.ps1 eval -Corpus scifact -Env USE_HYBRID=false,USE_RERANKER=false `
+#       --out eval/results_scifact_baseline.json      # A/B ka baseline arm
 #   .\dev.ps1 serve [-Port 8042] # FastAPI -> http://localhost:PORT/docs
 #   .\dev.ps1 shell              # container ke andar bash
 #
@@ -20,7 +22,11 @@ param(
     [int]$Port = 8000,
     # "concepts" (default) ya "scifact" - dono alag Chroma collections me rehte
     # hain, isliye switch karne pe re-ingest nahi karna padta.
-    [ValidateSet("", "concepts", "scifact")][string]$Corpus = ""
+    [ValidateSet("", "concepts", "scifact")][string]$Corpus = "",
+    # Extra env vars container ke liye: -Env USE_HYBRID=false,USE_RERANKER=false
+    # Retrieval ka A/B isi ke bina raw `docker run` likhna padta tha, jisme mounts
+    # dobara type karne padte the - aur wahi A/B is project ka core workflow hai.
+    [string[]]$Env = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,6 +59,11 @@ else { Write-Host "[dev] warning: .env nahi mila - LLM call fail hogi (.env.exam
 
 # -e ke baad aata hai taaki --env-file ki value ko override kare, ulta nahi.
 if ($Corpus) { $EnvArgs += @("-e", "CORPUS=$Corpus") }
+foreach ($pair in $Env) {
+    foreach ($kv in ($pair -split ",")) {
+        if ($kv.Trim()) { $EnvArgs += @("-e", $kv.Trim()) }
+    }
+}
 
 switch ($Command) {
     "build"  { docker build -t $Image $Backend }

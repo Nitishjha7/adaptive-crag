@@ -91,6 +91,69 @@ This is the standard way to build a small retrieval benchmark, and
 
 ---
 
+## Running the full corpus — the run that is still owed
+
+The 500-document subset is the honest limit of this laptop, not a design
+choice. The reranking question — *does it actually help, or was the concepts
+result the whole story?* — needs the full corpus and the full query set. On
+SciFact-500 the A/B moved recall 65% → 70%, which is **one gold document out of
+twenty**: the mechanism, not a magnitude.
+
+What it needs: a machine that can give Docker roughly **8 GB** (17,266 chunks
+were OOM-killed at 3.5 GB even after streaming was added), and a Groq tier that
+will absorb ~600 graded queries without throttling.
+
+The steps, in order:
+
+```powershell
+# 0. Stop the stack first - see the SQLite note below. This is not optional.
+docker compose down
+
+# 1. Full corpus. Drop --limit entirely; all 5,183 abstracts get ingested.
+.\dev.ps1 ingest -Corpus scifact -Reset
+
+# 2. Regenerate scenarios WITHOUT --limit, so every qrels claim is eligible.
+#    With a subset, build_scifact_scenarios skips claims whose gold document
+#    was not ingested; on the full corpus nothing is skipped.
+.\dev.ps1 shell
+#   > python -m eval.build_scifact_scenarios
+#   > exit
+
+# 3. Baseline arm - retrieval flags off.
+.\dev.ps1 eval -Corpus scifact -Env USE_HYBRID=false,USE_RERANKER=false `
+  --out eval/results_scifact_baseline.json
+
+# 4. Treatment arm - flags on (the defaults).
+.\dev.ps1 eval -Corpus scifact --out eval/results_scifact.json
+
+# 5. Compare recall@k and routing accuracy between the two files.
+```
+
+`-Env` takes a comma-separated list and passes each entry through as `docker
+run -e`. It exists because the A/B is this project's core workflow and there
+was previously no way to run it except by hand-writing the full `docker run`
+with all its mounts.
+
+Three things to watch, all of which have already bitten this project:
+
+- **Stop the compose stack before ingesting.** Both processes open the same
+  embedded Chroma SQLite file. The second one does not error — it blocks. An
+  ingest once ran five minutes with zero rows written and no message at all.
+- **The scenarios file follows `CORPUS` automatically** (`scifact` →
+  `scenarios_scifact.json`). It used to default to the concepts file no matter
+  what, so `-Corpus scifact` would query the SciFact index with concepts
+  questions and print confident, meaningless routing numbers — a failure that
+  looks like the router being wrong when the setup was wrong. Override with
+  `--scenarios` only if you mean to.
+- **Do not shrink the query set to save rate limit.** The whole point of the run
+  is a sample large enough to leave the noise band. Cutting back to 28 cases
+  reproduces exactly the result that is already documented.
+
+Until that run happens, the defensible claim stays: *the causal chain is real
+and instrumented; the magnitude is unproven.*
+
+---
+
 ## What each corpus can and cannot claim
 
 | Claim | `concepts` | `scifact` |

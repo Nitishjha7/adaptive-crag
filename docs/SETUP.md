@@ -211,14 +211,14 @@ embedded mode me chalta hai, persistence ke liye bas ek mounted volume.
 
 | Piece | Kahan | Kyun |
 |---|---|---|
-| Backend (FastAPI) | [Render](https://render.com) / [Railway](https://railway.app) | Docker se deploy, free tier |
+| Backend (FastAPI) | [HuggingFace Spaces](https://huggingface.co/spaces) (Docker SDK) | 16 GB RAM free. **Render free reject kiya** — peak 464 MB vs 512 MB limit, aur persistent disk nahi. Detail: [ROADMAP.md](ROADMAP.md#deployment-plan-free-tier) |
 | Vector DB | Chroma persistent volume ya [Chroma Cloud](https://www.trychroma.com) | Local persistence kaafi hai demo ke liye |
 | LLM | [Groq](https://console.groq.com) | Free tier, bahut fast inference |
 | Web search | DuckDuckGo (default) — koi key nahi. [Tavily](https://tavily.com) optional | Signup ke bina chalta hai; Tavily behtar snippets deta hai |
 | Frontend | [Vercel](https://vercel.com) / [Netlify](https://netlify.com) | Free static, GitHub auto-deploy |
 
 **Gotchas:**
-- Render free tier sleep hota hai — demo se pehle URL warm kar lena.
+- HF Spaces sleep nahi hota. (Render free hota hai — ek aur wajah usse na chunne ki.)
 - Groq rate limits — demo ke liye fixed queries use karo (`backend/data/README.md`).
 - **`.env` kabhi commit mat karna — aur `.env.example` me kabhi asli key mat daalna.** Wo
   file commit hoti hai. Ek baar aisa ho chuka hai aur key GitHub pe chali gayi thi; usko

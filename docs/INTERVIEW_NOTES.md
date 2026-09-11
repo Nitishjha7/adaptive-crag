@@ -370,9 +370,18 @@ with non-gold filler. Filler matters too: without it every indexed document woul
 some query and retrieval would be trivially easy. There's a test asserting both.
 
 **Q: How would you deploy this?**
-A: FastAPI backend in a Docker container on Render, Chroma persisted to a mounted volume,
-React frontend on Vercel with an `/api` proxy. Groq for the LLM, DuckDuckGo (or Tavily) for search,
-via env-injected keys.
+A: It isn't deployed, and the interesting part is why the obvious answer doesn't work. The
+plan was Render free plus Vercel. I measured it first: the backend peaks at **464 MB** after
+one web query on the *smallest* corpus — the cross-encoder and the embedding model are both
+resident — against Render free's **512 MB**. Forty-eight megabytes of headroom, so any
+concurrency OOMs. Render free also has no persistent disk, which kills the Chroma volume,
+and it sleeps after fifteen minutes.
+
+So the target is a HuggingFace Space on the Docker SDK — 16 GB free, no sleep, and the
+natural home for an ML demo. One image: Nginx serves the built frontend and proxies `/api/`
+to uvicorn, which removes CORS entirely since the origin becomes the same. The vector store
+is 12 MB, so it gets baked into the image rather than mounted. `GROQ_API_KEY` goes in HF
+Secrets.
 
 **Q: How does this scale?**
 A: The stateless FastAPI layer scales horizontally. The bottleneck is the vector store —
