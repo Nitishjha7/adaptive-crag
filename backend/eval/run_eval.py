@@ -1,41 +1,42 @@
-"""Routing eval — grader ko measure karta hai, uspe bharosa nahi karta.
+"""Routing eval — measures the grader instead of trusting it.
 
-`docs/ROADMAP.md` ka point A. README ab tak bolta tha "routing 5/5 sahi aayi" —
-paanch demo queries pe. Wo ek anecdote hai, measurement nahi. Ye harness usko
-number me badalta hai.
+The README used to say "routing was 5/5 correct" on five demo queries. That is
+an anecdote, not a measurement. This harness turns it into a number.
 
-    python -m eval.run_eval                       # poora set
-    python -m eval.run_eval --limit 5             # smoke run (rate limit bachao)
-    python -m eval.run_eval --only web            # sirf fallback cases
+    python -m eval.run_eval                       # the full set
+    python -m eval.run_eval --limit 5             # smoke run, saves rate limit
+    python -m eval.run_eval --only web            # fallback cases only
     python -m eval.run_eval --out eval/results.json
 
-**Kya measure hota hai**
+**What is measured**
 
-Routing ek binary classification hai: har question ko `local` ya `web` jaana
-chahiye. Isliye plain accuracy kaafi nahi — dono errors ki keemat alag hai:
+Routing is a binary classification: every question should go `local` or `web`.
+Plain accuracy is not enough, because the two errors do not cost the same:
 
-- **Missed fallback** (`web` chahiye tha, `local` gaya) — system ne un documents
-  se jawab bana diya jinhe khud "sufficient" samjha, jabki the nahi. Yahi wo
-  hallucination hai jise rokne ke liye poora CRAG banaya gaya hai. **Ye mehnga
-  error hai.**
-- **Unnecessary fallback** (`local` chahiye tha, `web` gaya) — ek extra web call
-  aur thodi latency. **Ye sasta error hai.**
+- **Missed fallback** (should have gone `web`, went `local`) — the system
+  answered from documents it judged sufficient when they were not. That is the
+  hallucination the whole of CRAG exists to prevent. **The expensive error.**
+- **Unnecessary fallback** (should have gone `local`, went `web`) — one extra
+  web call and some latency. **The cheap error.**
 
-Isliye headline accuracy ke saath dono error counts alag report hote hain, aur
-exit code **missed fallbacks** pe gate karta hai — usi metric pe jo sach me
-matter karti hai. (Yahi pattern code-guardian ke routing eval me bhi hai:
-threshold us error pe lagao jo mehnga ho.)
+So both error counts are reported next to the headline accuracy, and the exit
+code gates on **missed fallbacks** — the metric that actually matters. Put the
+threshold on the error that is expensive.
 
-**Groundedness rate** bhi report hota hai — kitne answers guardrails se clean
-nikle. Ye routing se alag axis hai: sahi route lene ke baad bhi answer ungrounded
-ho sakta hai.
+**Groundedness rate** is reported too: how many answers came back clean from the
+guardrails. A different axis from routing — an answer can be ungrounded even when
+the route was right.
 
-**Latency by route** — local vs web ka average. Yahi "adaptive kyun, hamesha web
-kyun nahi" wale argument ka asli number hai.
+**Answer correctness**, where the dataset provides a label, is the third axis:
+whether the answer was actually right, which neither of the other two tells you.
 
-**Ye eval deterministic nahi hai.** Web cases live DuckDuckGo hit karte hain, aur
-LLM temperature 0 pe bhi bilkul identical nahi rehta. Do runs me ±1 case ka farak
-normal hai. Isiliye headline pe koi decimal nahi likha jaata.
+**Latency by route** is printed but is not a route signal at this scale — Groq's
+throttling swamps the difference. See RESULTS.md; the cost argument rests on LLM
+call counts, which are exact.
+
+**This eval is not deterministic.** Web cases hit live DuckDuckGo, and an LLM at
+temperature 0 is still not byte-identical. A difference of ±1 case between runs
+is normal, which is why no headline number is quoted to a decimal.
 """
 
 from __future__ import annotations
@@ -60,13 +61,13 @@ def default_scenarios() -> Path:
 
     Pehle ye hardcoded `scenarios.json` (concepts) tha. Uska nateeja ek chupa
     hua measurement bug tha: `CORPUS=scifact` set karke eval chalao, to index
-    SciFact ka hota tha par sawaal concepts ke. Eval crash nahi karta — wo
-    chup-chaap bekaar routing numbers chhaap deta hai, aur wo galti *router ki*
-    lagti hai jabki galti setup ki thi.
+    the index was SciFact's but the questions were the concepts ones. The eval
+    does not crash — it quietly prints confident, meaningless routing numbers,
+    and the failure looks like *the router being wrong* when the setup was wrong.
 
-    Yahi wo tarah ka bug hai jisse ye project sabse zyada bachna chahta hai:
-    galat component ko blame karne wali measurement. Isliye default corpus se
-    nikalta hai; `--scenarios` se abhi bhi override ho sakta hai.
+    That is the kind of bug this project most wants to avoid: a measurement that
+    blames the wrong component. So the default follows the corpus; `--scenarios`
+    can still override it.
     """
     corpus = os.getenv("CORPUS", "concepts").strip() or "concepts"
     name = "scenarios.json" if corpus == "concepts" else f"scenarios_{corpus}.json"
@@ -77,29 +78,29 @@ def default_scenarios() -> Path:
 # sakein aur eval graph ke internals se tightly coupled na ho.
 ROUTE_OF_SOURCE = {"vector_db": "local", "web_search": "web"}
 
-# Teesra label. "local"/"web" ka matlab hai corpus jawab deta hai / nahi deta.
+# A third label. "local"/"web" mean the corpus does or does not hold the answer.
 # "ambiguous" ka matlab hai **reasonable log disagree karenge** — corpus topic ko
-# aadha cover karta hai. Inpe accuracy measure karna bekaar hai; inpe stability
+# half-covers the topic. Accuracy is meaningless on these; stability
 # measure hoti hai (neeche score() dekh).
 AMBIGUOUS = "ambiguous"
 
 
-# Kaunse node LLM call karte hain. `retrieve` aur `web_search_fallback` nahi —
+# Which nodes make an LLM call. Not `retrieve` or `web_search_fallback` —
 # ek vector search hai, doosra HTTP search. Ye list graph ke saath badalni padegi
-# agar koi naya LLM node aaye; isliye ek jagah rakhi hai.
+# if a new LLM node is added, so it lives in one place.
 LLM_NODES = ("grade_documents", "transform_query", "generate", "validate_guardrails")
 
 
 def count_llm_calls(logs: List[str]) -> int:
     """Trace se LLM calls gino.
 
-    **Latency ki jagah yahi metric kyun.** "Adaptive kyun, hamesha web search
-    kyun nahi" ka poora argument cost pe khada hai. Latency se wo cost measure
-    karne ki koshish ki thi aur wo fail hui — Groq ki throttling itni hawi hai
-    ki route ka farak usme doob jaata hai (detail RESULTS.md me).
+    **Why this metric rather than latency.** The whole "why adaptive, why not
+    always search" argument rests on cost. Latency cannot measure that at this
+    scale — Groq's throttling dominates so completely that the route difference
+    drowns in it (details in RESULTS.md).
 
     Call count us problem se azaad hai: ye graph ke structure se aata hai, timing
-    se nahi. Do baar chalao, wahi number milega. Yahi wo cheez hai jo asli me
+    not from timing. Run it twice and the number is the same. That is what
     claim ki ja sakti hai.
     """
     return sum(1 for line in logs if line.split(" ")[0] in LLM_NODES)
@@ -113,9 +114,9 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
     """Ek question chalao aur observed route + metrics lauta do.
 
     Groq free tier pe rate limit asli problem hai (self-healing-sql-agent me yahi
-    sabse bada atkaav nikla tha), isliye exponential backoff ke saath poora case
-    retry hota hai. Retry ko result me count karte hain — agar koi run bahut
-    retries dikhaye to number ko shak ki nazar se dekhna chahiye.
+    turned out to be the biggest blocker), so the whole case is re-run with
+    exponential backoff. Retries are reported in `attempts` — a run that shows
+    retries is a run whose numbers deserve suspicion.
     """
     question = case["question"]
     last_error = ""
@@ -127,7 +128,7 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         except Exception as exc:  # noqa: BLE001 — rate limit, network, model 404
             last_error = f"{type(exc).__name__}: {exc}"
             if attempt < max_attempts - 1:
-                # 4s, 16s — Groq ka per-minute window isse cross ho jaata hai
+                # 4s, 16s — enough to cross Groq's per-minute window
                 time.sleep(4 ** (attempt + 1))
                 continue
             return {
@@ -158,10 +159,10 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             hit, keyword_hit = [], None
 
         # **Retrieval recall@k** — sirf tab jab dataset gold docs deta ho (BEIR).
-        # Ye wo metric hai jo concepts corpus pe possible hi nahi tha: wahan
-        # koi ground truth nahi thi ki kaunsa chunk sahi hai, isliye retrieval
-        # quality measure hi nahi ho sakti thi — aur isiliye reranker ka A/B
-        # flat aaya tha. Yahan qrels hai, to ab ye sach me hil sakta hai.
+        # The metric that was impossible on the concepts corpus: there was no
+        # ground truth about which chunk was correct, so retrieval quality could
+        # not be measured at all — which is why the reranker A/B came out flat.
+        # Here there are qrels, so this can actually move.
         gold = case.get("gold_docs") or []
         if gold and expected == "local":
             retrieved = set(final.get("sources") or [])
@@ -172,11 +173,10 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         # **Answer correctness** — sirf un SciFact cases pe jinke saath dataset ka
         # apna SUPPORT/CONTRADICT label aata hai.
         #
-        # Routing, recall aur groundedness teeno ye nahi batate ki answer *sahi*
-        # tha. Groundedness sirf itna kehti hai ki answer apne context se match
-        # karta hai — galat context se banaya gaya galat answer bhi grounded pass
-        # kar sakta hai. Yahi wo gap hai jo RESULTS.md khud likhta hai, aur
-        # reranking ko asar isi metric pe dikhana chahiye tha, routing pe nahi.
+        # Routing, recall and groundedness all fail to say whether the answer was
+        # *right*. Groundedness only says the answer matches the context it got —
+        # a wrong answer built from the wrong context can pass it. This is the gap
+        # RESULTS.md names, and the metric reranking should have moved.
         # Yahan tak pahunchne ka matlab hai graph.invoke safal raha — error
         # path upar hi return kar chuka hota hai.
         expected_verdict = case.get("expected_verdict") or ""
@@ -191,10 +191,10 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             "question": question,
             "expected_route": expected,
             "observed_route": observed,
-            # Ambiguous cases pe `None`, `False` nahi. Inka koi ek sahi jawab hai
-            # hi nahi — inhe "galat" ginna headline accuracy ko meaningless bana
-            # dega, jo exactly wo problem hai jiski wajah se ye cases pehle
-            # eval se bahar rakhe gaye the. Inhe stability se maapa jaata hai.
+            # `None` on ambiguous cases, not `False`. They have no single right
+            # answer, and counting them as wrong would make the headline accuracy
+            # meaningless — which is exactly why they were left out of the eval to
+            # begin with. They are measured by stability instead.
             "routed_correctly": None if expected == AMBIGUOUS else observed == expected,
             "hard": bool(case.get("hard")),
             "relevance_score": final.get("relevance_score", ""),
@@ -216,32 +216,32 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             "error": "",
         }
 
-    return {}  # unreachable, loop hamesha return karta hai
+    return {}  # unreachable: the loop always returns
 
 
 def interleave(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """local aur web cases ko alternate karo.
+    """Alternate local and web cases.
 
-    **Ye ek asli bug ka fix hai, cosmetic nahi.** Pehle run me cases file order
-    me chale — pehle saare 12 local, phir saare 8 web. Result: case #1-4 me
-    2-8 sec lage, aur #5 se aage har case 15-22 sec, chahe route koi bhi ho.
-    Yaani Groq sustained load pe throttle kar raha tha, aur wo slowdown poora ka
-    poora local bucket me gir gaya.
+    **This fixes a real bug, it is not cosmetic.** The first run took cases in
+    file order — all 12 local, then all 8 web. Cases #1-4 took 2-8 seconds and
+    everything from #5 onward took 15-22 seconds regardless of route: Groq was
+    throttling under sustained load, and because the local cases ran first, the
+    entire slowdown landed in the local bucket.
 
-    Us run ka "local 13.7s vs web 18.5s" comparison isliye **route ka cost measure
-    kar hi nahi raha tha** — wo position ka cost measure kar raha tha. Aur yahi
-    number us poore argument ki jaan hai ki "hamesha web search kyun nahi".
+    That run's "local 13.7s vs web 18.5s" therefore **was not measuring the cost
+    of the route** — it was measuring the cost of position. And that number is
+    the whole basis of the "why not always search the web" argument.
 
-    Alternate karne se throttling dono buckets pe barabar padti hai, to difference
-    wapas route ka ho jaata hai. Isiliye ye default hai; `--order file` sirf
-    reproduce karne ke liye rakha hai.
+    Alternating spreads the throttling evenly across both buckets, so the
+    difference belongs to the route again. Hence the default; `--order file`
+    exists only to reproduce the original mistake.
     """
     local = [c for c in cases if c["expected_route"] == "local"]
     web = [c for c in cases if c["expected_route"] == "web"]
-    # Ambiguous cases bhi alternate hone chahiye. Pehle ye function sirf
-    # local/web buckets banata tha aur baaki sab **chupchaap drop** kar deta tha —
-    # ambiguous label add karte hi 8 cases bina kisi error ke gayab ho gaye.
-    # Isliye ab har wo case pakda jaata hai jo dono buckets me nahi hai.
+    # Ambiguous cases have to alternate too. This function used to build only
+    # local/web buckets and **silently drop** everything else — the moment the
+    # ambiguous label was added, 8 cases vanished without a single error. So now
+    # anything that is in neither bucket is caught explicitly.
     rest = [c for c in cases if c["expected_route"] not in ("local", "web")]
     out: List[Dict[str, Any]] = []
     for i in range(max(len(local), len(web), len(rest))):
@@ -260,21 +260,23 @@ def interleave(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def score_ambiguous(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Ambiguous cases ko accuracy se nahi, **stability** se maapo.
+    """Score ambiguous cases by **stability**, not by accuracy.
 
-    In cases ka koi ek sahi jawab nahi hai — corpus topic ko aadha cover karta
-    hai, aur do reasonable log alag label denge. Isliye "correct route" ginna
-    ek arguable label ko metric me badal dega. RESULTS.md yahi wajah deta hai ki
-    ye cases pehle chhode gaye the.
+    These cases have no single right answer — the corpus half-covers the topic and
+    two reasonable people would label them differently. Counting "correct route"
+    would turn an arguable label into a metric, which is the reason RESULTS.md
+    gives for leaving them out of the headline in the first place.
 
-    Lekin ek cheez ambiguous case pe bhi **objectively galat** hai: ek hi
-    question pe har baar alag route lena. Wo label ka jhagda nahi, wo grader ka
-    non-determinism hai — aur wo asli defect hai. Isliye har case ko kai baar
-    chalate hain aur poochte hain: kya route har baar wahi rahi?
+    But one thing is **objectively wrong** even on an ambiguous case: taking a
+    different route each time the same question is asked. That is not a disputed
+    label, that is grader non-determinism, and it is a real defect. So each case
+    runs several times and the question becomes: was the route the same every
+    time?
 
-    Ye metric aage kaam bhi aata hai: reranker ka pura point hai grader ko behtar
-    chunks dena. Agar reranker se stability badhti hai, wo **measurable** fayda
-    hai — jabki headline accuracy 100% pe pehle se pinned hai aur hil hi nahi sakti.
+    The metric also earns its keep later. The reranker's whole point is to give
+    the grader better chunks, so if reranking improves stability that is a
+    **measurable** benefit — while the headline accuracy is pinned at 100% and
+    cannot move at all.
     """
     by_id: Dict[Any, List[Dict[str, Any]]] = {}
     for r in rows:
@@ -301,9 +303,9 @@ def score_ambiguous(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     return {
         "ambiguous_cases": len(cases),
-        # Stability sirf tab meaningful hai jab case ek se zyada baar chala ho.
-        # `--repeat 1` pe ye `None` hai, `100.0` nahi — warna ek hi run "perfectly
-        # stable" dikhta, jo jhoot hai.
+        # Stability only means something if the case ran more than once. At
+        # `--repeat 1` this is `None`, not `100.0` — a single run reported as
+        # "perfectly stable" would be a lie.
         "ambiguous_stability_pct": (
             round(100.0 * len(stable) / len(repeated), 1) if repeated else None
         ),
@@ -317,15 +319,16 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     ok_all = [r for r in results if not r.get("error")]
     errored = [r for r in results if r.get("error")]
 
-    # Ambiguous cases headline metrics se **bilkul bahar**. Inhe accuracy me
-    # milaane se poora number arguable ho jaata — ek eval ka kaam hi ye hai ki
-    # uska number defend kiya ja sake.
+    # Ambiguous cases stay **entirely out** of the headline metrics. Folding them
+    # into accuracy would make the whole number arguable, and an eval's job is to
+    # produce a number that can be defended.
     ambiguous_rows = [r for r in ok_all if r["expected_route"] == AMBIGUOUS]
     ok = [r for r in ok_all if r["expected_route"] != AMBIGUOUS]
 
     correct = [r for r in ok if r["routed_correctly"]]
 
-    # Confusion matrix. Dono errors alag ginte hain kyunki dono ki keemat alag hai.
+    # Confusion matrix. The two errors are counted separately because they cost
+    # different amounts.
     missed_fallback = [
         r for r in ok if r["expected_route"] == "web" and r["observed_route"] == "local"
     ]
@@ -338,12 +341,12 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     went_web = [r for r in ok if r["observed_route"] == "web"]
 
     def pct(n: int, d: int):
-        """Denominator zero ho to `None`, `0.0` nahi.
+        """`None` when the denominator is zero, not `0.0`.
 
-        Ye cosmetic nahi hai: `--only local` chalane pe fallback recall ka
-        denominator zero hota hai, aur "0.0%" padhne me *failure* lagta hai
-        jabki sach ye hai ki wo metric is subset pe defined hi nahi. Ek eval ka
-        kaam hi galat impression na dena hai.
+        Not cosmetic. Running `--only local` leaves fallback recall with a zero
+        denominator, and "0.0%" reads as a *failure* when the truth is that the
+        metric is undefined on that subset. An eval's job is to avoid giving the
+        wrong impression.
         """
         return round(100.0 * n / d, 1) if d else None
 
@@ -365,7 +368,7 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "total_cases": len(results),
         "errored": len(errored),
-        "scored": len(ok),   # ambiguous ise me nahi ginte
+        "scored": len(ok),   # ambiguous cases are not counted here
 
         "routing_accuracy_pct": pct(len(correct), len(ok)),
         "routing_correct": len(correct),
@@ -399,8 +402,8 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "answer_verdict_unclear": len(
             [r for r in verdict_checked if r.get("observed_verdict") == "UNCLEAR"]
         ),
-        # Gold doc mila hi nahi to answer ka galat hona retrieval ki galti hai,
-        # generator ki nahi. Ye subset generator ko alag karke dekhta hai.
+        # If the gold document was never retrieved, a wrong answer is retrieval's
+        # failure, not the generator's. This subset isolates the generator.
         "answer_verdict_given_gold_pct": pct(
             len([r for r in verdict_given_gold if r["verdict_correct"]]),
             len(verdict_given_gold),
@@ -466,8 +469,8 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
               f"   <- isolates the generator from retrieval")
         if s.get("answer_verdict_unclear"):
             print(f"    took no position    : {s['answer_verdict_unclear']}")
-    # Sirf tab dikhta hai jab dataset gold docs deta ho (BEIR). Concepts corpus
-    # pe ground truth hai hi nahi, to yahan jhoothi 0% dikhana galat hoga.
+    # Only shown when the dataset provides gold documents (BEIR). The concepts
+    # corpus has no ground truth, so printing a false 0% here would be wrong.
     if s.get("recall_checked"):
         print(f"  Retrieval recall@k    : {f('recall_at_k_pct')}"
               f"  ({s['recall_checked']} cases with gold docs)"
@@ -480,8 +483,8 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
           "   <- the cost of correcting")
     print(f"  Mean latency          : local {n(s['mean_ms_local_route'], ' ms')}  vs  web {n(s['mean_ms_web_route'], ' ms')}")
     print("      (latency is throttling-dominated at this scale — not a route signal, see RESULTS.md)")
-    # Ambiguous block alag hai, aur jaan-boojh ke headline ke *neeche* hai —
-    # ye alag axis hai, accuracy ka hissa nahi.
+    # The ambiguous block is separate and deliberately *below* the headline —
+    # it is a different axis, not a part of accuracy.
     if s["ambiguous_cases"]:
         print()
         print(f"  Ambiguous cases       : {s['ambiguous_cases']}   (excluded from accuracy above)")
@@ -540,10 +543,10 @@ def main() -> int:
     if args.limit:
         cases = cases[: args.limit]
 
-    # Ambiguous cases ko N baar duplicate karo. Repeats ko aapas me alag rakhne
-    # ki koshish nahi karte — ek hi question back-to-back chalane se cache-jaisa
-    # koi effect nahi hai (graph stateless hai), aur saath rakhne se rate-limit
-    # backoff ek hi jagah padta hai.
+    # Duplicate ambiguous cases N times. No attempt to space the repeats apart:
+    # running the same question back-to-back has no cache-like effect (the graph
+    # is stateless), and keeping them together concentrates the rate-limit backoff
+    # in one place.
     if args.repeat > 1:
         expanded = []
         for c in cases:
@@ -569,9 +572,9 @@ def main() -> int:
         )
         print(f"\nWrote {out}")
 
-    # Gate missed fallbacks pe, overall accuracy pe nahi. Ek unnecessary fallback
-    # ek extra web call hai; ek missed fallback wo hallucination hai jise rokne
-    # ke liye ye poora system bana hai. Threshold usi error pe hona chahiye.
+    # Gate on missed fallbacks, not overall accuracy. An unnecessary fallback is
+    # one extra web call; a missed fallback is the hallucination this whole system
+    # exists to prevent. The threshold belongs on that error.
     if s["missed_fallbacks"] > args.max_missed_fallbacks:
         print(
             f"\nFAIL: {s['missed_fallbacks']} missed fallbacks "

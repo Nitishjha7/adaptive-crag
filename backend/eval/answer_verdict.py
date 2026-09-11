@@ -1,28 +1,31 @@
-"""Generated answer se SUPPORT/CONTRADICT verdict nikalo — answer quality naapne ke liye.
+"""Extract a SUPPORT/CONTRADICT verdict from a generated answer, to score answer quality.
 
-**Ye kyun exist karta hai.** Ab tak eval teen cheezein naapta tha: route sahi
-tha ya nahi, gold document retrieve hua ya nahi, aur answer apne context se
-grounded tha ya nahi. Teeno me se **koi bhi** ye nahi batata ki answer *sach me
-sahi* tha. `RESULTS.md` khud ye gap likhta hai:
+**Why this exists.** The eval measured three things: was the route right, was the
+gold document retrieved, and was the answer grounded in whatever context it got.
+None of them says whether the answer was *actually correct*. `RESULTS.md` names
+the gap itself:
 
     "Reranking is not useless - it is aimed at the wrong metric here. It should
     help the *answer*, and this eval does not measure answer quality."
 
-SciFact claim-verification dataset hai, to yahan wo gap bharna mumkin hai **bina
-LLM-judge ke**: dataset khud batata hai ki gold abstract claim ko support karta
-hai ya contradict. Hume sirf itna nikalna hai ki hamare answer ne kya kaha, aur
-dono milane hain.
+SciFact is a claim-verification dataset, so the gap can be closed **without an
+LLM judge**: the dataset records whether the gold abstract supports or
+contradicts each claim. All this module has to do is read what our answer said,
+and the two get compared.
 
-**Extraction judging nahi hai — aur ye farak zaroori hai.** LLM-judge se poochha
-jaata hai "kya ye answer accha hai", jo uski apni raay hoti hai. Yahan LLM se
-sirf ek **reading** maangi jaati hai: is text ne claim ko sach kaha ya jhooth?
-Sahi-galat ka faisla dataset karta hai, model nahi. Phir bhi ye chain ki sabse
-kamzor kadi hai aur RESULTS.md me aise hi likha hai — ek misread aur case galat
-score ho jaata hai.
+**Extraction is not judging, and the distinction matters.** An LLM judge is asked
+"is this answer good?", which is the model's opinion standing in for a
+measurement. Here the model is asked only for a *reading*: did this text call the
+claim true or false? Right and wrong are decided by the dataset, not the model.
 
-`UNCLEAR` alag se rakha hai, `CONTRADICT` me nahi milaya. Answer jo koi stand hi
-na le, wo galat answer se alag cheez hai — aur dono ko ek me milana wahi
-"measure nahi hua vs zero" wali galti hai jisse ye project bachta aaya hai.
+It is still the weakest link in the chain, and RESULTS.md says so — one misread
+flips one case, and a misread is indistinguishable from a wrong answer in the
+score.
+
+`UNCLEAR` is kept separate rather than folded into `CONTRADICT`. An answer that
+takes no position is a different thing from a wrong one, and collapsing them
+would be the same "not measured vs scored zero" mistake this project keeps
+avoiding.
 """
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -48,14 +51,14 @@ EXTRACT_PROMPT = ChatPromptTemplate.from_messages(
 
 
 def parse_verdict(raw: str) -> str:
-    """Model output ko teen values me squeeze karo — defensively.
+    """Squeeze the model's output into three values, defensively.
 
-    `grade_documents.parse_verdict` jaisa hi, aur usi wajah se: prompt kitna bhi
-    tight ho, model kabhi "SUPPORT." ya "The answer supports..." de deta hai.
+    Same problem as `grade_documents.parse_verdict`, and for the same reason:
+    however tight the prompt, a model sometimes returns a sentence.
 
-    Order yahan bhi matter karta hai. `CONTRADICT` pehle check hota hai kyunki
-    "does not support" jaise jumle me "support" substring maujood hai — agar
-    `SUPPORT` pehle check karein to ulta jawab nikal aayega.
+    Order matters here too. `CONTRADICT` is checked first because a phrase like
+    "does not support" contains the substring "support" — checking `SUPPORT`
+    first would read that answer backwards.
     """
     v = (raw or "").strip().upper()
     if "CONTRADICT" in v or "NOT SUPPORT" in v or "DOES NOT" in v:
@@ -70,8 +73,8 @@ def parse_verdict(raw: str) -> str:
 def extract_verdict(claim: str, answer: str) -> str:
     """`"SUPPORT" | "CONTRADICT" | "UNCLEAR"`.
 
-    temperature 0 — wahi wajah jo grader me hai: ek hi answer pe do baar do alag
-    verdict aaye to metric hi bekaar hai.
+    temperature 0, for the reason the grader uses it: if one answer produces two
+    different verdicts across runs, the metric is worthless.
     """
     if not (answer or "").strip():
         return "UNCLEAR"

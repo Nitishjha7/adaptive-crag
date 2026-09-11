@@ -2,19 +2,19 @@
 
     python -m eval.build_scifact_scenarios --local 20 --out eval/scenarios_scifact.json
 
-**Ye script kyun exist karta hai.** `scenarios.json` (concepts corpus wala) me
-maine documents bhi likhe the aur labels bhi — RESULTS.md khud isko structural
-bias bolta hai: *"one author writing both the corpus and the eval is its own
-bias — the honest fix is someone else writing cases."*
+**Why this script exists.** In `scenarios.json` (the concepts corpus) I wrote
+both the documents and the labels, which RESULTS.md itself calls structural
+bias: *"one author writing both the corpus and the eval is its own bias — the
+honest fix is someone else writing cases."*
 
-Yahan wo fix ho jaata hai. `local` cases ke labels **SciFact ke apne qrels** se
-aate hain: agar dataset kehta hai ki query Q ka jawab doc D me hai, aur D humne
-ingest kiya hai, to Q ko local jaana chahiye. Maine ye label nahi banaya.
+This is that fix. The `local` labels come from **SciFact's own qrels**: if the
+dataset says query Q is answered by document D, and D is in our index, then Q
+should stay local. I did not write that label.
 
-`web` cases abhi bhi haath se likhe hain, aur **ye maan lena zaroori hai** — par
-wo aasan hissa hai: SciFact 2020-era scientific abstracts hain, to "aaj ka
-pricing" ya "latest release" type sawaal us corpus me ho hi nahi sakte. Mushkil
-half (local) ab dataset se aata hai.
+The `web` cases are still hand-written, and **that has to be admitted** — but it
+is the easy half. SciFact is 2020-era scientific abstracts, so questions about
+today's pricing or the latest release cannot be in that corpus by construction.
+The hard half now comes from the dataset.
 """
 
 import argparse
@@ -25,7 +25,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 
-# Ye web cases haath se likhe hain. Inhe aise chuna hai ki **koi bhi** static
+# These web cases are hand-written, chosen so that **no** static
 # scientific corpus inka jawab de hi na sake — live pricing, current limits,
 # recent releases. Yahi wo axis hai jispe corpus definitionally khaali hai.
 WEB_CASES = [
@@ -60,29 +60,30 @@ def main() -> int:
     )
 
     # **Wahi limit jo ingest me di thi.** Warna scenarios poore corpus ke against
-    # bante hain jabki index me subset hai — aur phir ek `local` case ka gold doc
-    # index me hai hi nahi. Wo failure eval me *grader ki galti* jaisa dikhta,
+    # would be built against the full corpus while the index holds a subset, and
+    # then a `local` case's gold document is simply not there. In the eval that
+    # failure looks like *the grader being wrong*,
     # jabki galti mismatch ki hoti.
     #
-    # (Gold-first subset ki wajah se limit >= 283 pe ye vaise bhi match karta
-    # hai, par mismatch ko design pe chhodna theek nahi.)
+    # (Because the subset is gold-first this happens to line up for limits >= 283
+    # anyway, but leaving a mismatch to chance is not a design.)
     corpus_ids = {doc_id for doc_id, _, _ in load_corpus("scifact", limit=args.limit)}
     queries = load_queries("scifact")
     qrels = load_qrels("scifact", "test")
-    # Answer-correctness label. Har query pe nahi hota — jin pe hai unhi cases pe
-    # answer quality score hoti hai, baaki sirf routing ke liye chalte hain.
+    # The answer-correctness label. Not present on every query — only the cases
+    # that carry one get scored for answer quality; the rest run for routing only.
     verdicts = load_query_verdicts("scifact")
 
     # Sirf wo queries jinka **gold doc humare ingested corpus me hai**. Agar gold
-    # doc ingest hi nahi hua, to "local jaana chahiye" label jhootha hoga — system
-    # ke paas wo jawab hai hi nahi.
+    # document was never ingested, a "should stay local" label would be false —
+    # the system does not have that answer.
     usable = [
         (qid, queries[qid], gold)
         for qid, gold in qrels.items()
         if qid in queries and any(d in corpus_ids for d in gold)
     ]
     if not usable:
-        print("[build] ERROR: koi qrel query corpus se match nahi hui")
+        print("[build] ERROR: no qrel query matched the corpus")
         return 1
 
     random.Random(args.seed).shuffle(usable)
@@ -101,8 +102,8 @@ def main() -> int:
             "hard": False,
         }
         # Dataset ka apna SUPPORT/CONTRADICT label, jahan wo maujood aur
-        # unambiguous ho. Isse answer **sahi hai ya nahi** naapa ja sakta hai —
-        # routing aur groundedness dono ye nahi batate.
+        # and unambiguous. This is what makes it possible to measure whether the
+        # answer was **right**, which neither routing nor groundedness tells you.
         if qid in verdicts:
             case["expected_verdict"] = verdicts[qid]
         cases.append(case)
