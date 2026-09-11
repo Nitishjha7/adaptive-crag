@@ -383,6 +383,15 @@ to uvicorn, which removes CORS entirely since the origin becomes the same. The v
 is 12 MB, so it gets baked into the image rather than mounted. `GROQ_API_KEY` goes in HF
 Secrets.
 
+**Q: Couldn't you just turn the reranker off and fit inside 512 MB?**
+A: Yes, and I measured that too — with hybrid and reranking off it idles at 74 MB and peaks
+at **250 MB**, so the cross-encoder plus the BM25 index are about 214 MB of it. It fits
+comfortably. I still wouldn't ship it that way: the System Status page would then read
+"Hybrid: off, Cross-encoder rerank: off" while the Evaluation page's entire A/B is about
+that pipeline. The live demo would not be running the thing I'm showing measurements for,
+and the dashboard's one rule is that nothing on screen contradicts the backend. Shrinking
+the system to fit a smaller box means hiding the part I most want to talk about.
+
 **Q: How does this scale?**
 A: The stateless FastAPI layer scales horizontally. The bottleneck is the vector store —
 for real scale I'd move from embedded Chroma to a managed service (Pinecone / Weaviate /

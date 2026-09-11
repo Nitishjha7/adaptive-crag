@@ -498,9 +498,12 @@ restart karta rehta. Isliye sirf index count + config echo — including `groq_k
 setup debug karne me sabse pehle kaam aata hai.
 
 CORS: dev me `allow_origins=["*"]`. Compose me frontend Nginx se same-origin proxy karta hai,
-to wahan zaroorat nahi padti — par **deploy pe (Vercel + Render alag domains) ise frontend
-origin tak restrict karna hai**
-hai — code me TODO pada hai.
+to wahan zaroorat nahi padti. Pehla deploy plan Vercel + Render tha — **alag domains**, isliye
+CORS ko frontend origin tak restrict karna zaroori hota. Wo plan naapne ke baad badal gaya
+(ROADMAP dekho): ab ek hi image me Nginx build serve karega aur `/api/` proxy karega, yaani
+**origin ek hi rahega aur CORS ki zaroorat hi nahi padegi**. Phir bhi `allow_origins=["*"]`
+production me chhodna galat hai, isliye deploy se pehle ise band karna hai — code me TODO pada
+hai (`backend/main.py`).
 
 **Verified (asli HTTP requests, container me):** `/health` → `{"status":"ok",
 "indexed_chunks":22,...}`; khaali question → `422`; bina Groq key ke query → `500` uss saaf

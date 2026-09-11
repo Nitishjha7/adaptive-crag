@@ -74,7 +74,7 @@ bada risk hai.
 4. ✅ Phase 4 — output validation (groundedness + PII)
 5. ✅ Phase 5 — FastAPI `/api/query` endpoint with step logs
 6. ✅ Phase 6 — React + Vite + Tailwind dashboard (source badges, inline trace, Documents/Evaluation/System views)
-7. ✅ Phase 7 — Docker Compose · ❌ deployment (Render + Vercel) abhi baaki
+7. ✅ Phase 7 — Docker Compose · ❌ deployment abhi baaki (target: HuggingFace Space)
 8. ❌ Eval script + INTERVIEW_NOTES me real numbers bharna
 
 Detail har phase ka [ROADMAP.md](ROADMAP.md) me hai.
@@ -115,4 +115,6 @@ Backend + frontend + compose sab chal rahe hain. Ab do cheezein bachi hain:
 
 1. **Eval script** (`eval/scenarios.json` + runner) — abhi koi accuracy measure nahi hui,
    isliye interview me koi number quote nahi kar sakte. Ye sabse zyada value deta hai.
-2. **Deployment** — Render (backend) + Vercel (frontend).
+2. **Deployment** — HuggingFace Space (Docker SDK), backend + frontend ek image me.
+   Render + Vercel wala pehla plan naap ke reject kiya: peak 464 MB vs Render free ka
+   512 MB, aur free tier pe persistent disk hai hi nahi. Detail [ROADMAP.md](ROADMAP.md).

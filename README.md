@@ -30,7 +30,7 @@ cost and latency of a web call on every query.
 > | Second corpus — BEIR SciFact (`CORPUS=scifact`) | ✅ 500 docs → 1,717 chunks, labels from qrels |
 > | Test suite — 60 tests (`.\dev.ps1 test`) | ✅ |
 > | Evaluation harness — 20 labelled + 8 ambiguous (`.\dev.ps1 eval`) | ✅ **routing 20/20 · ambiguous stability 8/8** |
-> | Deployment (Render + Vercel) | ❌ not done |
+> | Deployment (HuggingFace Space) | ❌ not done — Render free measured and ruled out |
 
 ## Measured: does the router actually route?
 

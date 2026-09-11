@@ -212,10 +212,10 @@ embedded mode me chalta hai, persistence ke liye bas ek mounted volume.
 | Piece | Kahan | Kyun |
 |---|---|---|
 | Backend (FastAPI) | [HuggingFace Spaces](https://huggingface.co/spaces) (Docker SDK) | 16 GB RAM free. **Render free reject kiya** — peak 464 MB vs 512 MB limit, aur persistent disk nahi. Detail: [ROADMAP.md](ROADMAP.md#deployment-plan-free-tier) |
-| Vector DB | Chroma persistent volume ya [Chroma Cloud](https://www.trychroma.com) | Local persistence kaafi hai demo ke liye |
+| Vector DB | Chroma — **image me bake karke** | 12 MB hai, to volume ki zaroorat hi nahi |
 | LLM | [Groq](https://console.groq.com) | Free tier, bahut fast inference |
 | Web search | DuckDuckGo (default) — koi key nahi. [Tavily](https://tavily.com) optional | Signup ke bina chalta hai; Tavily behtar snippets deta hai |
-| Frontend | [Vercel](https://vercel.com) / [Netlify](https://netlify.com) | Free static, GitHub auto-deploy |
+| Frontend | **Wahi HF Space** — Nginx build serve karta hai aur `/api/` proxy | Alag host pe daalne ki zaroorat nahi, aur same-origin hone se CORS khatam |
 
 **Gotchas:**
 - HF Spaces sleep nahi hota. (Render free hota hai — ek aur wajah usse na chunne ki.)

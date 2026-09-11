@@ -161,8 +161,9 @@ Dashboard: nav rail, chat with source badges + citations, aur har answer ke neec
 trace / system config / eval numbers. Live demo Swagger se hamesha better lagta hai.
 
 ### Phase 7 — Docker Compose + Deployment
-`backend` + `frontend` services, `/api/` proxy, Chroma persistence volume. Deploy: Render
-(backend) + Vercel (frontend).
+`backend` + `frontend` services, `/api/` proxy, Chroma persistence volume. Deploy **abhi nahi
+hua**; plan neeche "Deployment Plan (free tier)" me hai — Render + Vercel naap ke reject kiya,
+target ek HuggingFace Space hai jisme dono ek hi image me chalte hain.
 
 ---
 
@@ -205,7 +206,26 @@ corpus (22 chunks) pe:
 Render free = **512 MB**, yaani **48 MB headroom** — ek bhi concurrent request pe OOM.
 Aur ye sabse chhote corpus ka number hai; SciFact (1,717 chunks) isse upar jaata hai.
 Do aur cheezein Render free pe todti hain: **persistent disk nahi hota** (to Chroma volume
-mount ho hi nahi sakta), aur 15 min baad **sleep** ho jaata hai.
+mount ho hi nahi sakta), aur 15 min baad **sleep** ho jaata hai. Paid se bhi fayda nahi —
+Render ka $7 wala tier bhi 512 MB hi hai; 2 GB $25/mo pe aata hai.
+
+### "Reranker band karke Render me fit kar do" — naapa, aur reject kiya
+
+Ye obvious sawaal hai, isliye iska number bhi naapa hua hai:
+
+| Config | idle | local query | web query (peak) |
+|---|---|---|---|
+| Hybrid + reranker **on** (asli pipeline) | 266 MB | 457 MB | **464 MB** |
+| Hybrid + reranker **off** | 74 MB | 242 MB | **250 MB** |
+
+Flags off karke 512 MB me aaram se fit ho jaata hai — cross-encoder aur BM25 index
+milke ~214 MB lete hain. **Phir bhi ye raasta nahi liya.**
+
+Wajah: System Status page tab likhega *"Hybrid: off, Cross-encoder rerank: off"*, jabki
+Evaluation page ka poora A/B usi pipeline ke baare me hai. Live demo wo cheez chala hi
+nahi raha hoga jiska measurement dikhaya ja raha hai — aur dashboard ka apna usool hai ki
+screen pe koi aisi baat na ho jo backend se match na karti ho. Chhote dabbe me ghusne ke
+liye sabse acha kaam band kar dena ulta sauda hai.
 
 **Isliye target: [HuggingFace Spaces](https://huggingface.co/spaces)** — 16 GB RAM free,
 Docker support, aur ek ML demo ka natural ghar hai.
