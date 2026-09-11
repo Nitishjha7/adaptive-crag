@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# requirements pehle copy — code badalne pe pip install layer cached rehti hai
+# Copy requirements first so the pip install layer stays cached when code changes
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -19,8 +19,8 @@ print('fastembed embedding + reranker models cached')"
 
 COPY app/ ./app/
 COPY data/ ./data/
-# eval/ bhi chahiye: `/api/stats` `eval/results.json` se routing numbers padhta
-# hai, aur `python -m eval.run_eval` container ke andar chalta hai.
+# eval/ is needed too: `/api/stats` reads routing numbers out of
+# `eval/results.json`, and `python -m eval.run_eval` runs inside the container.
 COPY eval/ ./eval/
 COPY ingest.py main.py ./
 
@@ -29,5 +29,4 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8000
 
-# Phase 5 me main.py bharega. Tab tak image `python -m app "..."` ke liye use hoti hai.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -45,7 +45,7 @@ def main() -> int:
     p.add_argument("--local", type=int, default=20, help="kitne local cases (qrels se)")
     p.add_argument("--web", type=int, default=8, help="kitne web cases")
     p.add_argument("--out", default=str(HERE / "scenarios_scifact.json"))
-    p.add_argument("--seed", type=int, default=17, help="reproducibility ke liye")
+    p.add_argument("--seed", type=int, default=17, help="for reproducibility")
     p.add_argument(
         "--limit", type=int, default=0,
         help="wahi limit jo ingest me use ki thi — scenarios usi subset pe bane",

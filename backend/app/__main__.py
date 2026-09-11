@@ -1,4 +1,4 @@
-"""CLI harness — graph ko FastAPI ke bina chala ke dekhne ke liye.
+"""CLI harness — run the graph without FastAPI.
 
     python -m app "why does chunk overlap matter?"
     python -m app                  # default demo query

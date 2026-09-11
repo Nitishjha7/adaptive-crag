@@ -81,7 +81,7 @@ ROUTE_OF_SOURCE = {"vector_db": "local", "web_search": "web"}
 # A third label. "local"/"web" mean the corpus does or does not hold the answer.
 # "ambiguous" ka matlab hai **reasonable log disagree karenge** — corpus topic ko
 # half-covers the topic. Accuracy is meaningless on these; stability
-# measure hoti hai (neeche score() dekh).
+# is measured instead (see score() below).
 AMBIGUOUS = "ambiguous"
 
 
@@ -148,9 +148,9 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         answer = final.get("final_output") or final.get("generation") or ""
         expected = case["expected_route"]
 
-        # Keyword check sirf local cases pe. Web cases ka text live search se
-        # aata hai — usme keyword na milna model ki galti ho bhi sakti hai aur
-        # us din ke search results ki bhi. Aise signal ko metric banana galat hai.
+        # Keyword check on local cases only. Web case text comes from live
+        # search, so a missing keyword could be the model's fault or that day's
+        # search results. Turning a signal like that into a metric is wrong.
         keywords = case.get("expect_keywords") or []
         if expected == "local" and keywords:
             hit = [k for k in keywords if k.lower() in answer.lower()]
@@ -170,15 +170,15 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         else:
             recall_hit = None
 
-        # **Answer correctness** — sirf un SciFact cases pe jinke saath dataset ka
-        # apna SUPPORT/CONTRADICT label aata hai.
+        # **Answer correctness** — only on the SciFact cases that carry the
+        # dataset's own SUPPORT/CONTRADICT label.
         #
         # Routing, recall and groundedness all fail to say whether the answer was
         # *right*. Groundedness only says the answer matches the context it got —
         # a wrong answer built from the wrong context can pass it. This is the gap
         # RESULTS.md names, and the metric reranking should have moved.
-        # Yahan tak pahunchne ka matlab hai graph.invoke safal raha — error
-        # path upar hi return kar chuka hota hai.
+        # Reaching here means graph.invoke succeeded — the error path has
+        # already returned above.
         expected_verdict = case.get("expected_verdict") or ""
         if expected_verdict:
             observed_verdict = extract_verdict(question, answer)

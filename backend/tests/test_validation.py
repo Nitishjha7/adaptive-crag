@@ -28,8 +28,9 @@ class TestGroundedness:
     def test_ungrounded_answer_is_flagged_not_hidden(self, fake_llm):
         """The answer is not hidden — it is shown with a warning attached.
 
-        Hallucination *pakda gaya* dikhna usse gayab kar dene se zyada useful hai,
-        aur user ke liye "ye shayad galat hai" khaali screen se behtar hai.
+        Showing a hallucination *being caught* is more useful than making it
+        disappear, and "this may be wrong" serves the user better than a blank
+        screen.
         """
         fake_llm.grounded = "no"
 

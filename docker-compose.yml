@@ -1,13 +1,13 @@
 # Adaptive CRAG — backend + frontend.
 #
-#   copy .env.example .env    <- GROQ_API_KEY bharo
+#   copy .env.example .env    <- fill in GROQ_API_KEY
 #   docker compose up --build
 #
-# Frontend: http://localhost:3001   (Nginx, /api/ backend pe proxy karta hai)
+# Frontend: http://localhost:3001   (Nginx, proxies /api/ to the backend)
 # Backend:  http://localhost:8001/docs
 #
-# Ports 3001/8001 hain, 3000/8000 nahi — is machine pe wo doosre projects ke
-# containers le rakhe hain. `.env` me FRONTEND_PORT / BACKEND_PORT se badal sakte ho.
+# Ports are 3001/8001 rather than 3000/8000 because other projects on this
+# machine hold those. Override with FRONTEND_PORT / BACKEND_PORT in `.env`.
 
 services:
   backend:
@@ -17,17 +17,17 @@ services:
     env_file:
       - .env
     environment:
-      # Corpus switch ek-line me: `CORPUS=scifact docker compose up -d`.
-      # `environment` ki value `env_file` se jeetati hai, aur default concepts
-      # rehta hai — warna corpus badalne ke liye har baar .env edit karna padta.
+      # One-line corpus switch: `CORPUS=scifact docker compose up -d`.
+      # `environment` wins over `env_file`, and the default stays concepts —
+      # otherwise changing corpus means editing .env every time.
       CORPUS: ${CORPUS:-concepts}
     volumes:
-      # Chroma index persist — warna har container start pe poora corpus
-      # dobara embed hota, jo slow aur bewajah hai.
+      # Persist the Chroma index, or every container start re-embeds the whole
+      # corpus — slow and pointless.
       - ./backend/vectorstore:/app/vectorstore
     healthcheck:
-      # /health jaan-boojh ke koi LLM call nahi karta, isliye ye sasta hai aur
-      # rate limit kabhi container ko unhealthy mark nahi karwata.
+      # /health deliberately makes no LLM call, so this is cheap and a rate
+      # limit can never mark the container unhealthy.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
@@ -40,10 +40,10 @@ services:
     ports:
       - "${FRONTEND_PORT:-3001}:80"
     depends_on:
-      # `service_healthy`, `service_started` nahi. Pehle started tha, aur usse
-      # ek asli bug aaya: nginx uvicorn ke bind karne se pehle up ho jaata tha,
-      # to `docker compose up` ke turant baad pehli query pe 502 aata tha.
-      # /health koi LLM call nahi karta, isliye ye check sasta aur bharosemand hai.
+      # `service_healthy`, not `service_started`. It was `started` once, and that
+      # caused a real bug: Nginx came up before uvicorn had bound, so the first
+      # query right after `docker compose up` returned a 502.
+      # /health makes no LLM call, so this check is cheap and reliable.
       backend:
         condition: service_healthy
     restart: unless-stopped

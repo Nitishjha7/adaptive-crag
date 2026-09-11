@@ -1,10 +1,11 @@
-# Demo Corpus — controlled, with a deliberate gap
+# Demo corpus — controlled, with a deliberate gap
 
-Ye 7 docs local knowledge base hai. Content deliberately RAG/agent engineering
-**concepts** tak seemit hai — aur usme ek jaan-boojh ke chhoda hua gap hai, taaki
-demo me web fallback **predictably** trigger ho (live randomness pe depend na karna pade).
+These 7 documents are the local knowledge base. The content is deliberately
+limited to RAG and agent engineering **concepts**, and it has a hole cut in it on
+purpose, so the web fallback fires **predictably** in a demo rather than
+depending on live randomness.
 
-## Kya cover hai (→ `grade: yes`, source = Local Vector DB)
+## What is covered (→ `grade: yes`, source = local vector DB)
 
 | Doc | Topic |
 |---|---|
@@ -16,15 +17,18 @@ demo me web fallback **predictably** trigger ho (live randomness pe depend na ka
 | `06_query_transformation.md` | rewriting, HyDE, decomposition |
 | `07_agent_graphs_and_state.md` | nodes, conditional edges, reducers |
 
-## Kya deliberately **nahi** hai (→ `grade: no`, source = Web Fallback)
+## What is deliberately **absent** (→ `grade: no`, source = web fallback)
 
-- Koi bhi **specific product / vendor / pricing** detail (Tavily plans, Groq limits, model pricing)
-- Koi bhi **recent news / release** (naye model launches, version numbers)
-- **Model Context Protocol (MCP)** — ek pura relevant-sounding topic, corpus me zero mention
+- Any **specific product, vendor or pricing** detail (Tavily plans, Groq limits,
+  model pricing)
+- Any **recent news or release** (new model launches, version numbers)
+- **Model Context Protocol (MCP)** — an entire relevant-sounding topic with zero
+  mentions in the corpus
 
-Ye gap isliye chuna gaya ki fallback query **web se genuinely answerable** ho. Agar corpus
-kisi fictional company ka hota, to `grade: no` to aata, lekin web search bhi kachra deta —
-demo ka doosra half mar jaata.
+The gap was chosen so that the fallback query is **genuinely answerable from the
+web**. If the corpus were about a fictional company, `grade: no` would still
+fire, but the web search would return noise too — and the second half of the demo
+would die with it.
 
 ## Fixed demo queries
 
@@ -36,5 +40,4 @@ demo ka doosra half mar jaata.
 | 4 | What is the Model Context Protocol and what problem does it solve? | `web` |
 | 5 | What is the current pricing of the Tavily search API? | `web` |
 
-Phase 8 (eval script) inhi ko `eval/scenarios.json` me expected-route labels ke saath
-use karega.
+`eval/scenarios.json` uses these with expected-route labels.

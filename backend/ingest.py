@@ -96,7 +96,7 @@ def main() -> int:
     s = get_settings()
     if args.corpus:
         s.CORPUS = args.corpus
-        # collection_name CORPUS se derive hota hai, to cached store stale hai
+        # collection_name derives from CORPUS, so the cached store is stale
         get_vectorstore.cache_clear()
 
     store_dir = Path(s.VECTORSTORE_DIR)
@@ -110,7 +110,7 @@ def main() -> int:
         print(f"[ingest] --reset -> dropping collection '{s.collection_name}'")
         try:
             store._client.delete_collection(s.collection_name)
-        except Exception:  # noqa: BLE001 — collection pehle se na ho
+        except Exception:  # noqa: BLE001 — the collection may not exist yet
             pass
         get_vectorstore.cache_clear()
         store = get_vectorstore()
@@ -120,8 +120,8 @@ def main() -> int:
     existing = store._collection.count()
     if existing and not args.reset:
         print(
-            f"[ingest] collection '{s.collection_name}' me pehle se {existing} chunks hai. "
-            "Rebuild ke liye: python ingest.py --reset"
+            f"[ingest] collection '{s.collection_name}' already holds {existing} chunks. "
+            "To rebuild: python ingest.py --reset"
         )
         return 0
 
@@ -147,9 +147,8 @@ def main() -> int:
     # pe wo 17,266 chunks banti hai aur container (3.5 GB) **OOM se mar gaya**
     # (exit 137). Never visible on the concepts corpus and its 22 chunks.
     #
-    # Ab documents ke batch pe kaam hota hai: split -> embed -> chhod do. Peak
-    # memory stops scaling with corpus size, so larger corpora also
-    # chalenge.
+    # Now it works a batch of documents at a time: split -> embed -> release.
+    # Peak memory stops scaling with corpus size, so larger corpora fit too.
     DOC_BATCH = 50
     total_chunks = 0
 
@@ -168,8 +167,9 @@ def main() -> int:
     print(f"[ingest] {total_chunks} chunks total "
           f"(size={s.CHUNK_SIZE}, overlap={s.CHUNK_OVERLAP})")
 
-    # BM25 index poore corpus se banta hai aur lru_cache me rehta hai. Ingestion
-    # ke baad wo stale hai — clear na karo to same process me purana index chalta rahe.
+    # The BM25 index is built from the whole corpus and held in an lru_cache.
+    # After ingestion it is stale — without clearing it, the same process would
+    # keep using the old one.
     from app.tools.bm25_search import bust_cache
 
     bust_cache()

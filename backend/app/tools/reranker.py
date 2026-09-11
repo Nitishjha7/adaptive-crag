@@ -56,7 +56,7 @@ def rerank(
 
     try:
         scores = list(get_cross_encoder().rerank(query, [text for text, _ in candidates]))
-    except Exception:  # noqa: BLE001 — neeche wali docstring dekh
+    except Exception:  # noqa: BLE001 — see the docstring above
         return candidates[:k]
 
     order = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)

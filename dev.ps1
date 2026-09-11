@@ -1,31 +1,29 @@
-# Dev helper - is machine pe local Python nahi hai, sab kuch Docker me chalta hai.
-# Code bind-mount hota hai, isliye edit ke baad rebuild ki zaroorat nahi.
+# Dev helper - there is no local Python on this machine, everything runs in
+# Docker. The code is bind-mounted, so an edit needs no rebuild.
 #
-#   .\dev.ps1 build              # image banao (requirements badle tab hi zaroori)
+#   .\dev.ps1 build              # build the image (only needed when requirements change)
 #   .\dev.ps1 ingest             # docs -> chroma (incremental)
-#   .\dev.ps1 ingest -Reset      # wipe karke dobara build
+#   .\dev.ps1 ingest -Reset      # wipe and rebuild
 #   .\dev.ps1 ask "why does chunk overlap matter?"
 #   .\dev.ps1 test               # pytest suite (no API key needed)
-#   .\dev.ps1 eval               # routing eval - ASLI Groq + DuckDuckGo calls
-#   .\dev.ps1 eval --limit 5     # smoke run, rate limit bachane ke liye
+#   .\dev.ps1 eval               # routing eval - REAL Groq + DuckDuckGo calls
+#   .\dev.ps1 eval --limit 5     # smoke run, saves rate limit
 #   .\dev.ps1 eval -Corpus scifact -Env USE_HYBRID=false,USE_RERANKER=false `
 #       --out eval/results_scifact_baseline.json      # A/B ka baseline arm
 #   .\dev.ps1 serve [-Port 8042] # FastAPI -> http://localhost:PORT/docs
-#   .\dev.ps1 shell              # container ke andar bash
-#
-# Phase 7 me proper docker-compose.yml aayega; ye tab tak ka scaffolding hai.
+#   .\dev.ps1 shell              # bash inside the container
 
 param(
     [Parameter(Position = 0)][string]$Command = "ask",
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest,
     [switch]$Reset,
     [int]$Port = 8000,
-    # "concepts" (default) ya "scifact" - dono alag Chroma collections me rehte
-    # hain, isliye switch karne pe re-ingest nahi karna padta.
+    # "concepts" (default) or "scifact" - they live in separate Chroma
+    # collections, so switching needs no re-ingest.
     [ValidateSet("", "concepts", "scifact")][string]$Corpus = "",
-    # Extra env vars container ke liye: -Env USE_HYBRID=false,USE_RERANKER=false
-    # Retrieval ka A/B isi ke bina raw `docker run` likhna padta tha, jisme mounts
-    # dobara type karne padte the - aur wahi A/B is project ka core workflow hai.
+    # Extra env vars for the container: -Env USE_HYBRID=false,USE_RERANKER=false
+    # Without this the retrieval A/B meant hand-writing a raw `docker run` with
+    # all its mounts - and that A/B is this project's core workflow.
     [string[]]$Env = @()
 )
 
@@ -37,7 +35,7 @@ $Image   = "adaptive-crag-backend:dev"
 New-Item -ItemType Directory -Force -Path (Join-Path $Backend "vectorstore") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $Backend "beir") | Out-Null
 
-# Code + data + vectorstore mount - image sirf dependencies deti hai
+# Mount code, data and the vector store - the image provides dependencies only
 $Mounts = @(
     "-v", "${Backend}\app:/app/app",
     "-v", "${Backend}\data:/app/data",
@@ -46,18 +44,18 @@ $Mounts = @(
     "-v", "${Backend}\main.py:/app/main.py",
     "-v", "${Backend}\tests:/app/tests",
     "-v", "${Backend}\eval:/app/eval",
-    # BEIR download host pe cache rehta hai - container har baar 5k abstracts
-    # dobara download na kare.
+    # The BEIR download is cached on the host so the container does not re-fetch
+    # 5k abstracts every run.
     "-v", "${Backend}\beir:/app/beir"
 )
 
-# .env repo root se - secrets image me bake nahi hote
+# .env from the repo root - secrets are never baked into the image
 $EnvArgs = @()
 $EnvFile = Join-Path $Root ".env"
 if (Test-Path $EnvFile) { $EnvArgs += @("--env-file", $EnvFile) }
-else { Write-Host "[dev] warning: .env nahi mila - LLM call fail hogi (.env.example copy karo)" -ForegroundColor Yellow }
+else { Write-Host "[dev] warning: no .env found - LLM calls will fail (copy .env.example)" -ForegroundColor Yellow }
 
-# -e ke baad aata hai taaki --env-file ki value ko override kare, ulta nahi.
+# Comes after -e so it overrides --env-file, not the other way round.
 if ($Corpus) { $EnvArgs += @("-e", "CORPUS=$Corpus") }
 foreach ($pair in $Env) {
     foreach ($kv in ($pair -split ",")) {
@@ -71,7 +69,7 @@ switch ($Command) {
         $cmdArgs = @("python", "ingest.py")
         if ($Reset) { $cmdArgs += "--reset" }
         if ($Corpus) { $cmdArgs += @("--corpus", $Corpus) }
-        # Baaki flags (jaise --limit) seedha pass ho jaate hain.
+        # Other flags (--limit and so on) pass straight through.
         if ($Rest) { $cmdArgs += $Rest }
         docker run --rm @Mounts @EnvArgs $Image @cmdArgs
     }
@@ -80,8 +78,8 @@ switch ($Command) {
         docker run --rm @Mounts @EnvArgs $Image python -m app $question
     }
     "serve" {
-        # Is machine pe 8000 aksar doosre projects ke containers le lete hain,
-        # isliye port override kar sakte hain: .\dev.ps1 serve -Port 8042
+        # Other projects' containers often hold 8000 on this machine, so the
+        # port can be overridden: .\dev.ps1 serve -Port 8042
         Write-Host "[dev] http://localhost:$Port/docs" -ForegroundColor Cyan
         docker run --rm -p "${Port}:8000" @Mounts @EnvArgs $Image uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     }
@@ -89,8 +87,8 @@ switch ($Command) {
         docker run --rm @Mounts @EnvArgs $Image python -m pytest tests/ -q
     }
     "eval" {
-        # Asli Groq + asli DuckDuckGo hit karta hai - tests ke ulat. Rate limit
-        # bachane ke liye smoke run: .\dev.ps1 eval --limit 5
+        # Hits real Groq and real DuckDuckGo, unlike the tests. For a smoke run
+        # that saves rate limit: .\dev.ps1 eval --limit 5
         $evalArgs = @("python", "-m", "eval.run_eval") + $Rest
         docker run --rm @Mounts @EnvArgs $Image @evalArgs
     }
