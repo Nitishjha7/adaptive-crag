@@ -78,7 +78,11 @@ bada risk hai.
 5. ✅ Phase 5 — FastAPI `/api/query` endpoint with step logs
 6. ✅ Phase 6 — React + Vite + Tailwind dashboard (source badges, inline trace, Documents/Evaluation/System views)
 7. ✅ Phase 7 — Docker Compose · ❌ deployment abhi baaki (target: HuggingFace Space)
-8. ❌ Eval script + INTERVIEW_NOTES me real numbers bharna
+8. ✅ Eval harness (`eval/run_eval.py`) + INTERVIEW_NOTES me asli naape hue numbers —
+   routing, recall@k, groundedness, answer correctness, aur dono negative results
+9. 🟡 Answer-correctness A/B — baseline arm chal gaya, treatment arm Groq ke daily
+   token cap pe atka. Quota reset hone pe ek command:
+   `.\dev.ps1 eval -Corpus scifact --out eval/results_scifact.json`
 
 Detail har phase ka [ROADMAP.md](ROADMAP.md) me hai.
 
