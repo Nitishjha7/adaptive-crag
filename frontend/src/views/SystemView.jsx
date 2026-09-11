@@ -1,10 +1,10 @@
 /**
- * Live configuration — kya sach me chal raha hai.
+ * Live configuration — what is actually running.
  *
- * Har value `/api/stats` se aati hai, screen pe kuch hardcoded nahi. Isi wajah
- * se ye view debugging me sabse kaam ka hai: "reranker on hai ya nahi", "kaunsa
- * corpus load hai", "Groq key set hai ya nahi" — teeno sawaal yahin dikh jaate
- * hain, container ke andar ghuse bina.
+ * Every value comes from `/api/stats`; nothing on screen is hardcoded. That is
+ * what makes this view useful when debugging: "is the reranker on", "which
+ * corpus is loaded", "is the Groq key set" — all three answered here without
+ * shelling into the container.
  */
 function Row({ label, value, mono, tone }) {
   const tones = {
@@ -59,14 +59,14 @@ export default function SystemView({ stats }) {
         </p>
       </div>
 
-      {/* Pehle yahan chaar cards the. "Retrieval" card me Corpus / Documents /
-          Chunks the — teeno header line me aur Documents page pe pehle se hain,
-          yaani do jagah dobara. Reranker do baar likha tha: model "Models" me,
-          on/off "Retrieval" me — ek hi cheez ke do rows. Aur "Web fallback"
-          card ki doosri row derived thi (provider duckduckgo hai to key nahi
-          chahiye), yaani ek poora card do lines ke liye.
+      {/* There were four cards. The "Retrieval" card held Corpus / Documents /
+          Chunks — all three already in the header line and on the Documents page,
+          so duplicated twice over. The reranker appeared twice: its model under
+          "Models", its on/off under "Retrieval" — two rows for one thing. And the
+          second row of the "Web fallback" card was derived (duckduckgo implies no
+          key), which is a whole card for two lines.
 
-          Ab do cards: kya chal raha hai, aur kya banaya hi nahi. */}
+          Now two cards: what is running, and what was never built. */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Pipeline" subtitle="Everything except the LLM runs locally">
           <Row label="LLM (Groq)" value={c.llm_model} mono />
@@ -76,8 +76,8 @@ export default function SystemView({ stats }) {
             tone={c.groq_key_set ? "good" : "bad"}
           />
           <Row label="Embeddings" value={c.embedding_model} mono />
-          {/* Flag aur model ek hi row me: off hone pe model ka naam dikhana
-              jhooth hai, kyunki wo load hi nahi hua. */}
+          {/* Flag and model in one row: showing the model name while it is off
+              would be a lie, because it was never loaded. */}
           <Row
             label="Cross-encoder rerank"
             value={c.reranker ? (c.reranker_model ?? "on") : "off"}

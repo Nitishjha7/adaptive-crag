@@ -7,17 +7,17 @@ import EvaluationView from "./views/EvaluationView.jsx";
 import SystemView from "./views/SystemView.jsx";
 import useHistory from "./useHistory.js";
 
-/** Fixed demo queries, expected route ke saath. Live demo me kuch bhi type
- *  karke ummeed karna ki fallback trigger hoga — wahi galti demo todti hai.
+/** Fixed demo queries with their expected route. Typing something at random in
+ *  a live demo and hoping the fallback fires is the mistake that breaks demos.
  *
- *  **Corpus ke saath badalte hain.** Pehle ye sirf concepts wale the aur
- *  hardcoded the. `CORPUS=scifact` pe "Why does chunk overlap matter" chip pe
- *  hara (local) dot dikhta, par us corpus me wo doc hai hi nahi — asal me web
- *  route chalta. Chip apne hi demo ko jhuthlaati.
+ *  **They change with the corpus.** These used to be the concepts ones,
+ *  hardcoded. Under `CORPUS=scifact` the "Why does chunk overlap matter" chip
+ *  showed a green (local) dot while that document does not exist in that corpus
+ *  — it actually routed to the web. The chip contradicted its own demo.
  *
- *  SciFact ki queries `eval/results_scifact.json` se li gayi hain — yahi
- *  cases us run me local route pe gaye the aur gold doc bhi retrieve hua tha.
- *  Ye claims hain, sawaal nahi: SciFact claim-verification dataset hai. */
+ *  The SciFact queries come from `eval/results_scifact.json`: these are the
+ *  cases that routed local in that run *and* retrieved their gold document.
+ *  They are claims rather than questions — SciFact is claim verification. */
 const SUGGESTIONS_BY_CORPUS = {
   concepts: [
     { q: "Why does chunk overlap matter when splitting documents?", route: "local" },
@@ -34,16 +34,15 @@ const SUGGESTIONS_BY_CORPUS = {
 };
 
 /**
- * View URL ke hash me rehta hai, sirf React state me nahi.
+ * The view lives in the URL hash, not only in React state.
  *
  * Pehle `view` ek plain useState tha. Evaluation khol ke refresh karo, aur app
- * chup-chaap Chat pe wapas — koi error nahi, bas kaam ka nuksaan. Browser ka
- * back button bhi kuch nahi karta tha, aur kisi ko "ye page dekho" bhej bhi
- * nahi sakte the.
+ * silently back to Chat — no error, just lost work. The browser's back button
+ * did nothing either, and there was no way to send someone a link to a page.
  *
- * Hash isliye, path nahi: hash server tak jaata hi nahi, to nginx me koi
- * SPA-fallback rule nahi chahiye. Path routing pe `/eval` refresh karne pe
- * nginx 404 deta, kyunki wahan koi file hai hi nahi.
+ * Hash rather than path: a hash never reaches the server, so Nginx needs no
+ * SPA-fallback rule. With path routing, refreshing on `/eval` would 404, because
+ * no such file exists.
  */
 const VIEWS = ["chat", "documents", "eval", "system"];
 
@@ -56,13 +55,13 @@ export default function App() {
   const [turns, setTurns] = useState([]);
   const [stats, setStats] = useState(null);
   const [busy, setBusy] = useState(false);
-  // Sidebar **poora main view** switch karta hai. Pehle wo sirf right rail ka
-  // ek chhota tab badalta tha, to "Evaluation" click karne pe lagta tha kuch
-  // hua hi nahi — aur wo tab aksar scroll ke neeche hota tha.
-  // Pehla render hash se — warna ek frame ke liye Chat dikhta aur phir jump.
+  // The sidebar switches the **whole main view**. It used to change a small tab
+  // inside the right rail, so clicking "Evaluation" looked like nothing had
+  // happened — and that tab was often below the fold.
+  // First render from the hash, or Chat flashes for a frame and then jumps.
   const [view, setView] = useState(viewFromHash);
   const [draft, setDraft] = useState("");
-  // Har conversation ki apni id — history usi pe update hoti hai, warna ek hi
+  // Each conversation has its own id; history updates on it, otherwise one
   // chat ke do turns do alag entries ban jaate.
   const [chatId, setChatId] = useState(() => Date.now().toString(36));
   const history = useHistory();
@@ -79,12 +78,12 @@ export default function App() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
 
-  // View -> URL. `chat` default hai, uske liye hash khaali rakhte hain warna
-  // landing URL me bewajah "#chat" chipak jaata hai.
+  // View -> URL. `chat` is the default, so its hash stays empty — otherwise
+  // "#chat" sticks to the landing URL for no reason.
   //
-  // `pushState`, `replaceState` nahi: replace se refresh to theek ho jaata hai
-  // par history me entry banti hi nahi, to back button views ke beech chalta
-  // nahi. Nav clicks ke liye history entry banna hi sahi vyavhaar hai.
+  // `pushState`, not `replaceState`: replace fixes refresh but creates no
+  // history entry, so the back button cannot move between views. For nav clicks,
+  // creating a history entry is the correct behaviour.
   useEffect(() => {
     const want = view === "chat" ? "" : `#${view}`;
     if (window.location.hash !== want) {
@@ -92,9 +91,9 @@ export default function App() {
     }
   }, [view]);
 
-  // URL -> view. `popstate` sunte hain, `hashchange` nahi: pushState se hui
-  // navigation pe back/forward popstate hi deta hai, aur hash badalne pe bhi
-  // popstate aata hai — to ek hi listener dono case sambhaal leta hai.
+  // URL -> view. Listen to `popstate`, not `hashchange`: back/forward over
+  // pushState navigation fires popstate, and a hash change fires it too, so one
+  // listener covers both cases.
   useEffect(() => {
     const onPop = () => setView(viewFromHash());
     window.addEventListener("popstate", onPop);
@@ -108,7 +107,7 @@ export default function App() {
     setTurns((t) => [...t, { role: "user", text: question, at: Date.now() }]);
 
     try {
-      // Relative path — dev me Vite proxy, production me Nginx handle karta hai.
+      // Relative path — Vite proxies it in dev, Nginx in production.
       const res = await fetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,8 +115,8 @@ export default function App() {
       });
 
       if (!res.ok) {
-        // Backend ka asli message dikhate hain (missing key, rate limit) —
-        // generic "something went wrong" se debug karna namumkin hota hai.
+        // Show the backend's real message (missing key, rate limit). A generic
+        // "something went wrong" makes debugging impossible.
         const body = await res.text();
         throw new Error(`HTTP ${res.status} — ${body.slice(0, 300)}`);
       }
@@ -128,8 +127,8 @@ export default function App() {
           ...t,
           { role: "assistant", text: data.answer, at: Date.now(), ...data },
         ];
-        // Answer aane ke baad record karo, sawaal ke baad nahi — warna ek
-        // adhoori entry (bina route ke) history me baith jaati.
+        // Record after the answer arrives, not after the question — otherwise a
+        // half-finished entry with no route sits in the history.
         history.record(chatId, next);
         return next;
       });
@@ -173,8 +172,8 @@ export default function App() {
               </span>
               Adaptive Corrective RAG
             </h1>
-            {/* Config header me hai, tagline nahi — dekhne wale ko sabse pehle
-                ye jaanna hota hai ki kis corpus aur kis model pe chal raha hai. */}
+            {/* Config in the header rather than a tagline — the first thing a
+                viewer wants is which corpus and which model this is running. */}
             <p className="mt-0.5 font-mono text-xs text-slate-400">
               {stats
                 ? `${stats.corpus} · ${stats.chunks} chunks · ${stats.config.llm_model}`
@@ -182,9 +181,9 @@ export default function App() {
             </p>
           </div>
 
-          {/* Backend up hone pe "online" likhna kuch nahi kehta — header ki
-              corpus line pehle hi backend se aa rahi hai, wahi proof hai. Down
-              hone pe batana zaroori hai, isliye sirf tab dikhta hai. */}
+          {/* Saying "online" when the backend is up says nothing — the header
+              line already comes from the backend, which is the proof. Saying so
+              when it is down does matter, so this only renders then. */}
           {!stats && (
             <span className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -220,7 +219,7 @@ export default function App() {
           }`}
         >
           {/* Rail hatne ke baad chat poori chaudai le rahi thi — 1400px ki line
-              padhne layak nahi hoti. Column ko reading width pe rok diya. */}
+              is not readable. The column is capped at a reading width. */}
           <section
             className={`mx-auto flex w-full max-w-4xl flex-col rounded-xl border border-slate-200 bg-white ${
               turns.length || busy ? "min-h-[26rem] flex-1" : ""
@@ -243,13 +242,10 @@ export default function App() {
                 turns.length || busy ? "flex-1 py-5" : "pt-5"
               }`}
             >
-              {/* Khaali chat ek bada blank void tha. Ab wahi jagah batati hai ki
-                  system karta kya hai — aur dono routes ka farak pehle hi dikha
-                  deti hai, jo poore project ka point hai. */}
-              {/* Pehle yahan ek lecture tha — dono routes ke explainer cards aur
-                  "pick one of the four below". Wo sab neeche chips aur har
-                  answer ke trace me pehle se hai; do baar kehna hi UI ko
-                  bhara-bhara aur banawati banata tha. */}
+              {/* There used to be a lecture here — explainer cards for both
+                  routes and "pick one of the four below". All of that is already
+                  in the chips below and in each answer's trace; saying it twice
+                  is what made the UI feel padded and generated. */}
               {turns.length === 0 && !busy && (
                 <p className="text-sm leading-relaxed text-slate-400">
                   Every question is graded before it is answered. Ask one, then open

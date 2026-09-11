@@ -3,23 +3,22 @@ import { useCallback, useEffect, useState } from "react";
 /**
  * Past queries ka local log.
  *
- * **Ye conversation memory NAHI hai — aur ye farak zaroori hai.** Graph
- * stateless hai: koi checkpointer nahi, aur `CRAGState` har request pe
- * `initial_state()` se naya banta hai. Follow-up question pichhle turn ka
- * context **use nahi karta**.
+ * **This is NOT conversation memory, and the distinction matters.** The graph
+ * is stateless: there is no checkpointer, and `CRAGState` is rebuilt from
+ * `initial_state()` on every request. A follow-up question does **not** use the
+ * previous turn's context.
  *
- * To ye sirf ek record hai — kya poochha gaya, kaunsa route mila, kya trace
- * tha. Demo me ye asli kaam ka hai: ek local-route aur ek web-route answer
- * saath rakh ke farak dikhaya ja sakta hai bina dobara chalaye. Par UI ko
- * kabhi ye impression nahi dena chahiye ki system pichhli baat yaad rakhta hai.
+ * So this is only a record — what was asked, which route it took, what the trace
+ * was. That earns its place in a demo: a local-route and a web-route answer can
+ * sit side by side without re-running either. But the UI must never suggest the
+ * system remembers anything.
  *
- * `localStorage` isliye ki backend pe koi user, session ya DB hai hi nahi.
- * Server-side history ke liye pehle wo teeno chahiye — aur wo is project ka
- * axis nahi hai.
+ * `localStorage` because the backend has no users, no sessions and no database.
+ * Server-side history would need all three, and that is not this project's axis.
  */
 const KEY = "crag.history.v1";
-// Purani entries chhaant dete hain: ye ek demo log hai, archive nahi, aur
-// localStorage ka quota ~5MB hota hai.
+// Old entries are trimmed: this is a demo log, not an archive, and
+// localStorage has a ~5MB quota.
 const MAX = 20;
 
 function load() {
@@ -28,7 +27,7 @@ function load() {
     return raw ? JSON.parse(raw) : [];
   } catch {
     // Private mode / storage disabled / corrupt JSON — history ek convenience
-    // hai, uske liye app todna galat hai.
+    // convenience; breaking the app over it would be wrong.
     return [];
   }
 }
@@ -58,8 +57,8 @@ export default function useHistory() {
       id,
       title: firstUser.text,
       at: Date.now(),
-      // Badge sidebar me dikhta hai — ek nazar me pata chal jaata hai ki us
-      // query pe correction path chala tha ya nahi.
+      // The badge shows in the sidebar, so one glance says whether that query
+      // took the correction path.
       route: answer?.source_type ?? null,
       turns,
     };

@@ -1,15 +1,15 @@
 /** Left navigation rail.
  *
- * Nav items sirf wo hain jo **sach me kuch dikhate hain**. Jo screens abhi nahi
- * hain (Documents upload, Settings) unhe `soon: true` mark kiya hai aur wo
- * disabled hain — ek dead link daal ke demo me uspe click ho jaana usse bura hai.
+ * Nav items are only the ones that **actually show something**. Screens that do
+ * not exist (document upload, settings) are marked `soon: true` and disabled —
+ * a dead link that someone clicks during a demo is worse than no link.
  */
-// `id` seedha App ke `view` se match karna chahiye. Pehle yahan "evaluation"
-// tha jabki App "eval" expect karta hai — nav click kuch karta hi nahi tha,
-// bina kisi error ke. Isliye ab dono jagah ek hi vocabulary hai.
+// `id` has to match App's `view` exactly. This used to say "evaluation" while
+// App expected "eval" — the nav click did nothing at all, with no error. So both
+// sides now use one vocabulary.
 //
-// "New Chat" is list me nahi hai: wo ek **action** hai, tab nahi. Dono ko ek
-// jaisa style dene se do items ek saath highlighted dikhte the.
+// "New chat" is not in this list: it is an **action**, not a tab. Styling them
+// the same made two things look highlighted at once.
 const NAV = [
   { id: "chat", label: "Chat", icon: ListIcon },
   { id: "documents", label: "Documents", icon: DocIcon },
@@ -82,11 +82,11 @@ export default function Sidebar({
       <div className="px-3 pb-3">
         <button
           onClick={onNewChat}
-          // Pehle ye `!hasChat` pe disabled tha, aur wahi galat tha: button ke
-          // do kaam hain — chat clear karna *aur* Chat view pe wapas laana.
-          // Documents ya Evaluation pe khade ho aur chat khaali ho, to click
-          // pe kuch nahi hota tha. Khaali chat pe ye harmless no-op hai, par
-          // view to sahi jagah le hi jaata hai.
+          // This used to be disabled on `!hasChat`, which was wrong: the button
+          // has two jobs — clear the chat *and* return to the Chat view. Standing
+          // on Documents or Evaluation with an empty chat, clicking it did
+          // nothing at all. On an empty chat the clear is a harmless no-op, but
+          // the view still lands where it should.
           className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
         >
           <ChatIcon className="h-4 w-4" />
@@ -103,9 +103,9 @@ export default function Sidebar({
               disabled={soon}
               onClick={() => onSelect(id)}
               title={soon ? "Not built — there is no upload API yet" : undefined}
-              // Active tab ka style "New Chat" button se **alag** hona chahiye.
-              // Pehle dono solid indigo the, to do cheezein ek saath primary
-              // dikhti thi aur samajh nahi aata tha kaunsi actionable hai.
+              // The active tab must look **different** from the "New chat"
+              // button. Both were solid indigo, so two things read as primary at
+              // once and it was unclear which one was actionable.
               className={`flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition ${
                 isActive
                   ? "bg-white/10 font-medium text-white"
@@ -122,10 +122,10 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* Yahan pehle ek promo card tha ("RAG + Web Search / Smarter Answers").
-          Marketing copy ek dev tool me jagah ghera rahi thi aur kuch bata nahi
-          rahi thi. Us jagah ab wo cheez hai jo asli me kaam ki hai: pichhli
-          queries, route badge ke saath. */}
+      {/* A promo card used to sit here ("RAG + Web Search / Smarter Answers").
+          Marketing copy took up space in a dev tool and told you nothing. The
+          space now holds something useful: past queries, with their route
+          badge. */}
       <div className="mt-5 flex min-h-0 flex-1 flex-col px-3">
         <div className="flex items-center justify-between px-1 pb-1.5">
           <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
@@ -151,8 +151,8 @@ export default function Sidebar({
                   }`}
                 >
                   <div className="flex items-center gap-1.5">
-                    {/* Route badge — ek nazar me pata chal jaata hai ki us query
-                        pe correction path chala tha ya nahi. */}
+                    {/* Route badge — one glance says whether that query took
+                        the correction path. */}
                     <span
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                         h.route === "web_search" ? "bg-sky-400" : "bg-emerald-400"
@@ -183,9 +183,9 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Ye line jaan-boojh ke hai. History ek **log** hai, memory nahi — graph
-          stateless hai aur follow-up question pichhla context use nahi karta.
-          Bina iske UI ek aisa dawa kar deta jo sach nahi hai. */}
+      {/* This line is deliberate. History is a **log**, not memory — the graph
+          is stateless and a follow-up does not use the previous context. Without
+          it the UI would be making a claim that is not true. */}
       <p className="border-t border-white/5 px-4 py-3 text-[10px] leading-relaxed text-slate-600">
         Stored in this browser only. Each query runs independently — history is a
         record, not conversation memory.

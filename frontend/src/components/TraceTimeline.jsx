@@ -1,13 +1,13 @@
 /**
  * Node-by-node execution timeline — UI ka sabse asli hissa.
  *
- * Backend ka har node `logs` me ek line append karta hai (additive reducer).
- * Yahan wahi lines timeline banti hain, to dikhta hai ki system ne kya socha:
+ * Every backend node appends one line to `logs` (an additive reducer). Those
+ * lines become this timeline, so you can see what the system decided:
  * retrieve -> grade: no -> rewrite -> web search -> generate -> validate.
  *
- * **Per-step timestamps nahi dikhate** — backend per-node timing emit nahi
- * karta, aur "10:24:03" chhaap dena number gadhna hoga. Total `elapsed_ms`
- * asli hai, wo dikhta hai.
+ * **No per-step timestamps** — the backend emits no per-node timing, and
+ * printing "10:24:03" would be inventing a number. The total `elapsed_ms` is
+ * real, so that is what is shown.
  */
 const LABELS = {
   retrieve: ["Retrieve", "Hybrid search + rerank"],
@@ -18,7 +18,7 @@ const LABELS = {
   validate_guardrails: ["Validate", "Groundedness + PII check"],
 };
 
-/** Chain me chhote naam — ek line me poora rasta dikhana hai. */
+/** Short names for the chain — the whole path has to fit on one line. */
 const SHORT = {
   retrieve: "retrieve",
   grade_documents: "grade",
@@ -28,7 +28,7 @@ const SHORT = {
   validate_guardrails: "validate",
 };
 
-/** Ye chaar node LLM call karte hain; retrieve aur web_search nahi. */
+/** These four nodes make an LLM call; retrieve and web_search do not. */
 const LLM_NODES = ["grade_documents", "transform_query", "generate", "validate_guardrails"];
 
 export function parse(line) {
@@ -38,8 +38,8 @@ export function parse(line) {
 }
 
 /**
- * Kitne LLM call lage — trace se gine jaate hain, hardcode nahi.
- * Yahi wo number hai jispe "hamesha web search kyun nahi" wala argument khada hai.
+ * How many LLM calls it took — counted from the trace, never hardcoded.
+ * This is the number the "why not always search the web" argument rests on.
  */
 export function llmCalls(logs = []) {
   return logs.filter((l) => LLM_NODES.includes(parse(l).node)).length;
@@ -47,7 +47,7 @@ export function llmCalls(logs = []) {
 
 /**
  * Ek line ka rasta: `retrieve -> grade: no -> rewrite -> web search -> generate`.
- * Grade ka verdict chain me hi dikhta hai, kyunki wahi poore project ka mod hai.
+ * The grade verdict appears inline, because that is the project's turning point.
  */
 export function chain(logs = []) {
   return logs
@@ -84,8 +84,8 @@ export default function TraceTimeline({ logs }) {
   const steps = logs.map(parse);
   const ranWeb = steps.some((s) => s.node === "web_search_fallback");
 
-  // Local route pe web search *chala hi nahi* — usko greyed step ki tarah
-  // dikhana hi wo baat saaf karta hai ki fallback conditional hai, default nahi.
+  // On the local route web search *never ran*. Showing it as a greyed-out step
+  // is what makes clear that the fallback is conditional, not the default.
   const rows = [...steps];
   if (!ranWeb) {
     const at = rows.findIndex((s) => s.node === "generate");

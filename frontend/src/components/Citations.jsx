@@ -1,15 +1,15 @@
 /**
  * Answer kis source se bana — filenames (local) ya URLs (web).
  *
- * Badge batata hai *kaunsa route* liya; ye batata hai *kaunse documents* use
- * hue. Dono chahiye: badge ke bina route invisible hai, iske bina user verify
- * nahi kar sakta.
+ * The badge says *which route* was taken; this says *which documents* were
+ * used. Both are needed: without the badge the route is invisible, without this
+ * the user cannot verify anything.
  */
 function isUrl(s) {
   return s.startsWith("http://") || s.startsWith("https://");
 }
 
-/** URL se sirf domain — poora URL layout todta hai aur padhne me kuch deta nahi. */
+/** Just the domain — a full URL breaks the layout and reads no better. */
 function label(s) {
   if (!isUrl(s)) return s;
   try {

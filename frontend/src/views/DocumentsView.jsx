@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 
 /**
- * Kya kya index me hai.
+ * What is in the index.
  *
- * Ye view isliye zaroori hai ki poore project ka faisla — "local context kaafi
- * hai ya nahi" — is list par khada hai. Wo dikhaye bina grader ka verdict ek
- * black box lagta hai; list dikhne ke baad user khud dekh sakta hai ki fallback
- * kyun trigger hua.
+ * This view matters because the project's central decision — "is the local
+ * context sufficient?" — rests on this list. Without showing it, the grader's
+ * verdict looks like a black box; with it, anyone can see for themselves why the
+ * fallback fired.
  */
 function FileIcon(p) {
   return (
@@ -59,11 +59,11 @@ export default function DocumentsView({ stats }) {
         </p>
       </div>
 
-      {/* Har corpus ke saath uska **maqsad** likha hai, aur ye list se zyada
-          zaroori hai. Pehle sirf concepts pe note tha; SciFact pe 500 abstracts
-          bina kisi framing ke aa jaate the, jisse lagta tha bas data bhar diya
-          hai. Dono corpora alag wajah se maujood hain, aur wahi wajah batani
-          chahiye. */}
+      {/* Each corpus is shown with its **purpose**, which matters more than the
+          list itself. Only concepts had a note before; SciFact dropped 500
+          abstracts on the page with no framing, which read as data for its own
+          sake. The two corpora exist for different reasons, and that reason is
+          the thing worth saying. */}
       {isConcepts ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
           <h4 className="text-sm font-semibold text-slate-800">

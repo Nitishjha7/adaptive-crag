@@ -1,22 +1,21 @@
 /**
- * Evaluation ka poora page.
+ * The whole Evaluation page.
  *
- * Numbers akele **misleading** hain: 20/20 dekh ke lagta hai router perfect
- * hai, jabki asli baat ye hai ki labelled task aasan hai. Isliye har number ke
- * saath uska caveat hai, aur negative results utne hi prominently hain jitni
- * accuracy.
+ * Numbers on their own are **misleading**: 20/20 reads as a perfect router when
+ * the real point is that the labelled task is easy. So every number carries its
+ * caveat, and the negative results sit as prominently as the accuracy.
  *
- * Do baar chhaanta gaya hai. Pehle **nau** metric cards the: teen ek hi baat
- * keh rahe the (routing accuracy = total - missed - unnecessary, to missed aur
- * unnecessary uska *breakdown* hain, peers nahi), do measurement the hi nahi
- * (LLM calls dono paths ki fixed keemat hai, aur ab har chat trace me dikhti
- * hai), aur "Ambiguous cases" result nahi — Route stability ka denominator tha.
+ * Trimmed twice. There were **nine** metric cards: three said the same thing
+ * (routing accuracy = total - missed - unnecessary, so missed and unnecessary
+ * are its *breakdown*, not its peers), two were not measurements at all (LLM
+ * calls are the fixed cost of each path, and now appear in every chat trace),
+ * and "Ambiguous cases" was not a result — it was Route stability's denominator.
  *
- * Phir neeche ke teen prose cards. Wo "AI se likhwaya hua" lagte the, aur
- * wajah saaf thi: teeno ek hi shakl ke — bold title + ~40 shabd — aur teeno
- * apna data *bata* rahe the, *dikha* nahi rahe the. "27 of 28 questions
- * retrieved different chunks" ek jumle me dab jaata hai; table me wahi
- * punchline ban jaata hai. Ab har block apna asli number rakhta hai.
+ * Then the three prose cards below. They read as generated, for a clear reason:
+ * all three had the same shape — bold title plus ~40 words — and all three
+ * *described* their data instead of *showing* it. "27 of 28 questions retrieved
+ * different chunks" disappears inside a sentence; in a table it is the
+ * punchline. Each block now carries its own real numbers.
  */
 function Metric({ label, value, hint, tone = "slate", big }) {
   const tones = {
@@ -35,7 +34,7 @@ function Metric({ label, value, hint, tone = "slate", big }) {
   );
 }
 
-/** Ek experiment: sawaal, uska **data**, phir nateeja. */
+/** One experiment: the question, its **data**, then the conclusion. */
 function Experiment({ question, children, footnote }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -50,7 +49,7 @@ function Experiment({ question, children, footnote }) {
   );
 }
 
-/** Before/after — teen column. */
+/** Before/after — three columns. */
 function Compare({ head = ["", "before", "after"], rows }) {
   return (
     <table className="w-full text-sm">
@@ -80,7 +79,7 @@ function Compare({ head = ["", "before", "after"], rows }) {
   );
 }
 
-/** Label -> ginti. `punch` wali row hi asli baat hoti hai. */
+/** Label -> count. The `punch` row is the one that matters. */
 function Counts({ rows }) {
   return (
     <table className="w-full text-sm">
@@ -109,12 +108,12 @@ function Counts({ rows }) {
 }
 
 /**
- * Test set kisne banaya — page ka sabse zaroori jumla.
+ * Who built the test set — the most important sentence on the page.
  *
- * Concepts pe labels khud author ne lagaye hain, aur wahi single-author bias
- * hai jo RESULTS.md maanta hai. SciFact pe local cases dataset ke qrels se
- * aate hain, to wahan author ki raay shaamil hi nahi. Ye farak chhupane wali
- * cheez nahi — yahi batata hai kis number pe kitna bharosa karna hai.
+ * On concepts the labels are the author's own, which is the single-author bias
+ * RESULTS.md admits to. On SciFact the local cases come from the dataset's
+ * qrels, so no author judgement is involved. This difference is not something to
+ * hide — it is what tells you how much to trust each number.
  */
 const LABELLING = {
   concepts: (
@@ -138,14 +137,14 @@ const LABELLING = {
 };
 
 /**
- * Experiments corpus ke saath badalte hain — aur ye zaroori hai.
+ * The experiments change with the corpus, and that matters.
  *
- * Pehle ye cards hardcoded the aur sirf `concepts` ki baat karte the.
- * `CORPUS=scifact` pe UI SciFact ke numbers dikhata par neeche likha rehta
- * "reranking changed nothing" — us corpus pe **galat**. Dashboard ka apna hi
- * rule hai ki jo measure nahi hua wo claim mat karo; ulta claim to bilkul nahi.
+ * These cards used to be hardcoded and only talked about `concepts`. Under
+ * `CORPUS=scifact` the UI showed SciFact's numbers with "reranking changed
+ * nothing" written underneath — **wrong** on that corpus. The dashboard's own
+ * rule is not to claim what was not measured, let alone claim the opposite.
  *
- * Saare numbers `backend/eval/RESULTS.md` se hain, haath se koi nahi gadha.
+ * Every number here comes from `backend/eval/RESULTS.md`. None were invented.
  */
 const EXPERIMENTS = {
   concepts: [
@@ -258,8 +257,8 @@ export default function EvaluationView({ stats }) {
           </span>{" "}
           to measure it.
         </p>
-        {/* "Measure nahi hua" aur "score zero hai" do alag baatein hain — UI ko
-            kabhi zero nahi dikhana chahiye jab measurement hui hi na ho. */}
+        {/* "Not measured" and "scored zero" are different claims — the UI must
+            never show a zero when no measurement happened. */}
         <p className="mt-3 text-xs text-slate-400">
           Nothing is shown as 0 here on purpose — &quot;not measured&quot; and &quot;scored
           zero&quot; are different claims.
@@ -293,9 +292,10 @@ export default function EvaluationView({ stats }) {
           hint={`${e.routing_accuracy_pct}% on the labelled set`}
         />
 
-        {/* Missed aur unnecessary accuracy ke peers nahi, uska breakdown hain —
-            teen barabar cards me dikhane se lagta tha teen alag nataije hain.
-            Asli baat dono ka **farak** hai: ek mehnga, ek sasta. */}
+        {/* Missed and unnecessary are not peers of accuracy, they are its
+            breakdown — three equal cards made them look like three separate
+            results. The real point is the **difference**: one is expensive, one
+            is cheap. */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-sm font-medium text-slate-700">Where the errors are</div>
           <div className="mt-3 space-y-2.5">
@@ -334,8 +334,8 @@ export default function EvaluationView({ stats }) {
           hint="Answers supported by their own retrieved context"
         />
 
-        {/* Sirf BEIR pe milta hai — wahan qrels batate hain ki sahi doc kaunsa
-            tha. Concepts pe ground truth hai hi nahi, isliye card hi nahi. */}
+        {/* Only available on BEIR, where qrels say which document was correct.
+            The concepts corpus has no ground truth, so no card. */}
         {e.recall_at_k_pct != null && (
           <Metric
             label="Retrieval recall@k"
@@ -344,9 +344,9 @@ export default function EvaluationView({ stats }) {
           />
         )}
 
-        {/* Groundedness kehti hai "answer apne context se match karta hai".
-            Ye kehta hai "answer **sahi** tha". Do alag baatein hain: galat
-            context se bana galat answer groundedness pass kar sakta hai. */}
+        {/* Groundedness says "the answer matches its context". This says "the
+            answer was **right**". Two different claims: a wrong answer built
+            from the wrong context can pass groundedness. */}
         {e.answer_verdict_pct != null && (
           <Metric
             label="Answer correctness"
@@ -355,8 +355,8 @@ export default function EvaluationView({ stats }) {
           />
         )}
 
-        {/* Ambiguous cases na hon to stability ka matlab hi nahi — pehle yahan
-            khaali "—" wala card baitha rehta tha. */}
+        {/* With no ambiguous cases, stability means nothing — an empty "—" card
+            used to sit here. */}
         {e.ambiguous_cases > 0 && (
           <Metric
             label="Route stability"

@@ -5,11 +5,11 @@ import TraceTimeline, { chain, llmCalls } from "./TraceTimeline.jsx";
 
 /** One turn in the conversation.
  *
- * Assistant message apne saath apna **poora rasta** leke chalta hai — badge,
- * chain, trace, sources. Pehle ye sab ek right rail me tha jo sirf *aakhri*
- * answer dikhata tha, aur Message ki aadhi cheezein wahan dobara likhi thi.
- * Demo me scroll karke "isme grade no aaya tha, isme yes" dikhana tab mumkin
- * hi nahi tha. Ab har answer khud-mukhtar hai.
+ * An assistant message carries **its whole path** with it — badge, chain,
+ * trace, sources. All of that used to live in a right rail that showed only the
+ * *last* answer, and half of it duplicated what Message already displayed.
+ * Scrolling back in a demo to say "this one graded no, this one yes" was simply
+ * not possible. Now every answer stands on its own.
  */
 function CopyButton({ text }) {
   return (
@@ -52,9 +52,9 @@ function SourceBadgeInline({ sourceType }) {
 /**
  * Ek line ka rasta + kharcha, aur poora trace ek click door.
  *
- * Cost line jaan-boojh ke dono raaste batati hai. "3 calls" akela kuch nahi
- * kehta; "3, aur fallback pe 4 lagte" hi wo trade-off hai jispe conditional
- * routing ka poora argument khada hai.
+ * The cost line deliberately names both paths. "3 calls" on its own says
+ * nothing; "3, and the fallback would cost 4" is the trade-off the whole case
+ * for conditional routing rests on.
  */
 function TraceStrip({ logs, elapsedMs }) {
   const [open, setOpen] = useState(false);
@@ -158,8 +158,9 @@ export default function Message({ turn }) {
           {turn.text}
         </p>
 
-        {/* Rewritten query sirf fallback path pe hoti hai. Ise dikhana wo point
-            sabse saaf banata hai ki system ne khud query badli. */}
+        {/* The rewritten query only exists on the fallback path. Showing it is
+            the clearest way to make the point that the system changed the
+            query itself. */}
         {turn.transformed_query && (
           <div className="mx-4 mb-3 flex gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
             <svg
