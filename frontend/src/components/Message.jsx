@@ -1,10 +1,15 @@
+import { useState } from "react";
+
 import Citations from "./Citations.jsx";
+import TraceTimeline, { chain, llmCalls } from "./TraceTimeline.jsx";
 
 /** One turn in the conversation.
  *
- * Assistant messages carry the badge that is the entire point of the project:
- * did this answer come from the local corpus, or did the system decide the
- * corpus was insufficient and go to the web?
+ * Assistant message apne saath apna **poora rasta** leke chalta hai — badge,
+ * chain, trace, sources. Pehle ye sab ek right rail me tha jo sirf *aakhri*
+ * answer dikhata tha, aur Message ki aadhi cheezein wahan dobara likhi thi.
+ * Demo me scroll karke "isme grade no aaya tha, isme yes" dikhana tab mumkin
+ * hi nahi tha. Ab har answer khud-mukhtar hai.
  */
 function CopyButton({ text }) {
   return (
@@ -39,25 +44,81 @@ function SourceBadgeInline({ sourceType }) {
           <path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" />
         </svg>
       )}
-      {local ? "Answered from Documents" : "Answered from Web Search"}
+      {local ? "Answered from documents" : "Answered from web search"}
     </span>
   );
 }
 
-export default function Message({ turn }) {
-  const time = new Date(turn.at).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+/**
+ * Ek line ka rasta + kharcha, aur poora trace ek click door.
+ *
+ * Cost line jaan-boojh ke dono raaste batati hai. "3 calls" akela kuch nahi
+ * kehta; "3, aur fallback pe 4 lagte" hi wo trade-off hai jispe conditional
+ * routing ka poora argument khada hai.
+ */
+function TraceStrip({ logs, elapsedMs }) {
+  const [open, setOpen] = useState(false);
+  if (!logs?.length) return null;
 
+  const steps = chain(logs);
+  const calls = llmCalls(logs);
+  const wentWeb = steps.some((s) => s.text === "web search");
+
+  return (
+    <div className="border-t border-slate-100">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 px-4 py-2.5 text-left transition hover:bg-slate-50"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className={`h-3 w-3 shrink-0 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          aria-hidden="true"
+        >
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+
+        {steps.map((s, i) => (
+          <span key={i} className="flex items-center gap-1.5">
+            {i > 0 && <span className="text-slate-300">/</span>}
+            <span
+              className={`font-mono text-[11px] ${
+                s.verdict === "no"
+                  ? "font-semibold text-sky-600"
+                  : s.verdict === "yes"
+                    ? "font-semibold text-emerald-600"
+                    : "text-slate-500"
+              }`}
+            >
+              {s.text}
+            </span>
+          </span>
+        ))}
+
+        <span className="ml-auto pl-2 font-mono text-[11px] text-slate-400">
+          {calls} LLM {calls === 1 ? "call" : "calls"}
+          {!wentWeb && " (fallback would cost 4)"} · {(elapsedMs / 1000).toFixed(1)}s
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-1">
+          <TraceTimeline logs={logs} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Message({ turn }) {
   if (turn.role === "user") {
     return (
       <div className="flex items-start justify-end gap-3">
-        <div className="max-w-[78%]">
-          <div className="rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-white">
-            {turn.text}
-          </div>
-          <div className="mt-1 text-right text-[11px] text-slate-400">{time}</div>
+        <div className="max-w-[78%] rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-white">
+          {turn.text}
         </div>
         <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-500">
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -119,19 +180,13 @@ export default function Message({ turn }) {
           </div>
         )}
 
-        <div className="flex items-center gap-3 px-4 pb-3 text-[11px] text-slate-400">
-          <span>{time}</span>
-          <span>·</span>
-          <span>{turn.elapsed_ms} ms</span>
-          <span>·</span>
-          <span>grade: {turn.relevance_score}</span>
-        </div>
-
         {turn.sources?.length > 0 && (
           <div className="border-t border-slate-100 px-4 py-3">
             <Citations sources={turn.sources} sourceType={turn.source_type} />
           </div>
         )}
+
+        <TraceStrip logs={turn.logs} elapsedMs={turn.elapsed_ms} />
       </div>
     </div>
   );

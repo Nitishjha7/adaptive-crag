@@ -100,20 +100,6 @@ export default function DocumentsView({ stats }) {
         </p>
       )}
 
-      {/* Upload wala flow banaya nahi hai. Usko "coming soon" bolne se behtar hai
-          batana ki abhi ingestion kaise hoti hai. */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h4 className="text-sm font-semibold text-slate-800">Adding documents</h4>
-        <p className="mt-1.5 text-sm text-slate-600">
-          There is no upload endpoint — ingestion is a deliberate offline step, so the
-          index is never half-written while queries are being served. Drop{" "}
-          <span className="font-mono">.md</span> or <span className="font-mono">.txt</span>{" "}
-          files into <span className="font-mono">backend/data/</span> and run:
-        </p>
-        <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100">
-          .\dev.ps1 ingest -Reset
-        </pre>
-      </div>
     </div>
   );
 }

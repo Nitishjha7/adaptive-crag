@@ -4,9 +4,9 @@
  * hain (Documents upload, Settings) unhe `soon: true` mark kiya hai aur wo
  * disabled hain — ek dead link daal ke demo me uspe click ho jaana usse bura hai.
  */
-// `id` seedha SidePanel ke tab id se match karna chahiye. Pehle yahan
-// "evaluation" tha jabki panel "eval" expect karta hai — nav click kuch karta
-// hi nahi tha, bina kisi error ke. Isliye ab dono jagah ek hi vocabulary hai.
+// `id` seedha App ke `view` se match karna chahiye. Pehle yahan "evaluation"
+// tha jabki App "eval" expect karta hai — nav click kuch karta hi nahi tha,
+// bina kisi error ke. Isliye ab dono jagah ek hi vocabulary hai.
 //
 // "New Chat" is list me nahi hai: wo ek **action** hai, tab nahi. Dono ko ek
 // jaisa style dene se do items ek saath highlighted dikhte the.
@@ -78,7 +78,6 @@ export default function Sidebar({
       <div className="flex items-center gap-2.5 px-4 pb-5 pt-5">
         <Logo className="h-7 w-7" />
         <div className="text-base font-semibold leading-none text-white">CRAG</div>
-        <span className="ml-auto text-[10px] text-slate-600">v0.9.0</span>
       </div>
 
       <div className="px-3 pb-3">

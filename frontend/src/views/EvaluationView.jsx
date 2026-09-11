@@ -40,6 +40,89 @@ function Finding({ title, children, tone = "amber" }) {
   );
 }
 
+/**
+ * Findings corpus ke saath badalte hain — aur ye zaroori hai.
+ *
+ * Pehle ye teen cards hardcoded the aur sirf `concepts` ki baat karte the.
+ * `CORPUS=scifact` pe UI SciFact ke numbers dikhata (78.6%, recall 70%) par
+ * neeche likha rehta "100% means the task is easy" aur "reranking changed
+ * nothing" — dono us corpus pe **galat**. Dashboard ka apna hi rule hai ki
+ * jo measure nahi hua wo claim mat karo; ulta claim to bilkul nahi.
+ */
+const FINDINGS = {
+  concepts: [
+    {
+      title: "100% means the task is easy, not that the router is perfect",
+      body: (
+        <>
+          The corpus gap is categorical by design — concepts in, vendor/pricing/news
+          out — so most web cases differ along an obvious axis. Ambiguous cases were
+          added for the harder situation and are scored for <em>stability</em>, not
+          correctness, because their labels are genuinely contestable.
+        </>
+      ),
+    },
+    {
+      title: "Negative result: latency could not be measured",
+      body: (
+        <>
+          The cost argument rests on <strong>LLM call counts</strong>, not latency.
+          Groq's throttling swamps the route difference — one run measured the local
+          route slower than the web route, which is backwards. The first ordering was
+          confounded and looked convincing.
+        </>
+      ),
+    },
+    {
+      title: "Negative result: reranking changed nothing here",
+      body: (
+        <>
+          Hybrid search and cross-encoder reranking were A/B'd behind flags. Routing
+          and stability were identical — yet 27 of 28 questions retrieved{" "}
+          <em>different</em> chunks. On a small topically-clustered corpus the verdict
+          follows topic, not ranking.
+        </>
+      ),
+    },
+  ],
+  scifact: [
+    {
+      title: "Why this corpus exists: concepts had no ground truth",
+      body: (
+        <>
+          On the hand-written corpus routing sat at 100% and no retrieval change could
+          be justified — the eval had a ceiling. SciFact ships{" "}
+          <span className="font-mono">qrels</span>, expert relevance judgements, so{" "}
+          <strong>recall@k</strong> becomes measurable and the score has room to move.
+        </>
+      ),
+    },
+    {
+      title: "Hybrid + rerank: mechanism confirmed, magnitude inside noise",
+      body: (
+        <>
+          Routing 75.0% → 78.6%, recall@k 65% → 70%, unnecessary fallbacks 7 → 6.
+          That is <strong>one case</strong> out of 28 and one gold document out of 20.
+          The direction is right and the mechanism is real, but a single case is not
+          evidence of a size — it is a hypothesis worth a bigger test set.
+        </>
+      ),
+    },
+    {
+      title: "The grader made zero independent errors",
+      body: (
+        <>
+          On the baseline run, every question whose gold document was retrieved routed
+          local (13/13) and every question that missed it routed web (7/7). The
+          correlation is perfect, so 78.6% is not a grading score —{" "}
+          <strong>retrieval is the bottleneck</strong>, and fixing the grader would
+          change nothing.
+        </>
+      ),
+    },
+  ],
+};
+
 export default function EvaluationView({ stats }) {
   const e = stats?.evaluation;
 
@@ -140,26 +223,11 @@ export default function EvaluationView({ stats }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Finding title="100% means the task is easy, not that the router is perfect">
-          The corpus gap is categorical by design — concepts in, vendor/pricing/news
-          out — so most web cases differ along an obvious axis. Ambiguous cases were
-          added for the harder situation and are scored for <em>stability</em>, not
-          correctness, because their labels are genuinely contestable.
-        </Finding>
-
-        <Finding title="Negative result: latency could not be measured">
-          The cost argument rests on <strong>LLM call counts</strong>, not latency.
-          Groq's throttling swamps the route difference — one run measured the local
-          route slower than the web route, which is backwards. The first ordering was
-          confounded and looked convincing.
-        </Finding>
-
-        <Finding title="Negative result: reranking changed nothing here">
-          Hybrid search and cross-encoder reranking were A/B'd behind flags. Routing
-          and stability were identical — yet 27 of 28 questions retrieved{" "}
-          <em>different</em> chunks. On a small topically-clustered corpus the verdict
-          follows topic, not ranking.
-        </Finding>
+        {(FINDINGS[stats.corpus] ?? FINDINGS.concepts).map((f) => (
+          <Finding key={f.title} title={f.title}>
+            {f.body}
+          </Finding>
+        ))}
       </div>
 
       <p className="text-xs text-slate-400">

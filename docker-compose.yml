@@ -16,6 +16,11 @@ services:
       - "${BACKEND_PORT:-8001}:8000"
     env_file:
       - .env
+    environment:
+      # Corpus switch ek-line me: `CORPUS=scifact docker compose up -d`.
+      # `environment` ki value `env_file` se jeetati hai, aur default concepts
+      # rehta hai — warna corpus badalne ke liye har baar .env edit karna padta.
+      CORPUS: ${CORPUS:-concepts}
     volumes:
       # Chroma index persist — warna har container start pe poora corpus
       # dobara embed hota, jo slow aur bewajah hai.

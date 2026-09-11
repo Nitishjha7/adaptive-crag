@@ -124,9 +124,25 @@ async def stats():
     s = get_settings()
 
     # SciFact pe "documents" ka matlab corpus ke abstracts hain, files nahi —
-    # wahan filesystem gin ke 7 bolna jhooth hoga.
+    # wahan filesystem gin ke 7 bolna jhooth hoga. Par `None` bhi galat tha:
+    # asli count pata hai, bas jagah doosri hai. Pehle stat card "—" dikhata
+    # tha jabki usi page pe neeche "500 documents" likha aata tha, aur
+    # `/api/documents` ka comment kehta tha ki count stats deta hai — jo deta
+    # hi nahi tha. Chunks se dedupe karo: ek abstract kai chunks me toota hai.
     if s.CORPUS != "concepts":
-        documents = None
+        try:
+            from app.config import get_vectorstore
+
+            raw = get_vectorstore()._collection.get(include=["metadatas"])
+            sources = {
+                (m or {}).get("source")
+                for m in (raw.get("metadatas") or [])
+                if (m or {}).get("source")
+            }
+            documents = len(sources) or None
+        except Exception:  # noqa: BLE001 — collection abhi bana hi na ho
+            # Yahan `None` hi sahi hai: sach me pata nahi chala.
+            documents = None
     else:
         data_dir = Path(s.DATA_DIR)
         documents = (

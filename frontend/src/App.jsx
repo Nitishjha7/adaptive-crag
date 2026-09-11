@@ -2,53 +2,40 @@ import { useEffect, useRef, useState } from "react";
 
 import Message from "./components/Message.jsx";
 import Sidebar, { Logo } from "./components/Sidebar.jsx";
-import SidePanel from "./components/SidePanel.jsx";
-import StatCards from "./components/StatCards.jsx";
 import DocumentsView from "./views/DocumentsView.jsx";
 import EvaluationView from "./views/EvaluationView.jsx";
 import SystemView from "./views/SystemView.jsx";
 import useHistory from "./useHistory.js";
 
-/** Fixed demo queries — `backend/data/README.md` wali, expected route ke saath.
- *  Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga, wahi
- *  galti demo todti hai. */
-const SUGGESTIONS = [
-  { q: "Why does chunk overlap matter when splitting documents?", route: "local" },
-  { q: "Why is cosine similarity used instead of Euclidean distance?", route: "local" },
-  { q: "What is the Model Context Protocol?", route: "web" },
-  { q: "What is the current pricing of the Tavily search API?", route: "web" },
-];
-
-const LLM_NODES = [
-  "grade_documents",
-  "transform_query",
-  "generate",
-  "validate_guardrails",
-];
-
-/** Empty-state card explaining one of the two routes. */
-function RouteHint({ tone, title, body }) {
-  const styles =
-    tone === "emerald"
-      ? "border-emerald-200 bg-emerald-50/60 text-emerald-900"
-      : "border-sky-200 bg-sky-50/60 text-sky-900";
-  const dot = tone === "emerald" ? "bg-emerald-500" : "bg-sky-500";
-
-  return (
-    <div className={`rounded-lg border px-4 py-3 text-left ${styles}`}>
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <span className={`h-2 w-2 rounded-full ${dot}`} />
-        {title}
-      </div>
-      <p className="mt-1 text-xs opacity-80">{body}</p>
-    </div>
-  );
-}
+/** Fixed demo queries, expected route ke saath. Live demo me kuch bhi type
+ *  karke ummeed karna ki fallback trigger hoga — wahi galti demo todti hai.
+ *
+ *  **Corpus ke saath badalte hain.** Pehle ye sirf concepts wale the aur
+ *  hardcoded the. `CORPUS=scifact` pe "Why does chunk overlap matter" chip pe
+ *  hara (local) dot dikhta, par us corpus me wo doc hai hi nahi — asal me web
+ *  route chalta. Chip apne hi demo ko jhuthlaati.
+ *
+ *  SciFact ki queries `eval/results_scifact.json` se li gayi hain — yahi
+ *  cases us run me local route pe gaye the aur gold doc bhi retrieve hua tha.
+ *  Ye claims hain, sawaal nahi: SciFact claim-verification dataset hai. */
+const SUGGESTIONS_BY_CORPUS = {
+  concepts: [
+    { q: "Why does chunk overlap matter when splitting documents?", route: "local" },
+    { q: "Why is cosine similarity used instead of Euclidean distance?", route: "local" },
+    { q: "What is the Model Context Protocol?", route: "web" },
+    { q: "What is the current pricing of the Tavily search API?", route: "web" },
+  ],
+  scifact: [
+    { q: "ALDH1 expression is associated with poorer prognosis in breast cancer.", route: "local" },
+    { q: "Febrile seizures reduce the threshold for development of epilepsy.", route: "local" },
+    { q: "What is the current pricing of the Groq API per million tokens?", route: "web" },
+    { q: "Which chat models are available on Groq today?", route: "web" },
+  ],
+};
 
 export default function App() {
   const [turns, setTurns] = useState([]);
   const [stats, setStats] = useState(null);
-  const [loadingStats, setLoadingStats] = useState(true);
   const [busy, setBusy] = useState(false);
   // Sidebar **poora main view** switch karta hai. Pehle wo sirf right rail ka
   // ek chhota tab badalta tha, to "Evaluation" click karne pe lagta tha kuch
@@ -65,15 +52,12 @@ export default function App() {
     fetch("/api/stats")
       .then((r) => (r.ok ? r.json() : null))
       .then(setStats)
-      .catch(() => setStats(null))
-      .finally(() => setLoadingStats(false));
+      .catch(() => setStats(null));
   }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
-
-  const latest = [...turns].reverse().find((t) => t.role === "assistant");
 
   async function ask(question) {
     if (!question.trim() || busy) return;
@@ -157,18 +141,15 @@ export default function App() {
             </p>
           </div>
 
-          <span
-            className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs ${
-              stats
-                ? "border-slate-200 bg-white text-slate-600"
-                : "border-amber-200 bg-amber-50 text-amber-700"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${stats ? "bg-emerald-500" : "bg-amber-500"}`}
-            />
-            {stats ? "online" : "backend unreachable"}
-          </span>
+          {/* Backend up hone pe "online" likhna kuch nahi kehta — header ki
+              corpus line pehle hi backend se aa rahi hai, wahi proof hai. Down
+              hone pe batana zaroori hai, isliye sirf tab dikhta hai. */}
+          {!stats && (
+            <span className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              backend unreachable
+            </span>
+          )}
 
           <a
             href="https://github.com/Nitishjha7/adaptive-crag"
@@ -184,10 +165,6 @@ export default function App() {
           </a>
         </header>
 
-        <div className="px-6">
-          <StatCards stats={stats} loading={loadingStats} />
-        </div>
-
         {view !== "chat" && (
           <div className="p-6">
             {view === "eval" && <EvaluationView stats={stats} />}
@@ -197,18 +174,19 @@ export default function App() {
         )}
 
         <div
-          className={`grid min-h-0 flex-1 grid-cols-1 gap-4 p-6 xl:grid-cols-[minmax(0,1fr)_360px] ${
+          className={`flex min-h-0 flex-1 flex-col p-6 ${
             view === "chat" ? "" : "hidden"
           }`}
         >
-          <section className="flex min-h-[26rem] flex-col rounded-xl border border-slate-200 bg-white">
+          {/* Rail hatne ke baad chat poori chaudai le rahi thi — 1400px ki line
+              padhne layak nahi hoti. Column ko reading width pe rok diya. */}
+          <section
+            className={`mx-auto flex w-full max-w-4xl flex-col rounded-xl border border-slate-200 bg-white ${
+              turns.length || busy ? "min-h-[26rem] flex-1" : ""
+            }`}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-              <div>
-                <h2 className="font-semibold">Chat with CRAG</h2>
-                <p className="text-sm text-slate-500">
-                  Ask about the indexed documents, or anything current.
-                </p>
-              </div>
+              <h2 className="font-semibold">Chat</h2>
               {turns.length > 0 && (
                 <button
                   onClick={newChat}
@@ -219,49 +197,23 @@ export default function App() {
               )}
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+            <div
+              className={`space-y-5 overflow-y-auto px-5 ${
+                turns.length || busy ? "flex-1 py-5" : "pt-5"
+              }`}
+            >
               {/* Khaali chat ek bada blank void tha. Ab wahi jagah batati hai ki
                   system karta kya hai — aur dono routes ka farak pehle hi dikha
                   deti hai, jo poore project ka point hai. */}
+              {/* Pehle yahan ek lecture tha — dono routes ke explainer cards aur
+                  "pick one of the four below". Wo sab neeche chips aur har
+                  answer ke trace me pehle se hai; do baar kehna hi UI ko
+                  bhara-bhara aur banawati banata tha. */}
               {turns.length === 0 && !busy && (
-                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-                  <svg viewBox="0 0 32 32" className="h-12 w-12 opacity-70">
-                    <path
-                      d="M16 5 L27 26 H5 Z"
-                      fill="none"
-                      stroke="#6366f1"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M16 13 L21 26 H11 Z" fill="#6366f1" opacity="0.85" />
-                  </svg>
-
-                  <h3 className="mt-4 font-semibold text-slate-700">
-                    Ask anything — it decides where to look
-                  </h3>
-                  <p className="mt-1 max-w-md text-sm text-slate-500">
-                    Every question is graded before it is answered. If the indexed
-                    documents genuinely cover it, you get a local answer. If they
-                    don't, the system rewrites the query and searches the web.
-                  </p>
-
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                    <RouteHint
-                      tone="emerald"
-                      title="Local Documents"
-                      body="Graded sufficient — no web call, 3 LLM calls."
-                    />
-                    <RouteHint
-                      tone="sky"
-                      title="Web Fallback"
-                      body="Graded insufficient — query rewritten, then searched."
-                    />
-                  </div>
-
-                  <p className="mt-6 text-xs text-slate-400">
-                    Pick one of the four below — two of each.
-                  </p>
-                </div>
+                <p className="text-sm leading-relaxed text-slate-400">
+                  Every question is graded before it is answered. Ask one, then open
+                  the trace under the answer to see which way it went.
+                </p>
               )}
 
               {turns.map((t, i) => (
@@ -311,7 +263,8 @@ export default function App() {
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-slate-400">Try asking:</span>
-                {SUGGESTIONS.map(({ q, route }) => (
+                {(SUGGESTIONS_BY_CORPUS[stats?.corpus] ??
+                  SUGGESTIONS_BY_CORPUS.concepts).map(({ q, route }) => (
                   <button
                     key={q}
                     disabled={busy}
@@ -328,10 +281,6 @@ export default function App() {
               </div>
             </div>
           </section>
-
-          <aside className="min-w-0">
-            <SidePanel latest={latest} llmNodes={LLM_NODES} />
-          </aside>
         </div>
       </main>
     </div>

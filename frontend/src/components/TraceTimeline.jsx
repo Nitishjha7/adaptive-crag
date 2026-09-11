@@ -1,27 +1,63 @@
 /**
- * Node-by-node execution timeline — UI ka sabse impressive hissa.
+ * Node-by-node execution timeline — UI ka sabse asli hissa.
  *
  * Backend ka har node `logs` me ek line append karta hai (additive reducer).
  * Yahan wahi lines timeline banti hain, to dikhta hai ki system ne kya socha:
- * retrieve → grade: no → transform → web search → generate → validate.
+ * retrieve -> grade: no -> rewrite -> web search -> generate -> validate.
  *
  * **Per-step timestamps nahi dikhate** — backend per-node timing emit nahi
- * karta, aur mockup jaisa "10:24:03" chhaap dena number gadhna hoga. Total
- * `elapsed_ms` asli hai, wo dikhta hai.
+ * karta, aur "10:24:03" chhaap dena number gadhna hoga. Total `elapsed_ms`
+ * asli hai, wo dikhta hai.
  */
 const LABELS = {
-  retrieve: ["Retrieve Documents", "Hybrid search + rerank"],
-  grade_documents: ["Grade Documents", "Is this context sufficient?"],
-  transform_query: ["Rewrite Query", "Conversational → keywords"],
-  web_search_fallback: ["Web Search", "Local context was insufficient"],
-  generate: ["Generate Answer", "Grounded in retrieved context"],
-  validate_guardrails: ["Validate & Return", "Groundedness + PII check"],
+  retrieve: ["Retrieve", "Hybrid search + rerank"],
+  grade_documents: ["Grade", "Is this context sufficient?"],
+  transform_query: ["Rewrite query", "Conversational -> keywords"],
+  web_search_fallback: ["Web search", "Local context was insufficient"],
+  generate: ["Generate", "Grounded in retrieved context"],
+  validate_guardrails: ["Validate", "Groundedness + PII check"],
 };
 
-function parse(line) {
+/** Chain me chhote naam — ek line me poora rasta dikhana hai. */
+const SHORT = {
+  retrieve: "retrieve",
+  grade_documents: "grade",
+  transform_query: "rewrite",
+  web_search_fallback: "web search",
+  generate: "generate",
+  validate_guardrails: "validate",
+};
+
+/** Ye chaar node LLM call karte hain; retrieve aur web_search nahi. */
+const LLM_NODES = ["grade_documents", "transform_query", "generate", "validate_guardrails"];
+
+export function parse(line) {
   const node = line.split(" ->")[0].trim();
   const detail = line.slice(node.length).replace(/^\s*->\s*/, "");
   return { node, detail };
+}
+
+/**
+ * Kitne LLM call lage — trace se gine jaate hain, hardcode nahi.
+ * Yahi wo number hai jispe "hamesha web search kyun nahi" wala argument khada hai.
+ */
+export function llmCalls(logs = []) {
+  return logs.filter((l) => LLM_NODES.includes(parse(l).node)).length;
+}
+
+/**
+ * Ek line ka rasta: `retrieve -> grade: no -> rewrite -> web search -> generate`.
+ * Grade ka verdict chain me hi dikhta hai, kyunki wahi poore project ka mod hai.
+ */
+export function chain(logs = []) {
+  return logs
+    .map(parse)
+    .filter((s) => SHORT[s.node])
+    .map((s) => {
+      if (s.node !== "grade_documents") return { text: SHORT[s.node] };
+      const verdict = s.detail.trim().split(/\s+/)[0];
+      return { text: `grade: ${verdict}`, verdict };
+    });
 }
 
 function Tick({ state }) {
@@ -42,7 +78,7 @@ function Tick({ state }) {
   );
 }
 
-export default function TraceTimeline({ logs, sourceType }) {
+export default function TraceTimeline({ logs }) {
   if (!logs?.length) return null;
 
   const steps = logs.map(parse);
@@ -69,7 +105,7 @@ export default function TraceTimeline({ logs, sourceType }) {
         const last = i === rows.length - 1;
 
         return (
-          <li key={i} className="relative flex gap-3 pb-4 last:pb-0">
+          <li key={i} className="relative flex gap-3 pb-3.5 last:pb-0">
             {!last && <span className="absolute left-2 top-5 h-full w-px bg-slate-200" />}
             <Tick state={state} />
             <div className="min-w-0 flex-1">
@@ -79,10 +115,10 @@ export default function TraceTimeline({ logs, sourceType }) {
                 }`}
               >
                 {title}
-                {s.skipped && " (Skipped)"}
+                {s.skipped && " (skipped)"}
               </div>
-              <div className="break-words text-xs text-slate-400">
-                {s.skipped ? "Local docs sufficient" : s.detail || hint}
+              <div className="break-words font-mono text-xs text-slate-400">
+                {s.skipped ? "local docs were sufficient" : s.detail || hint}
               </div>
             </div>
           </li>
