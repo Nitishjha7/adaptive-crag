@@ -184,6 +184,12 @@ async def stats():
                 # Sirf BEIR pe milta hai — wahan qrels se pata hai ki sahi doc
                 # kaunsa tha. Concepts corpus pe ground truth hi nahi, to None.
                 "recall_at_k_pct": summary.get("recall_at_k_pct"),
+                # Answer **sahi** tha ya nahi — routing aur groundedness dono ye
+                # nahi batate. Sirf SciFact pe milta hai, kyunki wahan dataset
+                # ka apna SUPPORT/CONTRADICT label hota hai.
+                "answer_verdict_pct": summary.get("answer_verdict_pct"),
+                "answer_verdict_checked": summary.get("answer_verdict_checked"),
+                "answer_verdict_given_gold_pct": summary.get("answer_verdict_given_gold_pct"),
             }
         except Exception:  # noqa: BLE001 — corrupt/partial file UI na tode
             evaluation = None

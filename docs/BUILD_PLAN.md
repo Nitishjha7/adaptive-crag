@@ -34,22 +34,25 @@ Code ban chuka hai. **Ye wala part nahi hua** — aur interview me exactly yahi 
 Code jo maine likha wo tere naam se jaayega; agar tu trace nahi kar sakta to wahi sabse
 bada risk hai.
 
-1. [CODE_NOTES.md](CODE_NOTES.md) padh — har file ka "kya / kyun"
-2. Code line-by-line trace kar, jo samajh na aaye pooch. Yahan se shuru kar (yahi core hai):
+1. [CODE_QA.md](CODE_QA.md) — **yahin se shuru kar.** 27 sawaal jawab ke saath,
+   wahi jo interviewer poochhega. Jawab dekhe bina bolna; jahan atke wahi kaam ka.
+   Aakhir me teen exercise hain: test todne wale.
+2. [CODE_NOTES.md](CODE_NOTES.md) padh — har file ka "kya / kyun"
+3. Code line-by-line trace kar, jo samajh na aaye pooch. Yahan se shuru kar (yahi core hai):
    - `backend/app/nodes/grade_documents.py` — grader + `parse_verdict`
    - `backend/app/graph/build_graph.py` — `decide_to_generate` conditional edge
    - `backend/app/nodes/web_search_fallback.py` — docs replace kyun, merge kyun nahi
    - `backend/app/schemas/crag_state.py` — `logs` pe reducer, `documents` pe kyun nahi
-3. Dono routes khud chala:
+4. Dono routes khud chala:
    ```powershell
    .\dev.ps1 ask "why does chunk overlap matter?"              # grade: yes -> local
    .\dev.ps1 ask "what is the model context protocol?"          # grade: no  -> web
    ```
    Trace me har node dekh. Phir UI pe wahi kar — <http://localhost:3001>
-4. **Ek test jaan-boojh ke todh ke dekh** — samajhne ka sabse tez tareeka. Jaise
+5. **Ek test jaan-boojh ke todh ke dekh** — samajhne ka sabse tez tareeka. Jaise
    `web_search_fallback.py` me `"documents": snippets` ko append karne wala bana de aur
    `.\dev.ps1 test` chala; dekh kaunsa test fail hota hai aur kyun. Phir wapas theek kar.
-5. [INTERVIEW_NOTES.md](INTERVIEW_NOTES.md) ka Q&A bolke practice kar — khaas kar trade-offs
+6. [INTERVIEW_NOTES.md](INTERVIEW_NOTES.md) ka Q&A bolke practice kar — khaas kar trade-offs
    aur "why not Guardrails AI" wale.
 
 **Nitish ka effort:** ~3–4 din (daily 2–3 ghante).

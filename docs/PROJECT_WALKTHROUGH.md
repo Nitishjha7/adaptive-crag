@@ -344,6 +344,70 @@ router only ever failed in the cheap direction.
 
 ---
 
+
+### Step 14 — Measuring whether the answer was right, not just where it looked
+
+Every number up to here measures the *route*. Routing accuracy, recall@k, missed
+and unnecessary fallbacks all ask the same question: did the system look in the
+right place? Groundedness is the only answer-level check, and it asks something
+narrower than it sounds — whether the answer is consistent with the context it
+was handed. **An answer assembled from the wrong documents can pass groundedness
+and still be wrong.**
+
+Step 11 named this gap and left it open: reranking should improve the *answer*,
+and the eval could not see answers at all. Closing it needed ground truth about
+answers, which is a harder thing to come by than ground truth about documents.
+
+SciFact has it. It is a claim-verification dataset, so for each claim it records
+whether the gold abstract **supports** or **contradicts** it. That label is the
+dataset authors', not mine. Twelve of the twenty local cases carry one; claims
+whose gold documents disagree with each other are skipped, because on mixed
+evidence there is no honest answer to score against.
+
+The design decision worth defending here is what this deliberately is *not*. The
+obvious move is LLM-as-judge — hand the answer to a model and ask whether it is
+good. That substitutes a model's opinion for a measurement, and it tends to
+flatter whatever produced the answer. Instead the model is asked only to read:
+*what position does this text take on the claim?* Right and wrong are decided by
+the dataset. The extraction is still the weakest link — one misread flips one
+case, and a misread is indistinguishable from a wrong answer in the score — so
+the module says so in its docstring and its parser is tested, including the trap
+that `"does not support"` contains the substring `support`.
+
+The baseline run, vector-only retrieval:
+
+| | |
+|---|---|
+| Answer correct, end to end | **83.3%** (10 / 12) |
+| Answer correct, **given the gold document was retrieved** | **90.9%** (10 / 11) |
+| Took no position at all | 1 |
+
+Two failures, and they are not the same kind of failure. In **#10** the gold
+document was never retrieved, and the system declined to reach a verdict rather
+than inventing one — scored wrong, but the generator behaved correctly on
+missing evidence. In **#11** the gold document *was* retrieved and the answer
+still landed on the opposite conclusion. That is the single genuine generator
+error in the run.
+
+Which extends the finding from Step 13 one stage further down the pipeline. The
+grader made zero independent errors; given the right document, the generator was
+right ten times out of eleven. Two of the three stages are close to clean, and
+both remaining failures trace back to the same place. **Retrieval is the
+bottleneck — now measured at every stage rather than inferred from routing.**
+
+**The A/B on this metric has not run, and the document says so.** The treatment
+arm hit Groq's daily token cap partway through (`Limit 200000, Used 199876`), so
+only the baseline exists and nothing compares the two. The comparison to make,
+once the quota resets, is `answer_verdict_given_gold_pct` between the arms: that
+subset holds retrieval constant, so it isolates whether reranking changed what
+the model actually wrote.
+
+One incidental result worth keeping. Groundedness came out at 78.6% on this run;
+the previous run of the *same config on the same cases* reported 89.3%. Ten
+points of swing from run-to-run variation alone, about three cases. It is the
+cheapest available calibration on every small number in this project, and the
+reason none of them are reported without their sample size.
+
 ## 4. How the whole system works now
 
 ### 4.1 Component map

@@ -52,7 +52,12 @@ def main() -> int:
     )
     args = p.parse_args()
 
-    from app.tools.beir_loader import load_corpus, load_qrels, load_queries
+    from app.tools.beir_loader import (
+        load_corpus,
+        load_qrels,
+        load_queries,
+        load_query_verdicts,
+    )
 
     # **Wahi limit jo ingest me di thi.** Warna scenarios poore corpus ke against
     # bante hain jabki index me subset hai — aur phir ek `local` case ka gold doc
@@ -64,6 +69,9 @@ def main() -> int:
     corpus_ids = {doc_id for doc_id, _, _ in load_corpus("scifact", limit=args.limit)}
     queries = load_queries("scifact")
     qrels = load_qrels("scifact", "test")
+    # Answer-correctness label. Har query pe nahi hota — jin pe hai unhi cases pe
+    # answer quality score hoti hai, baaki sirf routing ke liye chalte hain.
+    verdicts = load_query_verdicts("scifact")
 
     # Sirf wo queries jinka **gold doc humare ingested corpus me hai**. Agar gold
     # doc ingest hi nahi hua, to "local jaana chahiye" label jhootha hoga — system
@@ -82,7 +90,7 @@ def main() -> int:
 
     cases = []
     for i, (qid, text, gold) in enumerate(picked, start=1):
-        cases.append({
+        case = {
             "id": i,
             "question": text,
             "expected_route": "local",
@@ -91,7 +99,13 @@ def main() -> int:
             "why": "SciFact qrels mark this claim as supported by an ingested abstract.",
             "label_source": "beir-qrels",
             "hard": False,
-        })
+        }
+        # Dataset ka apna SUPPORT/CONTRADICT label, jahan wo maujood aur
+        # unambiguous ho. Isse answer **sahi hai ya nahi** naapa ja sakta hai —
+        # routing aur groundedness dono ye nahi batate.
+        if qid in verdicts:
+            case["expected_verdict"] = verdicts[qid]
+        cases.append(case)
 
     for j, q in enumerate(WEB_CASES[: args.web], start=len(cases) + 1):
         cases.append({
@@ -116,6 +130,12 @@ def main() -> int:
             "`web` cases ARE hand-written, and that is worth stating. They were",
             "chosen so that no static scientific corpus could answer them - live",
             "pricing, current rate limits, recent releases. The easy half.",
+            "",
+            "Local cases carrying `expected_verdict` also have SciFact's own",
+            "SUPPORT/CONTRADICT label. Those are the cases where answer",
+            "*correctness* can be scored, not just routing and groundedness.",
+            "Queries whose gold documents disagree with each other are skipped:",
+            "on mixed evidence there is no honest right answer to score against.",
             "",
             "Regenerate with: python -m eval.build_scifact_scenarios --limit 500",
         ],

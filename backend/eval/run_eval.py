@@ -50,6 +50,7 @@ from typing import Any, Dict, List
 
 from app.graph.build_graph import build_crag_graph
 from app.schemas.crag_state import initial_state
+from eval.answer_verdict import extract_verdict
 
 HERE = Path(__file__).parent
 
@@ -168,6 +169,23 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         else:
             recall_hit = None
 
+        # **Answer correctness** — sirf un SciFact cases pe jinke saath dataset ka
+        # apna SUPPORT/CONTRADICT label aata hai.
+        #
+        # Routing, recall aur groundedness teeno ye nahi batate ki answer *sahi*
+        # tha. Groundedness sirf itna kehti hai ki answer apne context se match
+        # karta hai — galat context se banaya gaya galat answer bhi grounded pass
+        # kar sakta hai. Yahi wo gap hai jo RESULTS.md khud likhta hai, aur
+        # reranking ko asar isi metric pe dikhana chahiye tha, routing pe nahi.
+        # Yahan tak pahunchne ka matlab hai graph.invoke safal raha — error
+        # path upar hi return kar chuka hota hai.
+        expected_verdict = case.get("expected_verdict") or ""
+        if expected_verdict:
+            observed_verdict = extract_verdict(question, answer)
+            verdict_correct = observed_verdict == expected_verdict
+        else:
+            observed_verdict, verdict_correct = "", None
+
         return {
             "id": case["id"],
             "question": question,
@@ -187,6 +205,9 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
             "keyword_hit": keyword_hit,
             "gold_docs": gold,
             "recall_hit": recall_hit,
+            "expected_verdict": expected_verdict,
+            "observed_verdict": observed_verdict,
+            "verdict_correct": verdict_correct,
             "elapsed_ms": elapsed_ms,
             "llm_calls": count_llm_calls(final.get("logs", [])),
             "nodes_run": len(final.get("logs", [])),
@@ -331,6 +352,8 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     graded = [r for r in ok if r.get("guardrail_passed") is not None]
     keyword_checked = [r for r in ok if r.get("keyword_hit") is not None]
+    verdict_checked = [r for r in ok if r.get("verdict_correct") is not None]
+    verdict_given_gold = [r for r in verdict_checked if r.get("recall_hit")]
     recall_checked = [r for r in ok if r.get("recall_hit") is not None]
 
     def mean_ms(rows: List[Dict[str, Any]]) -> int:
@@ -369,6 +392,20 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             len([r for r in recall_checked if r["recall_hit"]]), len(recall_checked)
         ),
         "recall_checked": len(recall_checked),
+        "answer_verdict_pct": pct(
+            len([r for r in verdict_checked if r["verdict_correct"]]), len(verdict_checked)
+        ),
+        "answer_verdict_checked": len(verdict_checked),
+        "answer_verdict_unclear": len(
+            [r for r in verdict_checked if r.get("observed_verdict") == "UNCLEAR"]
+        ),
+        # Gold doc mila hi nahi to answer ka galat hona retrieval ki galti hai,
+        # generator ki nahi. Ye subset generator ko alag karke dekhta hai.
+        "answer_verdict_given_gold_pct": pct(
+            len([r for r in verdict_given_gold if r["verdict_correct"]]),
+            len(verdict_given_gold),
+        ),
+        "answer_verdict_given_gold_checked": len(verdict_given_gold),
         "keyword_hit_pct": pct(
             len([r for r in keyword_checked if r["keyword_hit"]]), len(keyword_checked)
         ),
@@ -420,6 +457,15 @@ def print_report(results: List[Dict[str, Any]], s: Dict[str, Any]) -> None:
     print()
     print(f"  Groundedness pass     : {f('groundedness_pass_pct')}")
     print(f"  Keyword hit (local)   : {f('keyword_hit_pct')}")
+    if s.get("answer_verdict_checked"):
+        n = s["answer_verdict_checked"]
+        g = s["answer_verdict_given_gold_checked"]
+        print(f"  Answer verdict        : {f('answer_verdict_pct')}  ({n} cases with a "
+              f"dataset SUPPORT/CONTRADICT label)   <- whether the answer was RIGHT")
+        print(f"    given gold retrieved: {f('answer_verdict_given_gold_pct')}  ({g} cases)"
+              f"   <- isolates the generator from retrieval")
+        if s.get("answer_verdict_unclear"):
+            print(f"    took no position    : {s['answer_verdict_unclear']}")
     # Sirf tab dikhta hai jab dataset gold docs deta ho (BEIR). Concepts corpus
     # pe ground truth hai hi nahi, to yahan jhoothi 0% dikhana galat hoga.
     if s.get("recall_checked"):

@@ -107,6 +107,23 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
     7/7 web. **Grader ne ek bhi apni galti nahi ki** — saare "routing failures" retrieval
     misses the jinhe usne theek pakda. Matlab 75% grader ko under-report karti hai, aur
     bottleneck **retrieval** hai, grading nahi.
+- 🟡 **Answer correctness metric** — eval ab ye bhi naapta hai ki answer **sahi** tha
+  ya nahi, sirf route sahi tha ya nahi. Ground truth SciFact ke apne SUPPORT/CONTRADICT
+  labels se aati hai (20 local me se 12 cases pe maujood), LLM-judge se nahi.
+  - Baseline (vector-only): **83.3%** end-to-end, aur **90.9%** un cases pe jahan gold doc
+    retrieve hua. Do galtiyan alag tarah ki: #10 me gold mila hi nahi aur system ne koi
+    stand hi nahi liya (guess nahi kiya), #11 me gold mila phir bhi ulta conclusion — wahi
+    ek asli generator error hai.
+  - **Grader wale finding ka agla hissa:** grader ne 0 apni galti ki thi, ab pata chala ki
+    gold milne pe generator 11 me se 10 baar sahi hai. Teeno stage me bottleneck **retrieval**
+    hai — aur ab ye har stage pe naapa hua hai, routing se andaza lagaya hua nahi.
+  - ⬜ **A/B abhi baaki hai.** Treatment arm Groq ke daily token cap (200k TPD) pe mar gaya,
+    to `results_scifact.json` abhi bhi purana run hai jisme ye metric hai hi nahi. Quota reset
+    hone pe: `.\dev.ps1 eval -Corpus scifact --out eval/results_scifact.json`, phir dono file
+    me `answer_verdict_given_gold_pct` compare karo — wahi subset retrieval ko constant rakhta
+    hai, isliye wahi batayega ki reranking ne *answer* badla ya nahi
+  - **Noise ka calibration muft me mila:** isi config pe groundedness pichhle run me 89.3%
+    thi, is run me **78.6%** — 28 cases pe 10 point ka jhatka sirf run-to-run variation se
 - ❌ Deployment — abhi nahi hua. Render free tier naap ke **reject** kiya (peak 464 MB
   vs 512 MB limit, persistent disk nahi, sleep hota hai); target HuggingFace Spaces hai.
   Poora plan aur teen prerequisites neeche "Deployment Plan" me

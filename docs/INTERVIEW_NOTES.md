@@ -369,6 +369,29 @@ kind of measurement bug. So the subset keeps every gold document first, then fil
 with non-gold filler. Filler matters too: without it every indexed document would answer
 some query and retrieval would be trivially easy. There's a test asserting both.
 
+**Q: Your eval measures routing. Are the answers actually any good?**
+A: That was a real hole, and I filled it late rather than pretending it wasn't there.
+Everything else measures the route; groundedness is the only answer-level check and it only
+asks whether the answer matches the context it was given — an answer built from the wrong
+documents passes it. SciFact is a claim-verification set, so it records whether the gold
+abstract supports or contradicts each claim, and twelve of my twenty local cases carry that
+label. Baseline: **83.3% correct end to end, 90.9% when the gold document was actually
+retrieved**. The two failures are different animals — one where retrieval missed and the
+system declined to guess, one where it had the right document and still drew the opposite
+conclusion. That is the only real generator error in the run.
+
+Deliberately not LLM-as-judge, and that distinction matters: a judge is asked "is this
+good?", which is a model's opinion wearing a number's clothes. Mine is asked only what
+position the text takes; right and wrong come from the dataset. The extraction is still the
+weak link and I say so in the code — a misread is indistinguishable from a wrong answer.
+
+**Q: Did reranking improve the answers, then?**
+A: I don't know yet, and I'd rather say that than guess. Only the baseline arm ran — the
+treatment arm hit Groq's daily token cap partway through. The comparison I want is
+`answer_verdict_given_gold_pct` between arms, because that subset holds retrieval constant
+and isolates what the model actually wrote. Until both arms exist there is nothing to
+compare, so nothing in the repo or the dashboard claims there is.
+
 **Q: How would you deploy this?**
 A: It isn't deployed, and the interesting part is why the obvious answer doesn't work. The
 plan was Render free plus Vercel. I measured it first: the backend peaks at **464 MB** after

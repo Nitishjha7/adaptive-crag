@@ -344,6 +344,17 @@ export default function EvaluationView({ stats }) {
           />
         )}
 
+        {/* Groundedness kehti hai "answer apne context se match karta hai".
+            Ye kehta hai "answer **sahi** tha". Do alag baatein hain: galat
+            context se bana galat answer groundedness pass kar sakta hai. */}
+        {e.answer_verdict_pct != null && (
+          <Metric
+            label="Answer correctness"
+            value={`${e.answer_verdict_pct}%`}
+            hint={`Did the answer reach the dataset's own verdict? (${e.answer_verdict_checked} labelled cases)`}
+          />
+        )}
+
         {/* Ambiguous cases na hon to stability ka matlab hi nahi — pehle yahan
             khaali "—" wala card baitha rehta tha. */}
         {e.ambiguous_cases > 0 && (

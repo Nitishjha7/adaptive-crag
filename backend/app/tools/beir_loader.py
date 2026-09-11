@@ -125,3 +125,38 @@ def load_qrels(name: str = "scifact", split: str = "test") -> Dict[str, List[str
             if float(score) > 0:
                 out.setdefault(qid, []).append(did)
     return out
+
+
+def load_query_verdicts(name: str = "scifact") -> Dict[str, str]:
+    """`{query_id: "SUPPORT" | "CONTRADICT"}` — dataset ka apna answer label.
+
+    SciFact claim-verification dataset hai: har claim ke saath likha hai ki gold
+    abstract usko **support karta hai ya contradict**. Ye `queries.jsonl` ke
+    `metadata` me baitha hai, aur `load_queries` use drop kar deta hai kyunki
+    routing ko uski zaroorat nahi.
+
+    Answer quality naapne ke liye ye zaroori hai. Ab tak eval sirf ye naapta tha
+    ki **route** sahi tha aur answer apne context se **grounded** tha. Ye dono
+    is sawaal ka jawab nahi dete ki answer **sach me sahi hai ya nahi** — aur
+    RESULTS.md khud likhta hai ki reranking ko *answer* pe asar dikhana chahiye,
+    routing pe nahi. Wahi gap ye label bharta hai, aur wo bhi LLM-judge se nahi,
+    dataset ki apni ground truth se.
+
+    Ek query pe kai gold docs ho sakte hain. Agar unke labels **aapas me alag**
+    hain to wo case skip ho jaata hai — mixed evidence pe "answer sahi tha ya
+    nahi" ka koi imaandar jawab nahi hai.
+    """
+    path = ensure_downloaded(name) / "queries.jsonl"
+    out: Dict[str, str] = {}
+    with path.open(encoding="utf-8") as fh:
+        for row in map(json.loads, fh):
+            meta = row.get("metadata") or {}
+            labels = {
+                item.get("label")
+                for items in meta.values()
+                for item in (items or [])
+                if item.get("label")
+            }
+            if len(labels) == 1:
+                out[row["_id"]] = labels.pop()
+    return out

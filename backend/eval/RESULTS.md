@@ -279,6 +279,102 @@ happened. The router failed only in the cheap direction.
 
 ---
 
+## Answer correctness — the metric this eval was missing
+
+Every number above measures the *route*. Routing accuracy, recall@k, missed and
+unnecessary fallbacks — all of them ask "did the system look in the right
+place?". Groundedness is the one answer-level check, and it only asks whether
+the answer is consistent with whatever context it was handed: **an answer built
+from the wrong documents can pass groundedness while being wrong.**
+
+That gap was named in the reranking section above — *"it should help the
+answer, and this eval does not measure answer quality"* — and left open. This
+closes it.
+
+### Where the ground truth comes from
+
+SciFact is a claim-verification dataset. `queries.jsonl` carries, for each
+claim, whether the gold abstract **SUPPORTS** or **CONTRADICTS** it. That is the
+dataset's own label, written by its authors, not a judgement of mine and not an
+LLM's opinion.
+
+12 of the 20 local cases carry such a label. Queries whose gold documents
+disagree with each other are skipped — on mixed evidence there is no honest
+right answer to score against.
+
+**This is deliberately not an LLM-as-judge setup.** An LLM judge is asked "is
+this answer good?", which is the model's opinion standing in for a measurement.
+Here the model is asked only to *read*: what position does this text take on the
+claim? Right and wrong are decided by the dataset. The extraction is still the
+weak link in the chain — one misread flips one case — and a wrong reading is
+indistinguishable from a wrong answer in the score. `answer_verdict.py` says so
+in its docstring, and its parser has its own tests, including the trap that
+`"does not support"` contains the substring `support`.
+
+### Baseline result (vector-only retrieval, 28 cases)
+
+| | |
+|---|---|
+| Answer correctness, end to end | **83.3%** (10 / 12) |
+| Answer correctness, **given the gold document was retrieved** | **90.9%** (10 / 11) |
+| Answers that took no position at all | 1 |
+
+Only two cases were scored wrong, and they fail in completely different ways:
+
+- **#10** — the gold document was **never retrieved**. The system did not invent
+  a verdict; it took no position (`UNCLEAR`). Counted wrong because the dataset
+  says CONTRADICT, but the failure is retrieval's, and the generator's behaviour
+  on missing evidence was the correct one: say nothing rather than guess.
+- **#11** — the gold document **was** retrieved and the answer still reached the
+  opposite conclusion. This is the one genuine generator error in the run.
+
+### What that adds to the earlier finding
+
+The routing section above established that **the grader made zero independent
+errors**: every routing failure was a retrieval miss it detected correctly. This
+run extends the same shape one stage further down the pipeline — given the right
+document, the generator was right **10 times out of 11**.
+
+So two of the three stages are close to clean on this corpus, and both of the
+remaining failures trace back to the same place. **Retrieval is the bottleneck,
+and now that is measured at every stage rather than inferred from routing
+alone.**
+
+### The A/B on this metric is NOT done — and that is the point of the metric
+
+The reranking question was always *"does better retrieval produce better
+answers?"*. Answering it needs both arms. **Only the baseline arm has run.** The
+treatment arm (hybrid + reranker on) died partway through on Groq's daily token
+cap:
+
+    RateLimitError: 429 - tokens per day (TPD): Limit 200000, Used 199876
+
+so `results_scifact.json` is still a previous run that predates this metric and
+carries no `answer_verdict` field at all. Nothing in this document or the
+dashboard compares the two on answer correctness, because there is nothing to
+compare yet.
+
+To finish it, after the daily quota resets:
+
+```powershell
+.\dev.ps1 eval -Corpus scifact --out eval/results_scifact.json
+```
+
+and compare `answer_verdict_given_gold_pct` between the two files. That subset is
+the one to watch: it holds retrieval constant, so it isolates whether reranking
+changed what the model actually wrote.
+
+### One more thing this run showed, for free
+
+Groundedness came out at **78.6%** here. The previous baseline run — same
+config, same 28 cases — reported **89.3%**. That is a 10-point swing from
+run-to-run variation alone, roughly three cases. It is a useful calibration on
+every small number in this document: **differences of a few points on 28 cases
+are noise, and this project's rule is to say so rather than to pick the
+favourable run.**
+
+---
+
 ## The cost argument, and the measurement that failed
 
 The design claims adaptive routing is cheaper than always searching. The eval
