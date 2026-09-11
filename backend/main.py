@@ -1,9 +1,10 @@
-"""FastAPI entrypoint — Phase 5.
+"""FastAPI entrypoint.
 
-`POST /api/query` graph invoke karta hai aur answer ke saath `source_type`,
-`relevance_score`, aur poora step-by-step trace lautata hai. Trace hi is project
-ka sabse dikhne wala hissa hai: frontend usse node-by-node timeline render karta
-hai, jisse system black box nahi rehta — dikhta hai ki route kyun liya gaya.
+`POST /api/query` invokes the graph and returns the answer together with
+`source_type`, `relevance_score` and the full step-by-step trace. The trace is
+the most visible part of this project: the frontend renders it as a node-by-node
+timeline under each answer, so the system is not a black box — you can see why a
+route was taken.
 """
 
 import time
@@ -18,7 +19,7 @@ from app.config import get_settings
 from app.graph.build_graph import build_crag_graph
 from app.schemas.crag_state import initial_state
 
-# Module load pe ek baar compile — har request pe graph dobara banana bewajah kaam hai.
+# Compiled once at module load — rebuilding the graph per request is wasted work.
 _graph = None
 
 
@@ -35,11 +36,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Dev me khula. Production me frontend domain tak restrict karna hai — abhi
-# frontend ka origin pata nahi hai, isliye TODO chhoda hai (Phase 7).
+# Open in dev. The deployment plan puts the frontend and backend in one image
+# behind Nginx, which makes them same-origin and removes the need for CORS at all
+# — but `allow_origins=["*"]` still has no business in production either way.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO(Phase 7): deploy pe frontend origin tak seemit karo
+    allow_origins=["*"],  # TODO: restrict to the deployed origin before shipping
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
@@ -52,9 +54,9 @@ class QueryIn(BaseModel):
 class QueryOut(BaseModel):
     answer: str
     source_type: str          # "vector_db" | "web_search" -> UI badge
-    sources: List[str]        # filenames (local) ya URLs (web)  -> UI citations
+    sources: List[str]        # filenames (local) or URLs (web) -> UI citations
     relevance_score: str      # "yes" | "no"                -> UI relevance pill
-    transformed_query: str    # khaali agar fallback nahi chala
+    transformed_query: str    # empty unless the fallback ran
     logs: List[str]           # node-by-node trace          -> UI trace viewer
     elapsed_ms: int
 
@@ -63,14 +65,14 @@ class QueryOut(BaseModel):
 async def query(body: QueryIn) -> QueryOut:
     started = time.perf_counter()
 
-    # graph.invoke sync hai aur LLM/search calls pe block karta hai. Threadpool me
-    # bhejte hain taaki ek slow request poora event loop na rok de.
+    # graph.invoke is synchronous and blocks on LLM and search calls. Run it in a
+    # threadpool so one slow request cannot stall the whole event loop.
     from starlette.concurrency import run_in_threadpool
 
     final = await run_in_threadpool(_graph.invoke, initial_state(body.question))
 
     return QueryOut(
-        # final_output guardrails node bharta hai; generation defensive fallback hai.
+        # final_output is written by the guardrails node; generation is the fallback.
         answer=final.get("final_output") or final.get("generation") or "",
         source_type=final.get("source_type", ""),
         sources=final.get("sources", []),
@@ -83,15 +85,15 @@ async def query(body: QueryIn) -> QueryOut:
 
 @app.get("/health")
 async def health():
-    """Docker healthcheck. Jaan-boojh ke koi LLM call nahi karta — health endpoint
-    ko sasta aur bharosemand hona chahiye, warna rate limit hi container ko
-    unhealthy mark karwa dega."""
+    """Docker healthcheck. Deliberately makes no LLM call — a health endpoint has
+    to be cheap and reliable, or one rate limit marks the container unhealthy and
+    Docker restarts it in a loop."""
     from app.tools.vector_search import collection_count
 
     s = get_settings()
     try:
         chunks = collection_count()
-    except Exception:  # noqa: BLE001 — store abhi bana hi na ho
+    except Exception:  # noqa: BLE001 — the store may not exist yet
         chunks = 0
 
     return {
@@ -105,15 +107,14 @@ async def health():
 
 @app.get("/api/stats")
 async def stats():
-    """Dashboard ke stat cards + System Info / Evaluation tabs ke liye.
+    """Feeds the dashboard's Evaluation and System views.
 
-    Sab kuch **asli source** se aata hai — corpus files gine jaate hain, chunk
-    count Chroma se, aur eval numbers `eval/results.json` se jo asli run ne
-    likhi thi. Yahan koi number hardcode nahi hai; agar eval dobara chale aur
-    result badle, UI apne aap badal jaayega.
+    Every value comes from a **real source** — documents counted for real, chunk
+    count from Chroma, eval numbers read out of the JSON an actual run wrote.
+    Nothing here is hardcoded, so re-running the eval changes the UI on its own.
 
-    `/health` ki tarah ye bhi **koi LLM call nahi** karta — dashboard har page
-    load pe isse hit karta hai.
+    Like `/health`, this makes **no LLM call** — the dashboard hits it on every
+    page load.
     """
     import json
     from pathlib import Path
@@ -123,12 +124,12 @@ async def stats():
 
     s = get_settings()
 
-    # SciFact pe "documents" ka matlab corpus ke abstracts hain, files nahi —
-    # wahan filesystem gin ke 7 bolna jhooth hoga. Par `None` bhi galat tha:
-    # asli count pata hai, bas jagah doosri hai. Pehle stat card "—" dikhata
-    # tha jabki usi page pe neeche "500 documents" likha aata tha, aur
-    # `/api/documents` ka comment kehta tha ki count stats deta hai — jo deta
-    # hi nahi tha. Chunks se dedupe karo: ek abstract kai chunks me toota hai.
+    # On SciFact "documents" means the corpus's abstracts, not files — counting
+    # the filesystem and reporting 7 would be a lie. But `None` was wrong too:
+    # the real count is known, it just lives somewhere else. The stat card used
+    # to show "—" while the same page said "500 documents" below it, and the
+    # comment in `/api/documents` claimed stats provided the count when it did
+    # not. Dedupe from the chunks: one abstract is split across several.
     if s.CORPUS != "concepts":
         try:
             from app.config import get_vectorstore
@@ -140,8 +141,8 @@ async def stats():
                 if (m or {}).get("source")
             }
             documents = len(sources) or None
-        except Exception:  # noqa: BLE001 — collection abhi bana hi na ho
-            # Yahan `None` hi sahi hai: sach me pata nahi chala.
+        except Exception:  # noqa: BLE001 — the collection may not exist yet
+            # Here `None` is right: it genuinely could not be determined.
             documents = None
     else:
         data_dir = Path(s.DATA_DIR)
@@ -159,12 +160,13 @@ async def stats():
     except Exception:  # noqa: BLE001 — store abhi bana hi na ho
         chunks = 0
 
-    # Eval results optional hain — repo clone karke bina eval chalaye bhi UI
-    # chalni chahiye. Isliye missing file pe `None`, zero nahi: "measure nahi
-    # hua" aur "zero score" do alag baatein hain, aur UI ko farak pata hona chahiye.
+    # Eval results are optional — the UI has to work on a fresh clone that has
+    # never run the eval. So a missing file means `None`, not zero: "not
+    # measured" and "scored zero" are different claims and the UI has to be able
+    # to tell them apart.
     evaluation = None
-    # Per-corpus results file — concepts aur scifact ke numbers alag hain aur
-    # unhe mix karna dono ko meaningless bana dega.
+    # One results file per corpus. Concepts and SciFact numbers are different
+    # things, and mixing them would make both meaningless.
     results_name = "results.json" if s.CORPUS == "concepts" else f"results_{s.CORPUS}.json"
     results_path = BACKEND_DIR / "eval" / results_name
     if results_path.exists():
@@ -181,17 +183,17 @@ async def stats():
                 "llm_calls_web": summary.get("llm_calls_web_route"),
                 "ambiguous_cases": summary.get("ambiguous_cases"),
                 "ambiguous_stability_pct": summary.get("ambiguous_stability_pct"),
-                # Sirf BEIR pe milta hai — wahan qrels se pata hai ki sahi doc
-                # kaunsa tha. Concepts corpus pe ground truth hi nahi, to None.
+                # Only available on BEIR, where qrels say which document was
+                # correct. The concepts corpus has no ground truth, so: None.
                 "recall_at_k_pct": summary.get("recall_at_k_pct"),
-                # Answer **sahi** tha ya nahi — routing aur groundedness dono ye
-                # nahi batate. Sirf SciFact pe milta hai, kyunki wahan dataset
-                # ka apna SUPPORT/CONTRADICT label hota hai.
+                # Whether the answer was **right**, which neither routing nor
+                # groundedness tells you. SciFact only, because that is where the
+                # dataset ships its own SUPPORT/CONTRADICT label.
                 "answer_verdict_pct": summary.get("answer_verdict_pct"),
                 "answer_verdict_checked": summary.get("answer_verdict_checked"),
                 "answer_verdict_given_gold_pct": summary.get("answer_verdict_given_gold_pct"),
             }
-        except Exception:  # noqa: BLE001 — corrupt/partial file UI na tode
+        except Exception:  # noqa: BLE001 — a corrupt file must not break the UI
             evaluation = None
 
     return {
@@ -215,16 +217,16 @@ async def stats():
 
 @app.get("/api/documents")
 async def documents():
-    """Kya kya index me hai — UI ka Documents view isi se banta hai.
+    """What is in the index — the source for the UI's Documents view.
 
-    Do alag sources, kyunki dono corpora ki shakl alag hai:
+    Two different sources, because the corpora have different shapes:
 
-    - `concepts` — filesystem se, kyunki wahan documents asli files hain aur
-      unka naam hi citation hai.
-    - BEIR — Chroma ke metadata se, kyunki wahan koi file hai hi nahi; documents
-      dataset ke andar se aate hain aur unki pehchaan `doc_id` hai.
+    - `concepts` — from the filesystem, where documents are real files and the
+      filename is the citation.
+    - BEIR — from Chroma metadata, where there are no files at all; documents
+      come from inside the dataset and are identified by `doc_id`.
 
-    `/health` aur `/api/stats` ki tarah **koi LLM call nahi**.
+    Like `/health` and `/api/stats`, **no LLM call**.
     """
     from pathlib import Path
 
@@ -248,8 +250,8 @@ async def documents():
             ),
         }
 
-    # BEIR: metadata se unique documents nikalo. Chunks se dedupe karna padta hai —
-    # ek abstract kai chunks me toota hota hai, aur UI ko documents chahiye, chunks nahi.
+    # BEIR: pull unique documents out of the metadata. Dedupe is required because
+    # one abstract is split across several chunks, and the UI wants documents.
     try:
         raw = get_vectorstore()._collection.get(include=["metadatas"])
     except Exception:  # noqa: BLE001 — collection abhi bana hi na ho
@@ -261,8 +263,8 @@ async def documents():
         if doc_id and doc_id not in seen:
             seen[doc_id] = {"id": doc_id, "title": (meta or {}).get("title", ""), "bytes": None}
 
-    # Poori list bhejne ka matlab nahi — 500 abstracts UI ko bhar denge. Count
-    # `/api/stats` deta hai; yahan sirf ek sample.
+    # No point shipping the whole list — 500 abstracts would flood the UI. The
+    # count comes from `/api/stats`; this is a sample.
     docs = list(seen.values())
     return {
         "corpus": s.CORPUS,

@@ -4,8 +4,8 @@ Run:
     python ingest.py            # incremental (collection already bhari ho to skip)
     python ingest.py --reset    # wipe karke dobara build
 
-Idempotent rakha hai kyunki embedding model pehli baar ~100MB download karta hai
-aur re-embedding slow hai — har container start pe rebuild nahi chahiye.
+Kept idempotent because the embedding model downloads ~100 MB on first use and
+re-embedding is slow — a rebuild on every container start is not wanted.
 """
 
 import argparse
@@ -18,9 +18,9 @@ from app.config import get_settings, get_vectorstore
 def load_documents(data_dir: Path):
     """data/ ki .md aur .txt files padho.
 
-    data/README.md skip hota hai — wo corpus ka part nahi, uske baare me notes hai.
-    Usko ingest karna corpus me "yahan kya nahi hai" wala meta-text daal deta,
-    jo grader ko confuse karta.
+    data/README.md is skipped — it is notes *about* the corpus, not part of it.
+    Ingesting it would put "what is not in here" meta-text into the corpus, which
+    is exactly the sort of thing that confuses the grader.
     """
     from langchain_core.documents import Document
 
@@ -44,10 +44,10 @@ def load_beir_documents(name: str = "scifact", limit: int = 0):
 
     Har abstract ek Document hai, `title` text ke aage jodte hain — SciFact ke
     titles claim-jaise hote hain aur retrieval me kaam ke signal hain, unhe
-    phenkna information waste karna hoga.
+    discarding it would throw away information.
 
-    `source` metadata me `doc_id` jaata hai, filename nahi — citations aur qrels
-    dono usi id pe milte hain, isliye eval verify kar sakta hai ki jo doc
+    `source` metadata holds the `doc_id`, not a filename — citations and qrels
+    both key on that id, so the eval can verify that the document
     retrieve hua wo sach me gold doc tha.
     """
     from langchain_core.documents import Document
@@ -66,7 +66,7 @@ def load_beir_documents(name: str = "scifact", limit: int = 0):
 
 def split_documents(docs):
     """Recursive character splitting — heading/paragraph boundaries pe todta hai
-    fixed character count pe nahi, taaki related text saath rahe."""
+    rather than a fixed character count, so related text stays together."""
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     s = get_settings()
@@ -85,7 +85,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--corpus", default="", choices=["", "concepts", "scifact"],
-        help="kaunsa corpus ingest karna hai (default: CORPUS env / concepts)",
+        help="which corpus to ingest (default: CORPUS env, else concepts)",
     )
     parser.add_argument(
         "--limit", type=int, default=0,
@@ -102,10 +102,10 @@ def main() -> int:
     store_dir = Path(s.VECTORSTORE_DIR)
     store = get_vectorstore()
 
-    # **Sirf is corpus ki collection reset hoti hai, poori directory nahi.**
+    # **Only this corpus's collection is reset, not the whole directory.**
     # Dono corpora ek hi `vectorstore/` me alag collections me rehte hain —
-    # directory wipe karne se doosra corpus bhi ud jaata aur usko dobara embed
-    # karna padta (SciFact pe wo minutes ka kaam hai).
+    # Wiping the directory would take the other corpus with it and force a
+    # re-embed, which on SciFact costs minutes.
     if args.reset:
         print(f"[ingest] --reset -> dropping collection '{s.collection_name}'")
         try:
@@ -131,12 +131,12 @@ def main() -> int:
     else:
         data_dir = Path(s.DATA_DIR)
         if not data_dir.exists():
-            print(f"[ingest] ERROR: data dir nahi mila: {data_dir}")
+            print(f"[ingest] ERROR: data dir not found: {data_dir}")
             return 1
         print("[ingest] corpus: concepts (backend/data/)")
         docs = load_documents(data_dir)
     if not docs:
-        print(f"[ingest] ERROR: corpus '{s.CORPUS}' se koi document nahi mila")
+        print(f"[ingest] ERROR: no documents found for corpus '{s.CORPUS}'")
         return 1
     print(f"[ingest] {len(docs)} documents loaded")
     print(f"[ingest] embedding with {s.EMBEDDING_MODEL} ...")
@@ -145,10 +145,10 @@ def main() -> int:
     #
     # Pehle poora corpus split karke saare chunks ek list me rakhe the — SciFact
     # pe wo 17,266 chunks banti hai aur container (3.5 GB) **OOM se mar gaya**
-    # (exit 137). Concepts corpus ke 22 chunks pe ye kabhi dikhta hi nahi.
+    # (exit 137). Never visible on the concepts corpus and its 22 chunks.
     #
     # Ab documents ke batch pe kaam hota hai: split -> embed -> chhod do. Peak
-    # memory corpus size se azaad ho jaati hai, isliye isse bade corpora bhi
+    # memory stops scaling with corpus size, so larger corpora also
     # chalenge.
     DOC_BATCH = 50
     total_chunks = 0
