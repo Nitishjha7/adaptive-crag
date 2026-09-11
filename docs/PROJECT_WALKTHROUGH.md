@@ -190,8 +190,12 @@ an `async def` would stall the event loop.
 `/health` deliberately makes **no LLM call**: if it did, one rate-limit would mark the
 container unhealthy and Docker would restart it in a loop.
 
-The UI is a dashboard, not just a chat box: a nav rail, four stat cards, the conversation,
-and a right rail carrying the trace, the live system config, and the evaluation numbers.
+The UI is a dashboard, not just a chat box: a nav rail switching between four full-width
+views — the conversation, the indexed documents, the evaluation numbers, and the live
+system config. Each answer carries its own execution trace inline, collapsed to one line:
+`retrieve / grade: no / rewrite / web search / generate / validate` with the LLM call
+count beside it. Ask two questions and both chains sit on screen together, which is the
+whole thesis in two lines.
 `GET /api/stats` feeds it — corpus counts from disk, chunk count from Chroma, routing
 numbers read out of `eval/results.json`. Like `/health` it makes no LLM call, because the
 dashboard hits it on every page load.

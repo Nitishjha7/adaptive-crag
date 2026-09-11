@@ -59,9 +59,12 @@ export default function DocumentsView({ stats }) {
         </p>
       </div>
 
-      {/* Ye baat sabse zaroori hai aur isliye list ke upar hai: gap jaan-boojh ke
-          hai. Iske bina koi soch sakta hai ki corpus adhoora hai. */}
-      {isConcepts && (
+      {/* Har corpus ke saath uska **maqsad** likha hai, aur ye list se zyada
+          zaroori hai. Pehle sirf concepts pe note tha; SciFact pe 500 abstracts
+          bina kisi framing ke aa jaate the, jisse lagta tha bas data bhar diya
+          hai. Dono corpora alag wajah se maujood hain, aur wahi wajah batani
+          chahiye. */}
+      {isConcepts ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
           <h4 className="text-sm font-semibold text-slate-800">
             This corpus has a deliberate hole in it
@@ -71,6 +74,20 @@ export default function DocumentsView({ stats }) {
             about live facts <em>have</em> to fall back to the web. Without a known
             gap the correction path could only fire by luck, and a demo that depends
             on luck is not a demo.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+          <h4 className="text-sm font-semibold text-slate-800">
+            This corpus exists because the other one had no ground truth
+          </h4>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+            SciFact is a BEIR benchmark, so it ships{" "}
+            <span className="font-mono">qrels</span> — expert judgements of which
+            abstract answers which claim. That makes retrieval{" "}
+            <em>measurable</em> instead of merely plausible. On the hand-written
+            corpus routing sat at 100% and no retrieval change could be justified;
+            here the score has room to move.
           </p>
         </div>
       )}

@@ -64,14 +64,21 @@ aur "defendable" lagengi — agentic routing, self-verification, autonomous corr
   categorical hai. RESULTS.md me likha hai ki eval ko sach me hard kaise banaya jaaye.
 - ✅ **Test suite** — `backend/tests/`, 60 tests, `.\dev.ps1 test`. Dono routes, docs-replace
   invariant, search failure, guardrails ke saare case, aur API shape covered
-- ✅ **Phase 6** — React + Vite + Tailwind **dashboard**: `Sidebar`, `StatCards` (documents ·
-  chunks · routing accuracy · missed fallbacks — sab `/api/stats` se, koi hardcoded number
-  nahi), `Message` (source badge + rewrite note + citations), `SidePanel` (Sources & Trace ·
-  System Info · Evaluation tabs), `TraceTimeline` (node-by-node, "Web Search (Skipped)" bhi
-  dikhta hai taaki fallback ka conditional hona saaf rahe). App code me hamesha relative
-  `/api/...` — dev me Vite proxy, prod me Nginx, koi hardcoded backend URL nahi.
+- ✅ **Phase 6** — React + Vite + Tailwind **dashboard**: `Sidebar` nav jo chaar full-page
+  views switch karta hai (Chat · Documents · Evaluation · System), `Message` (source badge +
+  rewrite note + citations + **inline trace**), `TraceTimeline` (node-by-node, "Web search
+  (skipped)" bhi dikhta hai taaki fallback ka conditional hona saaf rahe). App code me
+  hamesha relative `/api/...` — dev me Vite proxy, prod me Nginx, koi hardcoded backend URL
+  nahi. View URL hash me rehta hai (`#eval`), isliye refresh aur back button dono chalte hain.
   **UI me jaan-boojh ke jo nahi hai:** koi fake "0.92 relevance score" (grader binary hai)
   aur koi per-step timestamp (backend emit nahi karta) — detail CODE_NOTES me
+- ✅ **UI trim** — ek right rail aur chaar stat cards **nikaal diye**. Rail wahi cheezein
+  dobara bol raha tha jo `Message` dikhata hai aur sirf aakhri answer ki dikhata tha; stat
+  cards har view pe repeat ho rahe the. Evaluation page nau metric cards se chaar
+  measurement + do **evidence blocks** (asli table ke saath) pe aaya, aur usme "Who labelled
+  this set" add hua — kyunki "measured on a labelled set" ke baad pehla sawaal yahi hai.
+  **Sab kuch corpus-aware hai:** demo questions, findings, labelling note aur corpus note
+  `CORPUS` ke hisaab se badalte hain, warna SciFact pe UI apne hi numbers ke khilaf bolta
 - ✅ **`GET /api/stats`** — corpus counts + `eval/results.json` ke numbers + live config.
   Koi LLM call nahi, kyunki dashboard har page load pe ise hit karta hai
 - ✅ **Phase 7** — `docker-compose.yml`: backend + frontend, Chroma volume, healthcheck,
@@ -148,7 +155,7 @@ answer sirf verified context se grounded ho.
 Step execution logs response me — explainability ke liye. `/health` for Docker.
 
 ### Phase 6 — Frontend Demo UI (React + Vite + Tailwind)
-Dashboard: nav rail, stat cards, chat with source badges + citations, aur right rail me
+Dashboard: nav rail, chat with source badges + citations, aur har answer ke neeche inline
 trace / system config / eval numbers. Live demo Swagger se hamesha better lagta hai.
 
 ### Phase 7 — Docker Compose + Deployment

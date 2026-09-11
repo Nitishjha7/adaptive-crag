@@ -80,7 +80,7 @@ question.
 | Web search tool | DuckDuckGo (default, no key) / Tavily (optional) | Fallback context when local docs graded irrelevant |
 | Output validation | Custom LLM groundedness check + regex PII | Catches ungrounded claims and redacts PII from the final answer |
 | Backend | FastAPI + Uvicorn | REST endpoint, retrieval scores, step execution logs |
-| Frontend | React + Vite + Tailwind CSS | Dashboard: stat cards, chat, citations, trace, eval tab |
+| Frontend | React + Vite + Tailwind CSS | Dashboard: chat, citations, inline trace, Documents/Evaluation/System views |
 | Containerization | Docker & Docker Compose | Backend + vector DB + frontend orchestration |
 
 ---
@@ -412,7 +412,8 @@ adaptive-crag/
 │   └── Dockerfile · requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── components/{Sidebar,StatCards,Message,Citations,SidePanel,TraceTimeline}.jsx
+│   │   ├── components/{Sidebar,Message,Citations,TraceTimeline}.jsx
+│   │   ├── views/{DocumentsView,EvaluationView,SystemView}.jsx
 │   │   └── App.jsx · main.jsx · index.css
 │   ├── package.json · tailwind.config.js · vite.config.js · postcss.config.js
 │   ├── nginx.conf                     # SPA fallback + /api/ proxy to backend

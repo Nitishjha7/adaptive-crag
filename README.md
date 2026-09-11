@@ -23,7 +23,7 @@ cost and latency of a web call on every query.
 > | Phase 3 — grading, conditional edge, query transform, web fallback | ✅ both routes verified live |
 > | Phase 4 — groundedness + PII validation | ✅ |
 > | Phase 5 — FastAPI `/api/query` + `/health` | ✅ |
-> | Phase 6 — React dashboard (stat cards, chat, citations, trace, eval + system tabs) | ✅ |
+> | Phase 6 — React dashboard (chat, citations, inline trace, documents + evaluation + system views) | ✅ |
 > | Phase 7 — `docker-compose.yml` (backend + Nginx frontend, `/api/` proxy) | ✅ |
 > | Citations — source filenames (local) / URLs (web) | ✅ |
 > | Hybrid retrieval (BM25 + RRF) + cross-encoder rerank | ✅ A/B'd on both corpora — flat on concepts, **+1 case on SciFact** |
@@ -169,6 +169,18 @@ docker compose up --build
 
 Ports are 3001/8001 rather than 3000/8000 because other projects on this machine hold
 those; override with `FRONTEND_PORT` / `BACKEND_PORT` in `.env`.
+
+**Switching corpus** — the whole stack, UI included, runs on either corpus:
+
+```bash
+CORPUS=scifact docker compose up -d --build   # BEIR SciFact, 1,717 chunks
+docker compose up -d                          # back to concepts
+```
+
+Everything corpus-specific follows: the demo questions, the evaluation findings, the
+"who labelled this set" note, and the corpus note on the Documents page. That is
+deliberate — the SciFact numbers next to prose written about the concepts corpus would
+have the dashboard contradicting its own figures.
 
 **First run:** the Chroma index is built into the image at `backend/vectorstore`, but if
 it's empty, populate it with `.\dev.ps1 ingest`.

@@ -520,26 +520,52 @@ hai — code me TODO pada hai.
 
 ## frontend/ ✅ — React + Vite + Tailwind
 
-Dashboard layout: left nav rail · stat cards · chat · right detail rail.
+Dashboard layout: left nav rail · one full-width view at a time (chat · documents ·
+evaluation · system).
+
+Pehle ek right rail bhi tha aur upar chaar stat cards. Dono nikal diye. Rail har
+wo cheez dobara bol raha tha jo `Message` pehle se dikha raha tha (route, verdict,
+calls, time), aur sirf **aakhri** answer ki dikhata tha — demo me do sawaal poochh
+ke "isme grade no aaya, isme yes" dikhana mumkin hi nahi tha. Ab trace har answer
+ke neeche inline hai. Stat cards har view pe repeat ho rahe the jabki har view
+apne numbers khud likhta hai.
 
 | File | Kaam |
 |---|---|
 | `src/App.jsx` | Layout + conversation state + `fetch("/api/query")` aur `/api/stats` |
-| `components/Sidebar.jsx` | Nav rail, logo, promo card |
-| `components/StatCards.jsx` | 4 top cards — documents · chunks · routing accuracy · missed fallbacks |
+| `components/Sidebar.jsx` | Nav rail, logo, recent-query list |
 | `components/Message.jsx` | Ek turn — user bubble ya assistant card (badge + rewrite note + citations) |
 | `components/Citations.jsx` | Sources list — filenames (local) ya clickable URLs (web) |
-| `components/SidePanel.jsx` | Tabs: Sources & Trace · System Info · Evaluation |
-| `components/TraceTimeline.jsx` | `logs[]` ko node-by-node timeline me render — sabse impressive part |
+| `views/{Chat,Documents,Evaluation,System}` | Sidebar jo full-page views switch karta hai |
+| `components/TraceTimeline.jsx` | `logs[]` ko node-by-node timeline me render, plus `chain()` aur `llmCalls()` helpers |
 | `vite.config.js` | dev me `/api` proxy backend pe |
 | `nginx.conf` | prod me wahi `/api` proxy + SPA fallback |
 
 **App code me hamesha relative `/api/query` kyun:** dev me Vite proxy karta hai, production
 me Nginx. Backend URL kahin hardcode nahi hai, isliye deploy pe kuch rebuild nahi karna padta.
 
-**Demo queries hardcoded kyun:** ye `backend/data/README.md` wali queries hain jinka expected
-route pata hai. Live demo me kuch bhi type karke ummeed karna ki fallback trigger hoga — wahi
-galti demo todti hai.
+**Demo queries fixed kyun:** inka expected route pehle se pata hai. Live demo me kuch bhi
+type karke ummeed karna ki fallback trigger hoga — wahi galti demo todti hai.
+
+**Aur wo corpus ke saath badalti kyun hain:** pehle chaaron chips hardcoded concepts wali
+thi. `CORPUS=scifact` pe *"Why does chunk overlap matter"* chip pe hara (local) dot dikhta,
+par us corpus me wo doc hai hi nahi — asal me web route chalta. Chip apne hi demo ko
+jhutlaati. SciFact ki queries `eval/results_scifact.json` se li gayi hain: yahi cases us run
+me local route pe gaye the **aur** gold doc bhi retrieve hua tha, isliye demo pe chalenge.
+Wahi baat findings, labelling note aur Documents ke corpus note pe bhi lagu hai — sab
+`CORPUS` ke hisaab se badalte hain, warna UI screen pe dikhe numbers ke khilaf bolta hai.
+
+**Har answer apna trace khud leke chalta hai:** `Message` ke neeche ek line ka rasta —
+`retrieve / grade: no / rewrite / web search / generate / validate` — aur uske aage LLM call
+count. Local route pe `(fallback would cost 4)` bhi likha aata hai, kyunki "3 calls" akela
+kuch nahi kehta; "3, aur fallback pe 4" hi wo trade-off hai jispe conditional routing khada
+hai. Dono numbers `logs[]` se gine jaate hain, hardcode nahi. Chevron pe poora timeline.
+
+**View URL ke hash me hai:** `#eval`, `#documents`, `#system`. Pehle `view` sirf `useState`
+tha — Evaluation khol ke refresh karo aur app chup-chaap Chat pe wapas. Hash isliye, path
+nahi: hash server tak jaata hi nahi, to Nginx me koi SPA-fallback rule nahi chahiye.
+`pushState` + `popstate` use kiya, `replaceState` nahi — replace se refresh to theek ho jaata
+hai par history entry banti nahi, to back button views ke beech chalta nahi.
 
 ### UI me kya *nahi* dikhaya, jaan-boojh ke
 

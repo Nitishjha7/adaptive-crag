@@ -67,7 +67,6 @@ export default function Sidebar({
   active,
   onSelect,
   onNewChat,
-  hasChat,
   history = [],
   currentId,
   onOpen,
@@ -83,8 +82,12 @@ export default function Sidebar({
       <div className="px-3 pb-3">
         <button
           onClick={onNewChat}
-          disabled={!hasChat}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-default disabled:opacity-40"
+          // Pehle ye `!hasChat` pe disabled tha, aur wahi galat tha: button ke
+          // do kaam hain — chat clear karna *aur* Chat view pe wapas laana.
+          // Documents ya Evaluation pe khade ho aur chat khaali ho, to click
+          // pe kuch nahi hota tha. Khaali chat pe ye harmless no-op hai, par
+          // view to sahi jagah le hi jaata hai.
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
         >
           <ChatIcon className="h-4 w-4" />
           New chat

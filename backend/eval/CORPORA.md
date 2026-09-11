@@ -8,6 +8,10 @@ other is good at.
 .\dev.ps1 ingest -Corpus concepts   # default
 .\dev.ps1 ingest -Corpus scifact    # BEIR SciFact
 .\dev.ps1 ask -Corpus scifact "..."
+
+# Poora stack (UI included) doosre corpus pe:
+CORPUS=scifact docker compose up -d --build
+docker compose up -d                        # wapas concepts pe
 ```
 
 They live in **separate Chroma collections** (`crag_docs` / `crag_scifact`), so

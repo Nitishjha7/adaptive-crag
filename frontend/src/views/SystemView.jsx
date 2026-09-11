@@ -53,51 +53,50 @@ export default function SystemView({ stats }) {
       <div>
         <h2 className="text-lg font-semibold">System status</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Live configuration read from the running backend — nothing here is hardcoded
-          in the UI.
+          Read live from the running backend — nothing on this page is hardcoded in
+          the UI, so it is the fastest way to check what a container is actually
+          running.
         </p>
       </div>
 
+      {/* Pehle yahan chaar cards the. "Retrieval" card me Corpus / Documents /
+          Chunks the — teeno header line me aur Documents page pe pehle se hain,
+          yaani do jagah dobara. Reranker do baar likha tha: model "Models" me,
+          on/off "Retrieval" me — ek hi cheez ke do rows. Aur "Web fallback"
+          card ki doosri row derived thi (provider duckduckgo hai to key nahi
+          chahiye), yaani ek poora card do lines ke liye.
+
+          Ab do cards: kya chal raha hai, aur kya banaya hi nahi. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Models" subtitle="All retrieval models run locally, no API key">
+        <Card title="Pipeline" subtitle="Everything except the LLM runs locally">
           <Row label="LLM (Groq)" value={c.llm_model} mono />
-          <Row label="Embeddings" value={c.embedding_model} mono />
-          <Row
-            label="Reranker"
-            value={c.reranker_model ?? "off"}
-            mono
-            tone={c.reranker_model ? undefined : "off"}
-          />
           <Row
             label="Groq API key"
             value={c.groq_key_set ? "set" : "missing"}
             tone={c.groq_key_set ? "good" : "bad"}
           />
-        </Card>
-
-        <Card title="Retrieval" subtitle="Both stages are flags so the eval can A/B them">
-          <Row label="Corpus" value={c.corpus} mono />
-          <Row label="Documents" value={stats.documents ?? "—"} />
-          <Row label="Chunks indexed" value={stats.chunks} />
-          <Row label="Top K" value={c.top_k} />
+          <Row label="Embeddings" value={c.embedding_model} mono />
+          {/* Flag aur model ek hi row me: off hone pe model ka naam dikhana
+              jhooth hai, kyunki wo load hi nahi hua. */}
+          <Row
+            label="Cross-encoder rerank"
+            value={c.reranker ? (c.reranker_model ?? "on") : "off"}
+            mono={Boolean(c.reranker && c.reranker_model)}
+            tone={c.reranker ? undefined : "off"}
+          />
           <Row
             label="Hybrid (BM25 + RRF)"
             value={c.hybrid ? "on" : "off"}
             tone={c.hybrid ? "good" : "off"}
           />
+          <Row label="Chunks sent to the grader" value={c.top_k} />
           <Row
-            label="Cross-encoder rerank"
-            value={c.reranker ? "on" : "off"}
-            tone={c.reranker ? "good" : "off"}
-          />
-        </Card>
-
-        <Card title="Web fallback" subtitle="Only runs when grading says local context is insufficient">
-          <Row label="Provider" value={c.search_provider} mono />
-          <Row
-            label="Requires a key"
-            value={c.search_provider === "duckduckgo" ? "no" : "yes"}
-            tone={c.search_provider === "duckduckgo" ? "good" : undefined}
+            label="Web search"
+            value={
+              c.search_provider === "duckduckgo"
+                ? "duckduckgo — no API key"
+                : `${c.search_provider} — needs a key`
+            }
           />
         </Card>
 
@@ -106,6 +105,7 @@ export default function SystemView({ stats }) {
           <Row label="Document upload API" value="none — ingestion is offline" tone="off" />
           <Row label="Context filter" value="none — top-k goes straight to the grader" tone="off" />
           <Row label="Prompt-injection defence" value="none" tone="off" />
+          <Row label="Conversation memory" value="none — every query is independent" tone="off" />
         </Card>
       </div>
     </div>

@@ -33,6 +33,25 @@ const SUGGESTIONS_BY_CORPUS = {
   ],
 };
 
+/**
+ * View URL ke hash me rehta hai, sirf React state me nahi.
+ *
+ * Pehle `view` ek plain useState tha. Evaluation khol ke refresh karo, aur app
+ * chup-chaap Chat pe wapas — koi error nahi, bas kaam ka nuksaan. Browser ka
+ * back button bhi kuch nahi karta tha, aur kisi ko "ye page dekho" bhej bhi
+ * nahi sakte the.
+ *
+ * Hash isliye, path nahi: hash server tak jaata hi nahi, to nginx me koi
+ * SPA-fallback rule nahi chahiye. Path routing pe `/eval` refresh karne pe
+ * nginx 404 deta, kyunki wahan koi file hai hi nahi.
+ */
+const VIEWS = ["chat", "documents", "eval", "system"];
+
+function viewFromHash() {
+  const v = window.location.hash.replace(/^#\/?/, "");
+  return VIEWS.includes(v) ? v : "chat";
+}
+
 export default function App() {
   const [turns, setTurns] = useState([]);
   const [stats, setStats] = useState(null);
@@ -40,7 +59,8 @@ export default function App() {
   // Sidebar **poora main view** switch karta hai. Pehle wo sirf right rail ka
   // ek chhota tab badalta tha, to "Evaluation" click karne pe lagta tha kuch
   // hua hi nahi — aur wo tab aksar scroll ke neeche hota tha.
-  const [view, setView] = useState("chat");
+  // Pehla render hash se — warna ek frame ke liye Chat dikhta aur phir jump.
+  const [view, setView] = useState(viewFromHash);
   const [draft, setDraft] = useState("");
   // Har conversation ki apni id — history usi pe update hoti hai, warna ek hi
   // chat ke do turns do alag entries ban jaate.
@@ -58,6 +78,28 @@ export default function App() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
+
+  // View -> URL. `chat` default hai, uske liye hash khaali rakhte hain warna
+  // landing URL me bewajah "#chat" chipak jaata hai.
+  //
+  // `pushState`, `replaceState` nahi: replace se refresh to theek ho jaata hai
+  // par history me entry banti hi nahi, to back button views ke beech chalta
+  // nahi. Nav clicks ke liye history entry banna hi sahi vyavhaar hai.
+  useEffect(() => {
+    const want = view === "chat" ? "" : `#${view}`;
+    if (window.location.hash !== want) {
+      window.history.pushState(null, "", want || window.location.pathname);
+    }
+  }, [view]);
+
+  // URL -> view. `popstate` sunte hain, `hashchange` nahi: pushState se hui
+  // navigation pe back/forward popstate hi deta hai, aur hash badalne pe bhi
+  // popstate aata hai — to ek hi listener dono case sambhaal leta hai.
+  useEffect(() => {
+    const onPop = () => setView(viewFromHash());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   async function ask(question) {
     if (!question.trim() || busy) return;
@@ -114,7 +156,6 @@ export default function App() {
     <div className="flex h-screen bg-slate-50 text-slate-900">
       <Sidebar
         active={view}
-        hasChat={turns.length > 0}
         onSelect={setView}
         onNewChat={newChat}
         history={history.items}
@@ -192,7 +233,7 @@ export default function App() {
                   onClick={newChat}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50"
                 >
-                  Clear Chat
+                  Clear chat
                 </button>
               )}
             </div>
