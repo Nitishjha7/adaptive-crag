@@ -99,7 +99,7 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, which is why 75 tests run with no API key.
+swapped for a scripted fake in one line, which is why 104 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
@@ -484,7 +484,7 @@ this and should not be claimed as such.
 
 | | |
 |---|---|
-| **75 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags. No API key needed |
+| **104 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence. No API key needed |
 | **Routing eval** (`.\dev.ps1 eval`) | 20 labelled cases — 20/20, 0 missed fallbacks, 3 runs |
 | **Ambiguity eval** (`--repeat 3`) | 8 half-covered cases, scored for route stability |
 | **Retrieval A/B** | Same 44 cases with `USE_HYBRID`/`USE_RERANKER` off vs on — see [RESULTS](../backend/eval/RESULTS.md) |
@@ -524,6 +524,34 @@ no re-index — a full re-ingest is the only path.
 
 ---
 
+## 5.1 What was added afterward — streaming, gateway, cost, monitoring
+
+Four things the project did not have when the phases above were written, each grounded
+in something the project already measured or already hit in production:
+
+- **`POST /api/query/stream`** — SSE built on `graph.stream(mode="updates")`, phrasing
+  each progress event around the routing decision itself rather than just the node
+  name. Verified live: one local-route and one web-fallback query against real Groq
+  and real DuckDuckGo, confirming the right event sequence and that the final `done`
+  event matches `/api/query`'s response for the same question.
+- **`get_llm()` fallback chain** — `LLM_FALLBACK_MODELS`, off by default. This is not a
+  hypothetical: the `llama-3.3-70b-versatile` 404 (§4.5 above) was a real incident
+  fixed by hand at the time. Live-replicated it: pointed `LLM_MODEL` at that same dead
+  id with a real second model configured as fallback, ran a real query, and it
+  completed correctly through the fallback — confirmed by `token_usage` showing only
+  the fallback model recorded any calls.
+- **Per-query token/cost tracking** — the precise successor to the LLM-call-count proxy
+  in §4 / `RESULTS.md`'s cost section. Real numbers from live Groq calls: local route
+  3 calls / 2,071 tokens / $0.000589, web route 4 calls / 2,649 tokens / $0.000780.
+- **`/metrics` + JSON logging** — Prometheus counters for routing, groundedness,
+  LLM calls/tokens/cost and gateway fallbacks; none invented beyond what
+  `RESULTS.md` already argues about.
+
+104 tests now pass (up from 75), all new tests using the same `fake_llm`/`fake_search`
+monkeypatch pattern as everything else — no real LLM calls inside the suite itself.
+
+---
+
 ## 6. Quick reference
 
 ### Commands
@@ -533,7 +561,7 @@ docker compose up --build     # full stack → :3001 (UI) · :8001 (API docs)
 
 .\dev.ps1 ingest [-Reset]     # backend/data/ → Chroma
 .\dev.ps1 ask "..."           # one query, full trace, no server
-.\dev.ps1 test                # 75 tests, no API key needed
+.\dev.ps1 test                # 104 tests, no API key needed
 .\dev.ps1 eval                # 20 labelled cases — real LLM + live web
 .\dev.ps1 eval --repeat 3     # + 8 ambiguous cases, scored for stability
 .\dev.ps1 serve -Port 8042    # API alone

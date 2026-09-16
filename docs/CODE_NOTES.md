@@ -24,6 +24,7 @@ the remaining gap.
 | `uvicorn[standard]` | The ASGI server | FastAPI is not a server by itself |
 | `pydantic` / `pydantic-settings` | Validation and typed config | Request/response models; typed settings from `.env` |
 | `python-dotenv` | Loads `.env` in dev | Local environment variables |
+| `prometheus-client` | `/metrics` exposition format | The text format has escaping/type-comment rules a real Prometheus server is unforgiving about; this is what production FastAPI services use rather than hand-rolling it |
 
 ---
 
@@ -31,13 +32,114 @@ the remaining gap.
 
 Central configuration and factory functions. No business logic.
 
-- `Settings(BaseSettings)` — `GROQ_API_KEY`, `TAVILY_API_KEY`, model names, `TOP_K`,
-  chunk parameters, `CORS_ORIGINS`, paths. Loaded from `.env` at the repo root, which
-  is the same file docker-compose reads.
+- `Settings(BaseSettings)` — `GROQ_API_KEY`, `TAVILY_API_KEY`, model names,
+  `LLM_FALLBACK_MODELS`, `TOP_K`, chunk parameters, `CORS_ORIGINS`, paths. Loaded
+  from `.env` at the repo root, which is the same file docker-compose reads.
 - `get_llm(temperature=0.0)` — a configured `ChatGroq`, with a clear error if the key
-  is missing.
+  is missing. Returns a `with_fallbacks()` chain when `LLM_FALLBACK_MODELS` is set,
+  a plain client otherwise — see the note below.
 - `get_embeddings()` — `FastEmbedEmbeddings` (local ONNX, no API call).
 - `get_vectorstore()` — a handle to the persisted Chroma collection.
+
+### `get_llm()` as a gateway, not just a factory
+
+This project already lived through a real model retirement: `llama-3.3-70b-versatile`
+returned a 404 `model_not_found` mid-project (see `docs/BUILD_PLAN.md`), fixed at the
+time by switching `LLM_MODEL` by hand to `openai/gpt-oss-120b`. `LLM_FALLBACK_MODELS`
+(comma-separated Groq model ids, empty by default) makes that switch automatic instead
+of manual: `get_llm()` wraps the primary client in `with_fallbacks()` so a dead or
+rate-limited model fails over live, and every one of the four call sites
+(`grade_documents`, `transform_query`, `generate`, `validators.check_groundedness`)
+keeps working through a plain `ChatPromptTemplate | get_llm(...)` chain without
+knowing whether it got a single client or a fallback chain — `RunnableWithFallbacks`
+satisfies the same `Runnable.invoke()` interface.
+
+**Only Groq-to-Groq.** This account has one vendor's key, so the fallback list is
+other Groq model ids, not other providers — real protection against a retired or
+saturated model id, not against Groq itself being down.
+
+**Temperature travels with every client in the chain**, primary and fallback alike —
+verified in `tests/test_config.py`: grading and routing need `temp=0` determinism
+regardless of which model in the chain actually answers, so a fallback that quietly
+ran warmer would undermine the whole "deterministic grader" claim in
+`grade_documents.py`.
+
+**Live-replicated the actual incident**: pointing `LLM_MODEL` at the now-dead
+`llama-3.3-70b-versatile` with `LLM_FALLBACK_MODELS=openai/gpt-oss-120b` and running a
+real query completed successfully — `token_usage` on the response showed only the
+fallback model recorded any calls, confirming the primary failed and the fallback
+answered transparently.
+
+---
+
+## backend/app/token_usage.py
+
+Per-query token and cost accounting — the precise replacement for the "3 calls vs 4
+calls" proxy `eval/RESULTS.md` fell back to after an early latency comparison turned
+out to be a Groq-throttling artifact (see that file's "cost argument" section). A call
+count treats every LLM call as equally expensive, which they are not: `grade_documents`
+reads a handful of chunks and returns one word, `generate` reads the same chunks and
+writes a whole answer.
+
+`get_llm()` is `@lru_cache`'d, so the four call sites share one or two actual
+`ChatGroq` instances, not one each — a plain module-level counter on the shared client
+would mix tokens from concurrent requests. `UsageTracker` lives behind a
+`contextvars.ContextVar` instead: `main.py` calls `new_tracker()` once per request, and
+the one `_TrackingCallback` instance bound onto every client (in `config._client`)
+always records into whichever tracker is current, so two concurrent requests never see
+each other's tokens.
+
+`summary()` returns per-model calls/tokens/cost plus a total. An unpriced model's cost
+is `None`, not `0.0` — "we don't know the price" and "this cost nothing" are different
+claims, and the total is `None` (a stated lower bound) rather than a silently
+under-counted number if any model that ran isn't in the price table.
+
+**Verified live**, real Groq, both routes: local route (3 calls) cost $0.000589; web
+route (4 calls) cost $0.000780 — a real $0.000191 / 32.4% delta per query on the
+correction path. Numbers and the full comparison are in
+[`eval/RESULTS.md`](../backend/eval/RESULTS.md).
+
+---
+
+## backend/app/metrics.py
+
+Prometheus counters that mirror what `eval/RESULTS.md` already measures — not generic
+request counters. `crag_queries_total{route}` (routing), `crag_groundedness_total{passed}`
+(from `validate_guardrails`), `crag_llm_calls_total` / `crag_llm_tokens_total` /
+`crag_llm_cost_usd_total` (all by model, from `token_usage.py`), and
+`crag_llm_fallback_triggered_total` (the gateway's own health signal — did a model other
+than the configured primary answer).
+
+**What is deliberately absent:** `RESULTS.md`'s missed-fallback / unnecessary-fallback
+taxonomy needs a ground-truth label for whether a question actually required `web`, and
+that label only exists in `eval/scenarios.json`, written by hand. A live request has no
+such label, so a live "missed fallback" counter would have to guess at the exact thing
+the eval exists to check — a guessed metric with a real-sounding name is worse than no
+metric. `crag_groundedness_total` is the live signal that correlates with it instead.
+
+`record_query(state, token_usage, elapsed_ms, primary_model=...)` is called once per
+query, in both `/api/query` and the streaming endpoint's final event — one function
+rather than `.inc()` calls scattered through graph nodes, so the nodes stay exactly
+what they were before metrics existed.
+
+**Verified live**: a real query against real Groq populated `crag_queries_total`,
+`crag_llm_calls_total`, `crag_llm_tokens_total` and `crag_llm_cost_usd_total` on
+`/metrics`, scraped and confirmed in Prometheus text format.
+
+---
+
+## backend/app/logging_config.py
+
+Stdlib JSON log formatter — one `logging.Formatter` subclass, no `structlog` or
+`python-json-logger` dependency for what the standard library already does. Plain-text
+logs are close to useless in a real aggregator because there is nothing to filter or
+group on except substring search; one JSON object per line fixes that without touching
+any existing `logger.info(...)` call site.
+
+`main.py`'s query-completion log line attaches `route`, `relevance_score`,
+`guardrail_passed`, `elapsed_ms`, `total_tokens` and `total_cost_usd` via `extra={...}`
+— the same three axes (routing, groundedness, cost) `eval/RESULTS.md` already argues
+about offline, now filterable live in whatever aggregator the JSON lines land in.
 
 **Why factories rather than direct imports:** they are easy to mock in tests (the
 Phase 2 wiring test ran with `get_llm` replaced by a fake, with no Groq key at all),
@@ -112,7 +214,7 @@ which is faster to iterate in.
 
 ---
 
-## backend/tests/ — 75 tests, `.\dev.ps1 test`
+## backend/tests/ — 104 tests, `.\dev.ps1 test`
 
 | File | What it covers |
 |---|---|
@@ -120,10 +222,15 @@ which is faster to iterate in.
 | `test_routing.py` | Both routes, documents being replaced, search failure, malformed grader output |
 | `test_grading.py` | The 11 cases of `parse_verdict` |
 | `test_validation.py` | PII redaction, false positives, ungrounded flagging, fail-open |
-| `test_api.py` | `/health`, 422 validation, response shape |
+| `test_api.py` | `/health`, 422 validation, response shape, `/metrics` |
 | `test_retrieval.py` | BM25, the RRF fusion maths, reranker fallback, retrieval flags |
 | `test_corpus.py` | Collection isolation, the BEIR subset gold-document guarantee, qrels score-0 filtering |
 | `test_answer_verdict.py` | Reading a SUPPORT/CONTRADICT stand out of an answer |
+| `test_config.py` | The `get_llm()` fallback chain — plain client vs `with_fallbacks()`, primary excluded from its own fallback list, temperature propagation |
+| `test_token_usage.py` | `UsageTracker` accumulation, cost calc, unpriced-model `None` handling, contextvar isolation between two trackers |
+| `test_metrics.py` | `record_query` updating each Prometheus counter from a fake `CRAGState` |
+| `test_logging_config.py` | `JsonFormatter` — valid JSON, extra fields riding through, exception capture |
+| `test_streaming.py` | `run_query_stream`'s event sequence on both routes, progress labels naming the routing decision, and the streamed `done` payload matching `/api/query` exactly |
 
 **Why no real LLM calls in the tests:** these test **control flow**, not model quality.
 Real calls are slow, cost money, need a key and are non-deterministic — that is, flaky
@@ -185,6 +292,29 @@ extra web call rather than answer from unverified context.
 **Design choice:** the fallback branch merges back into the same `generate` node rather
 than a second one. `generate` only reads `state["documents"]`, so the source makes no
 difference to it.
+
+### `run_query_stream` — the same graph, one node at a time
+
+Built on `graph.stream(..., stream_mode="updates")` rather than a second, hand-written
+traversal, so it cannot drift from what `graph.invoke()` actually executes — the node
+functions and edges above are the single source of truth for both. Yields
+`("progress", {node, label, elapsed_ms})` the instant each node finishes, then
+`("done", CRAGState)` with everything a non-streaming call would return.
+
+**The label is built from the state the node just wrote, not a static per-node string**
+— this project's real story is the corrective routing decision, so
+`grade_documents`'s progress event reads `relevance=no (not relevant, falling back to
+web)`, not just `"grading documents"`.
+
+**One real bug found writing this**: `logs` uses an `operator.add` reducer
+(`schemas/crag_state.py`) — LangGraph's own internal state appends each node's line,
+but the `{node_name: partial_state}` dict `stream(mode="updates")` yields only ever
+carries *that node's own* single new line, never the accumulated list. A naive
+`state.update(partial)` on the generator's local mirror of state silently overwrote
+`logs` with just the last node's line instead of the full trace — caught by
+`test_stream_endpoint_matches_non_streaming_payload_shape` asserting the streamed
+`done` payload matches `/api/query` exactly. Fixed by popping `logs` out of `partial`
+and appending it by hand before merging the rest.
 
 ---
 
@@ -505,8 +635,28 @@ script — so k and any score threshold are tuned in one place.
 
 The FastAPI entry point. The graph is compiled once in `lifespan` (rebuilding it per
 request is wasted work). `POST /api/query` returns `answer`, `source_type`, `sources`,
-`relevance_score`, `transformed_query`, `logs` and `elapsed_ms` — which is what the
-badge and the trace viewer are built from.
+`relevance_score`, `transformed_query`, `logs`, `elapsed_ms` and `token_usage` — which
+is what the badge, the trace viewer and the cost figure are built from.
+
+**`POST /api/query/stream`** — the same query as Server-Sent Events, built on
+`app.graph.build_graph.run_query_stream`. `_query_response()` is one function shared by
+both endpoints specifically so the streamed `done` event and the non-streaming response
+cannot drift apart — building the payload twice is exactly how that kind of bug creeps
+in. The synchronous generator is drained onto the async event loop through a queue plus
+`run_in_threadpool`, the same trick `/api/query` uses for `graph.invoke` — a slow
+request must not stall the event loop for everyone else. **Verified live** against real
+Groq and real DuckDuckGo: a local-route and a web-fallback query each produced the
+correct progress sequence, and the final SSE `done` event matched `/api/query`'s
+response for the same question field-for-field (`elapsed_ms` aside).
+
+**`GET /metrics`** — the Prometheus scrape target, `prometheus_client.generate_latest()`
+verbatim. No business logic here; `app/metrics.py` owns what is tracked and why.
+
+**Token tracking**: `new_tracker()` (a contextvar, `app/token_usage.py`) is opened once
+per request/stream — the LLM clients `get_llm()` returns are `@lru_cache`'d and shared
+across requests, so a plain counter on the client would mix concurrent requests'
+tokens. The tracker's `.summary()` becomes both the `token_usage` field in the response
+and the input to `record_query()` for `/metrics`.
 
 **Why `run_in_threadpool`:** `graph.invoke` is synchronous and **blocks** on LLM and
 search calls. Calling it directly inside an `async def` would let one slow request stall

@@ -413,6 +413,32 @@ argument rests on call counts, which are exact, not on latency, which this setup
 cannot measure.** A real latency comparison needs a dedicated paid-tier run with
 warm-up and repeated trials — worth doing, not done here.
 
+### Call counts, upgraded to real tokens and dollars
+
+"Local 3 calls, web 4 calls" treats every LLM call as equally expensive, which
+they are not: `grade_documents` reads a handful of chunks and returns one word;
+`generate` reads the same chunks and writes a whole answer. `app/token_usage.py`
+now tracks real per-model input/output tokens and USD cost for every query
+(contextvar-scoped, so concurrent requests cannot mix each other's counts), and
+`/api/query` and `/api/query/stream` both return it. This does not replace the
+call-count argument — it sharpens it with a real number instead of a proxy.
+
+Two live queries against real Groq (`openai/gpt-oss-120b`), one per route:
+
+| Route | LLM calls | Input tokens | Output tokens | Total tokens | Cost (USD) |
+|---|---|---|---|---|---|
+| local (`Why does chunk overlap matter?`) | 3 | 1,607 | 464 | 2,071 | **$0.000589** |
+| web (`What is the Model Context Protocol...?`) | 4 | 2,011 | 638 | 2,649 | **$0.000780** |
+
+The delta is **+$0.000191 per query on the correction path — a real 32.4% more**,
+which lines up with the "about 33% more LLM calls" already claimed from call
+counts alone. The call-count argument was directionally right; this is the same
+claim with a dollar figure attached instead of an integer. At Groq's current
+`openai/gpt-oss-120b` pricing ($0.15 / $0.75 per million input/output tokens)
+the absolute numbers are small — this corpus and query set are a demo, not a
+production load — but the *ratio* is what the routing design is claimed to
+improve, and now it is measured directly rather than inferred from a call count.
+
 ---
 
 ## Groundedness: one consistent false positive

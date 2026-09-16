@@ -149,6 +149,36 @@ Backend-only dev loop (`.\dev.ps1 test`, `ingest`, `eval`, `ask`) is in
 | Web fallback | DuckDuckGo (default) / Tavily (optional) |
 | Validation | LLM groundedness check + regex PII redaction |
 | API / UI | FastAPI · React + Vite + Tailwind · Docker Compose |
+| LLM gateway | Groq → Groq fallback chain (`with_fallbacks`) — same-provider, since this project has one key |
+| Observability | Per-query token/cost accounting, Prometheus `/metrics`, JSON stdout logs |
+
+---
+
+## Live, streaming, and observable
+
+Beyond the batch `POST /api/query`, the same graph is exposed three more ways:
+
+- **`POST /api/query/stream`** — Server-Sent Events. One `progress` event per
+  finished graph node, phrased around the routing decision itself
+  (`grade_documents: relevance=no (not relevant, falling back to web)`), then a
+  final `done` event with the exact payload `/api/query` returns. Verified live
+  against real Groq and real DuckDuckGo, one local-route and one web-fallback
+  query — see [backend/eval/RESULTS.md](backend/eval/RESULTS.md#call-counts-upgraded-to-real-tokens-and-dollars).
+- **`get_llm()` fallback chain** — this project already lived through a real
+  incident (Groq retired `llama-3.3-70b-versatile` mid-project, see
+  [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md)). Setting `LLM_FALLBACK_MODELS`
+  wires a `with_fallbacks()` chain so a dead or rate-limited primary fails over
+  to a second Groq model, with temperature preserved through the whole chain
+  (grading needs temp=0 determinism regardless of which model actually
+  answers). Empty by default — no fallback simulated unless configured.
+- **`/metrics`** (Prometheus) + JSON stdout logs — routing counts, groundedness
+  pass/fail, LLM calls/tokens/cost by model, and whether a fallback fired.
+  Every metric mirrors something `eval/RESULTS.md` already measures offline;
+  nothing generic was added.
+- **Per-query token and cost accounting** — the precise replacement for the
+  "3 calls vs 4 calls" proxy the eval fell back on after latency proved
+  unmeasurable. Both `/api/query` and `/api/query/stream` return `token_usage`
+  with real input/output tokens and USD cost per model.
 
 ---
 
@@ -187,7 +217,7 @@ Stated rather than hidden — the System Status page says the same thing in the 
   filter, no prompt-injection defence, no conversation memory — every query runs
   independently.
 
-75 tests, no API key needed: `.\dev.ps1 test`
+104 tests, no API key needed: `.\dev.ps1 test`
 
 ---
 

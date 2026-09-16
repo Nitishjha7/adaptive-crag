@@ -18,7 +18,11 @@ in [BUILD_PLAN.md](BUILD_PLAN.md). This file is the current state.
 | **Dashboard** | React + Vite + Tailwind — Chat, Documents, Evaluation, System Status. View lives in the URL hash, so refresh and back both work |
 | **Eval harness** | `backend/eval/` — routing accuracy, fallback recall/precision, groundedness, per-route LLM call counts, retrieval recall@k, answer correctness |
 | **Second corpus** | BEIR SciFact — 500 abstracts whose relevance labels ship with the dataset |
-| **Tests** | 75, no API key required |
+| **Tests** | 104, no API key required |
+| **Streaming** | `POST /api/query/stream` — SSE, one progress event per graph node, phrased around the routing decision |
+| **LLM gateway** | `get_llm()` — Groq → Groq `with_fallbacks()` chain, off by default, temperature preserved through the chain |
+| **Token/cost tracking** | Per-query, per-model tokens and USD cost — the precise upgrade to the "3 vs 4 calls" proxy |
+| **Monitoring** | `/metrics` (Prometheus: routing, groundedness, LLM calls/tokens/cost, fallback triggers) + JSON stdout logs |
 | **CI** | GitHub Actions — tests, frontend build, and a deploy-image smoke test |
 | **Deploy image** | Single-service `Dockerfile` at the repo root; ingests at build time and asserts the index is non-empty |
 
