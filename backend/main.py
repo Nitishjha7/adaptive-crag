@@ -7,19 +7,28 @@ timeline under each answer, so the system is not a black box — you can see why
 route was taken.
 """
 
+import logging
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
-from app.graph.build_graph import build_crag_graph
+from app.graph.build_graph import build_crag_graph, run_query_stream
+from app.logging_config import configure_json_logging
 from app.schemas.crag_state import initial_state
+from app.token_usage import new_tracker
+
+# Configured before any module-level `logging.getLogger(...)` call below does
+# its first logging — see app/logging_config.py.
+configure_json_logging()
+logger = logging.getLogger("app.main")
 
 # Compiled once at module load — rebuilding the graph per request is wasted work.
 _graph = None
@@ -63,18 +72,14 @@ class QueryOut(BaseModel):
     transformed_query: str    # empty unless the fallback ran
     logs: List[str]           # node-by-node trace          -> UI trace viewer
     elapsed_ms: int
+    token_usage: dict         # per-model tokens/cost for this query — see app/token_usage.py
 
 
-@app.post("/api/query", response_model=QueryOut)
-async def query(body: QueryIn) -> QueryOut:
-    started = time.perf_counter()
-
-    # graph.invoke is synchronous and blocks on LLM and search calls. Run it in a
-    # threadpool so one slow request cannot stall the whole event loop.
-    from starlette.concurrency import run_in_threadpool
-
-    final = await run_in_threadpool(_graph.invoke, initial_state(body.question))
-
+def _query_response(final: dict, elapsed_ms: int, token_usage: dict) -> QueryOut:
+    """One function so `/api/query` and `/api/query/stream`'s final event build
+    the exact same payload — building it twice is exactly the kind of drift
+    that would make a streamed result quietly disagree with the non-streamed
+    one."""
     return QueryOut(
         # final_output is written by the guardrails node; generation is the fallback.
         answer=final.get("final_output") or final.get("generation") or "",
@@ -83,8 +88,119 @@ async def query(body: QueryIn) -> QueryOut:
         relevance_score=final.get("relevance_score", ""),
         transformed_query=final.get("transformed_query", ""),
         logs=final.get("logs", []),
-        elapsed_ms=int((time.perf_counter() - started) * 1000),
+        elapsed_ms=elapsed_ms,
+        token_usage=token_usage,
     )
+
+
+@app.post("/api/query", response_model=QueryOut)
+async def query(body: QueryIn) -> QueryOut:
+    started = time.perf_counter()
+
+    # One tracker per request via a contextvar (app/token_usage.py) — the LLM
+    # clients are cached and shared across requests, so this is what keeps
+    # concurrent requests' token counts from mixing.
+    tracker = new_tracker()
+
+    # graph.invoke is synchronous and blocks on LLM and search calls. Run it in a
+    # threadpool so one slow request cannot stall the whole event loop.
+    from starlette.concurrency import run_in_threadpool
+
+    final = await run_in_threadpool(_graph.invoke, initial_state(body.question))
+
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    usage = tracker.summary()
+
+    from app.metrics import record_query
+
+    record_query(final, usage, elapsed_ms, primary_model=get_settings().LLM_MODEL)
+
+    logger.info(
+        "query completed",
+        extra={
+            "route": final.get("source_type", ""),
+            "relevance_score": final.get("relevance_score", ""),
+            "guardrail_passed": final.get("guardrail_passed"),
+            "elapsed_ms": elapsed_ms,
+            "total_tokens": usage.get("total_tokens", 0),
+            "total_cost_usd": usage.get("total_cost_usd"),
+        },
+    )
+
+    return _query_response(final, elapsed_ms, usage)
+
+
+@app.post("/api/query/stream")
+async def query_stream(body: QueryIn) -> StreamingResponse:
+    """Same query as `/api/query`, as Server-Sent Events.
+
+    The correction path (grade -> transform_query -> web_search_fallback ->
+    generate) takes noticeably longer than a local hit, and `/api/query` makes
+    both look identical to the caller until the whole thing is done. This
+    streams a `progress` event the instant each graph node finishes — the
+    corrective routing decision becoming visible as it happens is this
+    project's actual story — then a final `done` event carrying the exact
+    payload `/api/query` would have returned in one shot (`_query_response`,
+    used by both).
+
+    `run_query_stream` is a plain generator wrapping `graph.stream(...)`; the
+    queue and background thread below exist only to get a synchronous
+    generator's output onto the async event loop without blocking it — the
+    same problem `run_in_threadpool` solves for the non-streaming endpoint.
+    """
+    import asyncio
+    import json
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+    SENTINEL = object()
+    started = time.perf_counter()
+    tracker = new_tracker()
+
+    def produce() -> None:
+        try:
+            for kind, payload in run_query_stream(body.question, graph=_graph):
+                if kind == "done":
+                    elapsed_ms = int((time.perf_counter() - started) * 1000)
+                    usage = tracker.summary()
+                    from app.metrics import record_query
+
+                    record_query(payload, usage, elapsed_ms, primary_model=get_settings().LLM_MODEL)
+                    payload = _query_response(payload, elapsed_ms, usage).model_dump()
+                asyncio.run_coroutine_threadsafe(queue.put((kind, payload)), loop).result()
+        except Exception as exc:  # noqa: BLE001 - reported to the client as an event, not a 500
+            logger.exception("Streaming query failed")
+            asyncio.run_coroutine_threadsafe(
+                queue.put(("error", {"detail": str(exc)})), loop
+            ).result()
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put((SENTINEL, None)), loop).result()
+
+    async def event_source():
+        from starlette.concurrency import run_in_threadpool
+
+        await run_in_threadpool(produce)
+        # produce() has already fully populated the queue by the time
+        # run_in_threadpool returns (each put is awaited via
+        # run_coroutine_threadsafe before the next one), so draining it here
+        # is sequential, not racy.
+        while True:
+            kind, payload = await queue.get()
+            if kind is SENTINEL:
+                return
+            yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    """Prometheus scrape target — see app/metrics.py for what is tracked and
+    why: routing, groundedness, LLM calls/tokens/cost, and gateway fallbacks,
+    mirroring exactly what eval/RESULTS.md already argues about offline."""
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")

@@ -31,6 +31,9 @@ tavily-python>=0.5.0
 fastapi>=0.115.6
 uvicorn[standard]>=0.34.0
 
+# --- Monitoring (Phase 10) ------------------------------------------------
+prometheus-client>=0.21.0
+
 # --- Tests ---------------------------------------------------------------
 pytest>=8.3.0
 httpx>=0.28.0        # fastapi TestClient ke liye

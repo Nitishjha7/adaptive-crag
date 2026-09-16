@@ -40,12 +40,14 @@ def test_response_shape(client, fake_llm, fake_search):
     # Frontend inhi fields pe badge + trace render karega -- shape na toote
     assert set(body) == {
         "answer", "source_type", "sources", "relevance_score",
-        "transformed_query", "logs", "elapsed_ms",
+        "transformed_query", "logs", "elapsed_ms", "token_usage",
     }
     assert isinstance(body["sources"], list)
     assert body["source_type"] in {"vector_db", "web_search"}
     assert body["relevance_score"] in {"yes", "no"}
     assert body["logs"], "trace khaali hai -- explainability chali gayi"
+    assert "by_model" in body["token_usage"]
+    assert "total_tokens" in body["token_usage"]
 
 
 class TestStats:
@@ -81,3 +83,18 @@ class TestStats:
         """The dashboard hits this on every page load -- one LLM call here
         rate limit ko UI ke saath baandh deta."""
         assert client.get("/api/stats").status_code == 200
+
+
+class TestMetrics:
+    """`/metrics` — the Prometheus scrape target."""
+
+    def test_returns_prometheus_text_format(self, client):
+        r = client.get("/metrics")
+        assert r.status_code == 200
+        assert "text/plain" in r.headers["content-type"]
+
+    def test_query_updates_the_exposed_metrics(self, client, fake_llm, fake_search):
+        client.post("/api/query", json={"question": "Why does chunk overlap matter?"})
+        body = client.get("/metrics").text
+        assert "crag_queries_total" in body
+        assert "crag_llm_calls_total" in body
