@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # FastEmbed's default — small, ONNX, runs offline, no API key.
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
 
+    # A gateway needs somewhere to fail over *to*. Empty by default — a single
+    # model is the honest default for a project with one Groq key, and this
+    # only turns on when a fallback list is actually configured. See
+    # get_llm() for why this is Groq model ids, not other providers: this
+    # account has one key, one vendor, so a genuine multi-provider gateway is
+    # not being simulated here.
+    LLM_FALLBACK_MODELS: str = ""
+
     # --- retrieval ---------------------------------------------------------
     VECTOR_DB: str = "chroma"
     # "duckduckgo" (no key needed) or "tavily" (better snippets, needs a signup)
@@ -93,6 +101,10 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     @property
+    def fallback_model_list(self) -> list[str]:
+        return [m.strip() for m in self.LLM_FALLBACK_MODELS.split(",") if m.strip()]
+
+    @property
     def collection_name(self) -> str:
         """One Chroma collection per corpus.
 
@@ -112,26 +124,71 @@ def get_settings() -> Settings:
     return Settings()
 
 
-@lru_cache
-def get_llm(temperature: float = 0.0):
-    """Configured ChatGroq.
-
-    Defaults to temperature 0: grading and routing need determinism, not
-    creativity. The `generate` node can override it.
-    """
+def _client(model: str, temperature: float, settings: Settings):
     from langchain_groq import ChatGroq
 
-    s = get_settings()
-    if not s.GROQ_API_KEY:
+    from .token_usage import TRACKING_CALLBACK
+
+    return ChatGroq(
+        model=model,
+        temperature=temperature,
+        api_key=settings.GROQ_API_KEY,
+        # Bound once, here, rather than passed at every one of the four call
+        # sites (grade_documents, transform_query, generate, validators) —
+        # see app/token_usage.py for why one stateless callback shared across
+        # every cached client is the right scope.
+        callbacks=[TRACKING_CALLBACK],
+    )
+
+
+@lru_cache
+def get_llm(temperature: float = 0.0):
+    """Configured ChatGroq — a fallback chain when one is configured, a
+    single client otherwise.
+
+    Defaults to temperature 0: grading and routing need determinism, not
+    creativity. The `generate` node can override it. Cached per temperature,
+    so the grader/router calls (0.0) and any caller wanting slack share one
+    client rather than opening a fresh one each time.
+
+    **Why a gateway matters here specifically:** this project has already hit
+    a dead model id in production (docs/BUILD_PLAN.md — Groq retired
+    `llama-3.3-70b-versatile` mid-project, a 404 `model_not_found` no mock
+    ever caught, fixed by switching to `openai/gpt-oss-120b`). A retired or
+    saturated model is not a bug in this code, and none of the four call
+    sites below can tell "the model is gone" apart from "my prompt is wrong"
+    unless something sits in front of the client and retries elsewhere.
+
+    `with_fallbacks` was chosen over a hand-rolled try/except around every
+    call site because it returns something that still satisfies the plain
+    `Runnable` interface every caller already depends on (`.invoke(...)` via
+    a `ChatPromptTemplate | get_llm(...)` chain) — no call site has to know
+    whether it got a plain `ChatGroq` or a fallback chain.
+
+    **Only one provider.** `LLM_FALLBACK_MODELS` is a list of Groq model ids,
+    not other vendors — this account has one Groq key, so a genuine
+    multi-provider gateway would need a second vendor's key this project does
+    not have. Falling over to a second Groq model is real protection against
+    a retired or rate-limited model id; it is not protection against Groq
+    itself being down.
+    """
+    settings = get_settings()
+    if not settings.GROQ_API_KEY:
         raise RuntimeError(
             "GROQ_API_KEY is not set. Create `.env` in the repo root (copy "
             ".env.example) and add a key from https://console.groq.com."
         )
-    return ChatGroq(
-        model=s.LLM_MODEL,
-        temperature=temperature,
-        api_key=s.GROQ_API_KEY,
-    )
+
+    primary = _client(settings.LLM_MODEL, temperature, settings)
+    fallback_ids = [m for m in settings.fallback_model_list if m != settings.LLM_MODEL]
+    if not fallback_ids:
+        return primary
+
+    fallbacks = [_client(m, temperature, settings) for m in fallback_ids]
+    # Temperature is passed to every client in the chain, primary and
+    # fallback alike — the grading/routing determinism this project relies on
+    # (temp=0) holds regardless of which model in the chain actually answers.
+    return primary.with_fallbacks(fallbacks)
 
 
 @lru_cache
