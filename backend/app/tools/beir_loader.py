@@ -129,7 +129,7 @@ def load_qrels(name: str = "scifact", split: str = "test") -> Dict[str, List[str
 
 
 def load_query_verdicts(name: str = "scifact") -> Dict[str, str]:
-    """`{query_id: "SUPPORT" | "CONTRADICT"}` — dataset ka apna answer label.
+    """`{query_id: "SUPPORT" | "CONTRADICT"}` — the dataset's own answer label.
 
     SciFact is a claim-verification dataset: each claim records whether the gold
     abstract **supports or contradicts** it. That sits in `queries.jsonl` under

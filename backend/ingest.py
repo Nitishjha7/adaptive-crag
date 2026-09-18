@@ -1,8 +1,8 @@
-"""Phase 1 — local documents ko Chroma me ingest karo.
+"""Phase 1 — ingest local documents into Chroma.
 
 Run:
-    python ingest.py            # incremental (collection already bhari ho to skip)
-    python ingest.py --reset    # wipe karke dobara build
+    python ingest.py            # incremental (skips if the collection is already populated)
+    python ingest.py --reset    # wipe and rebuild from scratch
 
 Kept idempotent because the embedding model downloads ~100 MB on first use and
 re-embedding is slow — a rebuild on every container start is not wanted.
@@ -16,7 +16,7 @@ from app.config import get_settings, get_vectorstore
 
 
 def load_documents(data_dir: Path):
-    """data/ ki .md aur .txt files padho.
+    """Read the .md and .txt files in data/.
 
     data/README.md is skipped — it is notes *about* the corpus, not part of it.
     Ingesting it would put "what is not in here" meta-text into the corpus, which
@@ -40,15 +40,15 @@ def load_documents(data_dir: Path):
 
 
 def load_beir_documents(name: str = "scifact", limit: int = 0):
-    """BEIR corpus ko Documents me badlo.
+    """Convert a BEIR corpus into Documents.
 
-    Har abstract ek Document hai, `title` text ke aage jodte hain — SciFact ke
-    titles claim-jaise hote hain aur retrieval me kaam ke signal hain, unhe
+    Each abstract becomes one Document, with `title` prepended to the text —
+    SciFact's titles read like claims and are a useful retrieval signal, so
     discarding it would throw away information.
 
     `source` metadata holds the `doc_id`, not a filename — citations and qrels
-    both key on that id, so the eval can verify that the document
-    retrieve hua wo sach me gold doc tha.
+    both key on that id, so the eval can verify that the document actually
+    retrieved was really the gold document.
     """
     from langchain_core.documents import Document
 
@@ -65,7 +65,7 @@ def load_beir_documents(name: str = "scifact", limit: int = 0):
 
 
 def split_documents(docs):
-    """Recursive character splitting — heading/paragraph boundaries pe todta hai
+    """Recursive character splitting — breaks on heading/paragraph boundaries
     rather than a fixed character count, so related text stays together."""
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -103,7 +103,7 @@ def main() -> int:
     store = get_vectorstore()
 
     # **Only this corpus's collection is reset, not the whole directory.**
-    # Dono corpora ek hi `vectorstore/` me alag collections me rehte hain —
+    # Both corpora live as separate collections in the same `vectorstore/`.
     # Wiping the directory would take the other corpus with it and force a
     # re-embed, which on SciFact costs minutes.
     if args.reset:
@@ -141,11 +141,12 @@ def main() -> int:
     print(f"[ingest] {len(docs)} documents loaded")
     print(f"[ingest] embedding with {s.EMBEDDING_MODEL} ...")
 
-    # **Streaming: split aur embed dono batch-wise.**
+    # **Streaming: both splitting and embedding happen batch-wise.**
     #
-    # Pehle poora corpus split karke saare chunks ek list me rakhe the — SciFact
-    # pe wo 17,266 chunks banti hai aur container (3.5 GB) **OOM se mar gaya**
-    # (exit 137). Never visible on the concepts corpus and its 22 chunks.
+    # This used to split the whole corpus first and hold every chunk in one
+    # list — on SciFact that is 17,266 chunks, and the container (3.5 GB)
+    # **OOM-killed** (exit 137). Never visible on the concepts corpus and its
+    # 22 chunks.
     #
     # Now it works a batch of documents at a time: split -> embed -> release.
     # Peak memory stops scaling with corpus size, so larger corpora fit too.

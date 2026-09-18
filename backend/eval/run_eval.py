@@ -57,13 +57,13 @@ HERE = Path(__file__).parent
 
 
 def default_scenarios() -> Path:
-    """Scenarios file `CORPUS` ke saath chalti hai.
+    """The scenarios file follows `CORPUS`.
 
-    Pehle ye hardcoded `scenarios.json` (concepts) tha. Uska nateeja ek chupa
-    hua measurement bug tha: `CORPUS=scifact` set karke eval chalao, to index
-    the index was SciFact's but the questions were the concepts ones. The eval
-    does not crash — it quietly prints confident, meaningless routing numbers,
-    and the failure looks like *the router being wrong* when the setup was wrong.
+    This used to be hardcoded to `scenarios.json` (concepts). That hid a real
+    measurement bug: set `CORPUS=scifact` and run the eval, and the index was
+    SciFact's but the questions were still the concepts ones. The eval does
+    not crash — it quietly prints confident, meaningless routing numbers, and
+    the failure looks like *the router being wrong* when the setup was wrong.
 
     That is the kind of bug this project most wants to avoid: a measurement that
     blames the wrong component. So the default follows the corpus; `--scenarios`
@@ -73,35 +73,35 @@ def default_scenarios() -> Path:
     name = "scenarios.json" if corpus == "concepts" else f"scenarios_{corpus}.json"
     return HERE / name
 
-# source_type -> label. Graph "vector_db"/"web_search" bolta hai, scenarios
-# "local"/"web" — mapping ek jagah rakhi hai taaki dono vocabularies alag reh
-# sakein aur eval graph ke internals se tightly coupled na ho.
+# source_type -> label. The graph speaks "vector_db"/"web_search"; scenarios
+# speak "local"/"web" — the mapping lives in one place so the two vocabularies
+# can stay separate rather than tightly coupling the eval to the graph's internals.
 ROUTE_OF_SOURCE = {"vector_db": "local", "web_search": "web"}
 
 # A third label. "local"/"web" mean the corpus does or does not hold the answer.
-# "ambiguous" ka matlab hai **reasonable log disagree karenge** — corpus topic ko
+# "ambiguous" means **a reasonable person could disagree** — the corpus only
 # half-covers the topic. Accuracy is meaningless on these; stability
 # is measured instead (see score() below).
 AMBIGUOUS = "ambiguous"
 
 
-# Which nodes make an LLM call. Not `retrieve` or `web_search_fallback` —
-# ek vector search hai, doosra HTTP search. Ye list graph ke saath badalni padegi
-# if a new LLM node is added, so it lives in one place.
+# Which nodes make an LLM call. Not `retrieve` or `web_search_fallback` — one
+# is a vector search, the other an HTTP search. This list needs updating
+# alongside the graph if a new LLM node is added, so it lives in one place.
 LLM_NODES = ("grade_documents", "transform_query", "generate", "validate_guardrails")
 
 
 def count_llm_calls(logs: List[str]) -> int:
-    """Trace se LLM calls gino.
+    """Count LLM calls from the trace.
 
     **Why this metric rather than latency.** The whole "why adaptive, why not
     always search" argument rests on cost. Latency cannot measure that at this
     scale — Groq's throttling dominates so completely that the route difference
     drowns in it (details in RESULTS.md).
 
-    Call count us problem se azaad hai: ye graph ke structure se aata hai, timing
-    not from timing. Run it twice and the number is the same. That is what
-    claim ki ja sakti hai.
+    Call count is independent of that problem: it comes from the graph's
+    structure, not from timing. Run it twice and the number is the same. That
+    is what makes it a claim worth making.
     """
     return sum(1 for line in logs if line.split(" ")[0] in LLM_NODES)
 
@@ -111,12 +111,12 @@ def count_llm_calls(logs: List[str]) -> int:
 # ---------------------------------------------------------------------------
 
 def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, Any]:
-    """Ek question chalao aur observed route + metrics lauta do.
+    """Run one question and return the observed route plus metrics.
 
-    Groq free tier pe rate limit asli problem hai (self-healing-sql-agent me yahi
-    turned out to be the biggest blocker), so the whole case is re-run with
-    exponential backoff. Retries are reported in `attempts` — a run that shows
-    retries is a run whose numbers deserve suspicion.
+    Rate limiting on Groq's free tier is a real problem (self-healing-sql-agent
+    hit the same thing — it turned out to be the biggest blocker there too), so
+    the whole case is re-run with exponential backoff. Retries are reported in
+    `attempts` — a run that shows retries is a run whose numbers deserve suspicion.
     """
     question = case["question"]
     last_error = ""
@@ -158,7 +158,7 @@ def run_case(graph, case: Dict[str, Any], max_attempts: int = 3) -> Dict[str, An
         else:
             hit, keyword_hit = [], None
 
-        # **Retrieval recall@k** — sirf tab jab dataset gold docs deta ho (BEIR).
+        # **Retrieval recall@k** — only when the dataset provides gold docs (BEIR).
         # The metric that was impossible on the concepts corpus: there was no
         # ground truth about which chunk was correct, so retrieval quality could
         # not be measured at all — which is why the reranker A/B came out flat.
@@ -292,8 +292,8 @@ def score_ambiguous(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             "runs": len(routes),
             "routes": routes,
             "stable": stable,
-            # Majority route — kis taraf jhukav hai, ye batata hai grader kitna
-            # conservative hai. Aadha-cover topic pe "web" jaana zyada safe hai.
+            # Majority route — which way the grader leans shows how conservative
+            # it is. On a half-covered topic, going "web" is the safer call.
             "majority": max(set(routes), key=routes.count) if routes else None,
         })
 
@@ -373,9 +373,9 @@ def score(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "routing_accuracy_pct": pct(len(correct), len(ok)),
         "routing_correct": len(correct),
 
-        # Fallback ko positive class maan kar. Recall = jo cases web maangte the,
-        # unme se kitne actually web gaye. Yahi wo metric hai jo hallucination
-        # se bachati hai.
+        # Treating fallback as the positive class. Recall = of the cases that
+        # actually needed web, how many actually went web. This is the metric
+        # that guards against hallucination.
         "fallback_recall_pct": pct(len(web_cases) - len(missed_fallback), len(web_cases)),
         "fallback_precision_pct": pct(len(web_cases) - len(missed_fallback), len(went_web)),
 

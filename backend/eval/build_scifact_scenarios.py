@@ -1,4 +1,4 @@
-"""SciFact ke qrels se routing eval scenarios generate karo.
+"""Generate routing eval scenarios from SciFact's own qrels.
 
     python -m eval.build_scifact_scenarios --local 20 --out eval/scenarios_scifact.json
 
@@ -26,8 +26,8 @@ from pathlib import Path
 HERE = Path(__file__).parent
 
 # These web cases are hand-written, chosen so that **no** static
-# scientific corpus inka jawab de hi na sake — live pricing, current limits,
-# recent releases. Yahi wo axis hai jispe corpus definitionally khaali hai.
+# scientific corpus could possibly answer them — live pricing, current limits,
+# recent releases. This is the exact axis on which the corpus is definitionally empty.
 WEB_CASES = [
     "What is the current pricing of the Groq API per million tokens?",
     "What are the free tier rate limits on the Groq API right now?",
@@ -42,13 +42,13 @@ WEB_CASES = [
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Generate SciFact routing scenarios")
-    p.add_argument("--local", type=int, default=20, help="kitne local cases (qrels se)")
-    p.add_argument("--web", type=int, default=8, help="kitne web cases")
+    p.add_argument("--local", type=int, default=20, help="how many local cases (from qrels)")
+    p.add_argument("--web", type=int, default=8, help="how many web cases")
     p.add_argument("--out", default=str(HERE / "scenarios_scifact.json"))
     p.add_argument("--seed", type=int, default=17, help="for reproducibility")
     p.add_argument(
         "--limit", type=int, default=0,
-        help="wahi limit jo ingest me use ki thi — scenarios usi subset pe bane",
+        help="the same limit used at ingest time — scenarios are built against that same subset",
     )
     args = p.parse_args()
 
@@ -59,11 +59,11 @@ def main() -> int:
         load_query_verdicts,
     )
 
-    # **Wahi limit jo ingest me di thi.** Warna scenarios poore corpus ke against
-    # would be built against the full corpus while the index holds a subset, and
-    # then a `local` case's gold document is simply not there. In the eval that
-    # failure looks like *the grader being wrong*,
-    # jabki galti mismatch ki hoti.
+    # **The same limit given at ingest time.** Otherwise scenarios would be
+    # built against the full corpus while the index holds a subset, and then a
+    # `local` case's gold document is simply not there. In the eval that
+    # failure looks like *the grader being wrong*, when the real fault is a
+    # corpus/scenario mismatch.
     #
     # (Because the subset is gold-first this happens to line up for limits >= 283
     # anyway, but leaving a mismatch to chance is not a design.)
@@ -74,7 +74,7 @@ def main() -> int:
     # that carry one get scored for answer quality; the rest run for routing only.
     verdicts = load_query_verdicts("scifact")
 
-    # Sirf wo queries jinka **gold doc humare ingested corpus me hai**. Agar gold
+    # Only queries whose **gold document is in our ingested corpus**. If a gold
     # document was never ingested, a "should stay local" label would be false —
     # the system does not have that answer.
     usable = [
@@ -101,8 +101,8 @@ def main() -> int:
             "label_source": "beir-qrels",
             "hard": False,
         }
-        # Dataset ka apna SUPPORT/CONTRADICT label, jahan wo maujood aur
-        # and unambiguous. This is what makes it possible to measure whether the
+        # The dataset's own SUPPORT/CONTRADICT label, where it exists and is
+        # unambiguous. This is what makes it possible to measure whether the
         # answer was **right**, which neither routing nor groundedness tells you.
         if qid in verdicts:
             case["expected_verdict"] = verdicts[qid]
