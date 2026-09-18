@@ -379,6 +379,49 @@ miss that the grader correctly caught — it saw four chunks that did not contai
 answer and said so. 78.6% **under-reports** the grader; the bottleneck is retrieval,
 not grading.
 
+## 6.1 `app/memory/` — episodic and semantic
+
+### Q28. Why does episodic memory use real vector similarity while the sibling projects use exact matching?
+
+Because the unit of comparison is different. self-healing-sql-agent's episodic
+memory compares SQL questions where an exact-signature match (after normalizing
+whitespace and identifiers) is the right granularity; code-guardian compares code
+shapes the same way. Here the unit is a natural-language question, which is
+exactly what an embedding model is for — and this project already has one loaded
+for retrieval (`get_embeddings()`), so reusing it for memory cost nothing extra.
+
+### Q29. What was the bug `test_consolidate_writes_fact_at_threshold` caught?
+
+An early version stored the fact's own declarative sentence as the embedded
+document (`'Questions like "X" have repeatedly failed...'`), and `recall_facts`
+searched by the incoming *question*. A declarative sentence sits much further
+from a question in embedding space than another question does, so the fact
+almost never came back for the very question it was written for. Fixed by
+embedding the cluster's representative question instead, and moving the fact's
+prose into metadata. This is exactly the kind of bug a fake-embedding unit test
+would never catch — it only shows up against the real model.
+
+### Q30. `POST /api/memory/consolidate` is a separate endpoint from the query path. Why not run it automatically?
+
+Because it is a full-collection scan (`consolidate_facts()` clusters every
+ungrounded episode), not a per-query cost. Running it inline on every request
+would mean every user's question pays for an aggregate over the entire memory
+store — the same reasoning self-healing-sql-agent gives its own
+`consolidate_facts()`, arrived at independently here because the constraint is
+identical regardless of what backs the store.
+
+### Q31. Why did the same fact appear in one process but not another right after being written?
+
+A real bug, not a hypothetical — see docs/CODE_NOTES.md's `app/memory/` section
+for the full account. `chromadb`'s `PersistentClient` is cached process-wide by
+persist path, so a running server's in-memory client did not see a write another
+process (or even the same process's earlier collection handle) made to the same
+SQLite-backed directory. Fixed with `SharedSystemClient.clear_system_cache()`
+after a consolidation writes anything. Every unit test passed the whole time,
+because each test starts a fresh process — this only surfaces against a
+long-running server, which is why it was caught by manual live verification
+against `docker compose up`, not by the test suite.
+
 ---
 
 ## 7. Break a test on purpose
