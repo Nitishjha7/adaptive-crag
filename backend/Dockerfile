@@ -7,8 +7,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# FastEmbed model (~100MB) build time pe hi pull kar lo, taaki pehli request /
-# pehla ingest slow na ho aur container offline bhi chal jaye.
+# Pull the FastEmbed model (~100MB) at build time, so the first request /
+# first ingest isn't slow and the container can run fully offline.
 ENV FASTEMBED_CACHE_PATH=/app/.fastembed_cache
 RUN python -c "\
 from fastembed import TextEmbedding; \

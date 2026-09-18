@@ -35,7 +35,7 @@ def dataset_dir(name: str = "scifact") -> Path:
 
 
 def ensure_downloaded(name: str = "scifact") -> Path:
-    """Dataset local pe na ho to download + extract karo. Idempotent."""
+    """Download and extract the dataset if it isn't present locally. Idempotent."""
     import io
     import urllib.request
     import zipfile

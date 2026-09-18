@@ -4,11 +4,11 @@
 version pinning were the single largest time sink in this project, and what
 matters is not the name of a library but understanding *why a final answer should
 be verified, and how*. Two small checks do that job, with zero
-extra dependency ke saath.
+extra dependency.
 
-Do checks:
+Two checks:
 
-1. **Groundedness (LLM)** — kya answer ka har claim diye gaye context se supported
+1. **Groundedness (LLM)** — is every claim in the answer actually supported by
    the context? This is the real hallucination net. The `generate` prompt
    already says "only from the context", but a prompt is a request, not a
    guarantee — a model can still add from its training knowledge. This is a
