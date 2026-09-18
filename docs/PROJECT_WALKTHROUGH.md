@@ -99,7 +99,7 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, which is why 104 tests run with no API key.
+swapped for a scripted fake in one line, which is why 122 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
@@ -484,7 +484,7 @@ this and should not be claimed as such.
 
 | | |
 |---|---|
-| **104 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence. No API key needed |
+| **122 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence · episodic/semantic memory recall against a real embedding model. No API key needed |
 | **Routing eval** (`.\dev.ps1 eval`) | 20 labelled cases — 20/20, 0 missed fallbacks, 3 runs |
 | **Ambiguity eval** (`--repeat 3`) | 8 half-covered cases, scored for route stability |
 | **Retrieval A/B** | Same 44 cases with `USE_HYBRID`/`USE_RERANKER` off vs on — see [RESULTS](../backend/eval/RESULTS.md) |
@@ -552,6 +552,46 @@ monkeypatch pattern as everything else — no real LLM calls inside the suite it
 
 ---
 
+## 5.2 What was added afterward — cross-query memory
+
+`app/memory/` — episodic and semantic, not the full three-part taxonomy the sibling
+Self-Healing SQL Agent has, and that omission is deliberate, not partial work: **no
+long-term memory**, because long-term memory needs a client identity to scope
+preferences to, and this project has none — `/api/query` takes a question and
+nothing else, no cookie, no header. Inventing a `client_id` purely to check that box
+would be a fake feature.
+
+**Why real vector similarity works here without adding anything:** this project
+already loads a FastEmbed embedding model for retrieval (`app/config.py`'s
+`get_embeddings()`), so episodic memory's "has a similar question been asked before"
+reuses that exact model and a second Chroma collection (`crag_memory_episodes`) in
+the same persisted directory — kept separate from the retrieval corpus so a stored
+episode can never leak into a retrieval result. This is the one sibling project
+where memory did *not* need a new dependency, a new provider key, or a design
+compromise (contrast with code-guardian, which has no embeddings API at all and had
+to fall back to exact-signature matching in SQLite).
+
+**A real bug this surfaced, found only by testing against the running container, not
+by unit tests:** `POST /api/memory/consolidate` writes semantic facts, but the
+*same* running FastAPI process's own `recall_facts()` could not see those writes —
+a fresh `python -c` process against the identical persisted directory saw them
+immediately, but the long-running server did not, until restarted. The cause:
+`chromadb`'s `PersistentClient` is cached process-wide by
+`chromadb.api.client.SharedSystemClient`, keyed by persist path — not something
+this project opted into, and not documented anywhere obvious. Every unit test
+passed regardless, because each test process is fresh and never hits this path.
+Fixed by calling `SharedSystemClient.clear_system_cache()` after a successful
+consolidation, and reverified live: recorded three deliberately-similar failing
+episodes, ran consolidation, and the same still-running process immediately
+answered a fourth, rephrased question with the new fact in `memory_note` — no
+restart needed.
+
+122 tests now pass (up from 104), the memory tests using the real embedding model
+rather than a fake — unlike `fake_llm`, a fake embedding would not exercise the
+actual similarity search under test.
+
+---
+
 ## 6. Quick reference
 
 ### Commands
@@ -561,7 +601,7 @@ docker compose up --build     # full stack → :3001 (UI) · :8001 (API docs)
 
 .\dev.ps1 ingest [-Reset]     # backend/data/ → Chroma
 .\dev.ps1 ask "..."           # one query, full trace, no server
-.\dev.ps1 test                # 104 tests, no API key needed
+.\dev.ps1 test                # 122 tests, no API key needed
 .\dev.ps1 eval                # 20 labelled cases — real LLM + live web
 .\dev.ps1 eval --repeat 3     # + 8 ambiguous cases, scored for stability
 .\dev.ps1 serve -Port 8042    # API alone
