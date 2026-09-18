@@ -1,19 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Dev me `npm run dev` frontend ko 5173 pe chalata hai aur backend 8001 pe alag
-// container me hota hai. Proxy ke bina har fetch CORS pe atakti. Production me
-// Nginx yahi kaam karta hai (nginx.conf dekho), isliye app code me hamesha
-// relative "/api/..." likhte hain — dono jagah same path chalta hai.
+// In dev, `npm run dev` runs the frontend on 5173 while the backend runs on
+// 8001 in a separate container. Without a proxy, every fetch would hit CORS.
+// Production has Nginx do the same job (see nginx.conf), which is why the app
+// code always writes a relative "/api/..." — the same path works in both places.
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    // Vite 6 default me sirf localhost allow karta hai aur baaki Host headers pe
-    // 403 deta hai. Ye dev server Docker ke andar chalta hai, to browser use
-    // `host.docker.internal` ya machine ke LAN IP se hit karta hai — dono block
-    // ho jaate the. Ye sirf dev server ka setting hai; production Nginx serve
-    // karta hai aur wahan iska koi asar nahi.
+    // Vite 6 only allows localhost by default and 403s any other Host header.
+    // This dev server runs inside Docker, so the browser reaches it via
+    // `host.docker.internal` or the machine's LAN IP — both got blocked. This
+    // only affects the dev server; production is served by Nginx and is
+    // unaffected.
     allowedHosts: true,
     proxy: {
       "/api": {

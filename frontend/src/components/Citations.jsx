@@ -65,8 +65,8 @@ export default function Citations({ sources, sourceType }) {
                 <a
                   href={s}
                   target="_blank"
-                  // noreferrer bhi — warna target=_blank se khuli tab
-                  // window.opener ke through wapas pahunch sakti hai.
+                  // noreferrer too — otherwise the tab opened by target=_blank
+                  // could reach back into this page through window.opener.
                   rel="noopener noreferrer"
                   title={s}
                   className="truncate text-sky-600 underline decoration-sky-300 underline-offset-2 hover:text-sky-700"

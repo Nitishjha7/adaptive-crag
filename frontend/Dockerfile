@@ -11,8 +11,8 @@ COPY . .
 RUN npm run build
 
 # --- serve stage ---------------------------------------------------------
-# Node runtime ship karne ki zaroorat nahi — build ke baad sirf static files
-# bachti hain. Nginx image bahut chhoti hai aur /api proxy bhi wahi karta hai.
+# No need to ship a Node runtime — after the build, only static files remain.
+# The Nginx image is far smaller, and it also handles the /api proxy.
 FROM nginx:alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html

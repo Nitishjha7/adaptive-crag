@@ -36,7 +36,7 @@ const SUGGESTIONS_BY_CORPUS = {
 /**
  * The view lives in the URL hash, not only in React state.
  *
- * Pehle `view` ek plain useState tha. Evaluation khol ke refresh karo, aur app
+ * `view` used to be a plain useState. Open Evaluation, refresh, and the app
  * silently back to Chat — no error, just lost work. The browser's back button
  * did nothing either, and there was no way to send someone a link to a page.
  *
@@ -61,8 +61,8 @@ export default function App() {
   // First render from the hash, or Chat flashes for a frame and then jumps.
   const [view, setView] = useState(viewFromHash);
   const [draft, setDraft] = useState("");
-  // Each conversation has its own id; history updates on it, otherwise one
-  // chat ke do turns do alag entries ban jaate.
+  // Each conversation has its own id; history updates on it, otherwise two
+  // turns of the same chat would become two separate history entries.
   const [chatId, setChatId] = useState(() => Date.now().toString(36));
   const history = useHistory();
   const endRef = useRef(null);

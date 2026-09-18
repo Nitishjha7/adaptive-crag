@@ -47,7 +47,7 @@ export default function useHistory() {
     save(items);
   }, [items]);
 
-  /** Ek poori conversation record karo (ya usi id pe update karo). */
+  /** Record a whole conversation (or update it in place by id). */
   const record = useCallback((id, turns) => {
     const firstUser = turns.find((t) => t.role === "user");
     if (!firstUser) return;
