@@ -214,7 +214,7 @@ which is faster to iterate in.
 
 ---
 
-## backend/tests/ — 104 tests, `.\dev.ps1 test`
+## backend/tests/ — 122 tests, `.\dev.ps1 test`
 
 | File | What it covers |
 |---|---|
@@ -231,6 +231,7 @@ which is faster to iterate in.
 | `test_metrics.py` | `record_query` updating each Prometheus counter from a fake `CRAGState` |
 | `test_logging_config.py` | `JsonFormatter` — valid JSON, extra fields riding through, exception capture |
 | `test_streaming.py` | `run_query_stream`'s event sequence on both routes, progress labels naming the routing decision, and the streamed `done` payload matching `/api/query` exactly |
+| `test_memory.py` | Episodic recall by real vector similarity (a rephrasing matches, an unrelated question does not), semantic fact consolidation and recall, both against the real FastEmbed model in a temp Chroma directory — not a fake, since similarity search is exactly what is under test |
 
 **Why no real LLM calls in the tests:** these test **control flow**, not model quality.
 Real calls are slow, cost money, need a key and are non-deterministic — that is, flaky
@@ -262,6 +263,60 @@ partial update to it.
 - `final_output` — the guardrail-validated answer; this is what the user sees.
 - `logs` — each node appends one line (`Annotated[list, operator.add]`). The trace
   viewer renders this.
+- `memory_note` — set once by `main.py`'s `_state_with_memory`, before the graph
+  starts. Not set by a node, because no node has anywhere to derive it from — it
+  is precedent from *past* queries, which lives in `app/memory/`, not in this
+  query's own state.
+
+---
+
+## backend/app/memory/ — episodic and semantic, cross-query
+
+`CRAGState` is deliberately stateless between requests — see the schema note
+above, and `initial_state`'s own docstring. This package is the one thing that
+crosses that boundary: memory that spans multiple queries, not state inside one.
+
+**episodic.py** — has a similar question been asked before, and did its answer
+pass groundedness (`guardrail_passed`, straight from `validate_guardrails`, not a
+separate judgement invented for this feature). Real vector similarity, not exact
+match: `record_episode_from_state` writes to a second Chroma collection
+(`crag_memory_episodes`), reusing the exact same `get_embeddings()` this project
+already loads for retrieval — no second model, no new dependency.
+
+**semantic.py** — `consolidate_facts()` clusters *ungrounded* episodes by
+similarity (a plain greedy pass, not a real clustering library — this memory
+holds hundreds of episodes, not millions) and writes one fact per cluster once it
+reaches `_MIN_CLUSTER_SIZE`. Deliberately not automatic on every query, for the
+same reason the sibling self-healing-sql-agent's `consolidate_facts()` is a
+separate job: it is a full-collection scan, not a per-request cost.
+
+**Why the fact is embedded as the cluster's representative *question*, not its
+own prose:** a first version stored the fact text itself (`'Questions like "X"
+have repeatedly failed...'`) and `recall_facts` searched by the incoming
+question — which put a declarative sentence and a question much further apart in
+embedding space than two questions are from each other, so a real fact never
+came back for a real question. Caught by `test_consolidate_writes_fact_at_threshold`
+failing against the real embedding model, not by reasoning about it. Fixed by
+embedding the question and keeping the fact's prose in metadata, read back
+verbatim.
+
+**A cross-process Chroma caching bug, found only by testing against a running
+container:** writing a fact via `POST /api/memory/consolidate` was invisible to
+the *same process's* own `recall_facts()` immediately afterward — a completely
+fresh Python process against the identical directory saw it right away. The
+cause: `chromadb.api.client.SharedSystemClient` caches a `PersistentClient`
+process-wide, keyed by persist path, regardless of how many "fresh" `Chroma(...)`
+objects a caller constructs. `consolidate_facts()` now calls
+`SharedSystemClient.clear_system_cache()` after a successful write. Every unit
+test passed throughout, because a test process is always fresh — this only shows
+up against a long-running server, which is exactly why it was verified against
+`docker compose up`, not just `pytest`.
+
+**Why no long-term memory, unlike the sibling self-healing-sql-agent:** long-term
+memory needs a scope to persist preferences *for*. That project has `thread_id`;
+this one has nothing — `/api/query` takes a bare question, no cookie, no header.
+A `client_id` invented solely to unlock this feature would not be honest; the
+limitation is stated in `docs/ROADMAP.md` instead.
 
 ---
 
