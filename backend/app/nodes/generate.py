@@ -44,6 +44,10 @@ def run(state: CRAGState) -> dict:
         }
 
     context = "\n\n---\n\n".join(documents)
+    memory_note = state.get("memory_note") or ""
+    if memory_note:
+        context = f"{context}\n\n---\n\n{memory_note}"
+
     # temperature 0 — the answer should be grounded in the context, not creative.
     chain = GENERATE_PROMPT | get_llm(temperature=0.0)
     answer = chain.invoke({"context": context, "question": question}).content.strip()
