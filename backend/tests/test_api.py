@@ -37,15 +37,15 @@ def test_response_shape(client, fake_llm, fake_search):
     assert r.status_code == 200
 
     body = r.json()
-    # Frontend inhi fields pe badge + trace render karega -- shape na toote
+    # The frontend renders the badge and trace off exactly these fields — the shape must not break.
     assert set(body) == {
         "answer", "source_type", "sources", "relevance_score",
-        "transformed_query", "logs", "elapsed_ms", "token_usage",
+        "transformed_query", "logs", "elapsed_ms", "token_usage", "memory_note",
     }
     assert isinstance(body["sources"], list)
     assert body["source_type"] in {"vector_db", "web_search"}
     assert body["relevance_score"] in {"yes", "no"}
-    assert body["logs"], "trace khaali hai -- explainability chali gayi"
+    assert body["logs"], "the trace is empty — explainability is gone"
     assert "by_model" in body["token_usage"]
     assert "total_tokens" in body["token_usage"]
 

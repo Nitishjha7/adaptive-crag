@@ -97,7 +97,14 @@ def consolidate_facts() -> int:
                 "repeatedly failed the groundedness check on this corpus - the "
                 "retrieved context likely does not cover this topic well."
             )
-            facts_store.add_texts(texts=[fact], metadatas=[{"cluster_size": len(cluster)}])
+            # Embed the cluster's representative *question*, not the fact's own
+            # prose - recall_facts searches by an incoming question, and a
+            # declarative sentence like the fact text above sits much further
+            # in embedding space from a question than another question does.
+            # The fact text itself travels in metadata, read back verbatim.
+            facts_store.add_texts(
+                texts=[question], metadatas=[{"fact": fact, "cluster_size": len(cluster)}]
+            )
             written += 1
         return written
     except Exception as exc:  # noqa: BLE001 - fail open
@@ -111,7 +118,11 @@ def recall_facts(question: str, limit: int = 3) -> list[str]:
         return []
     try:
         results = facts_store.similarity_search_with_score(question, k=limit)
-        return [doc.page_content for doc, distance in results if distance <= _CLUSTER_DISTANCE_THRESHOLD]
+        return [
+            doc.metadata["fact"]
+            for doc, distance in results
+            if distance <= _CLUSTER_DISTANCE_THRESHOLD
+        ]
     except Exception as exc:  # noqa: BLE001 - fail open
         log.warning("recall_facts failed (%s)", exc)
         return []
