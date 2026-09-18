@@ -157,6 +157,7 @@ class CRAGState(TypedDict, total=False):
     final_output: str        # Validated final response
     guardrail_passed: bool   # Did validation pass clean
     logs: Annotated[List[str], operator.add]   # Node trace — additive
+    memory_note: str         # Precedent from app/memory/, set before the graph starts
 ```
 
 **Only `logs` has a reducer.** It is additive (`operator.add`), so every node appends one
@@ -171,6 +172,13 @@ re-introducing the exact hallucination risk the grading step exists to remove. S
 This is the single most important schema decision in the project, and
 `test_fallback_replaces_local_docs_instead_of_merging` asserts it, because it is the kind
 of thing that breaks silently.
+
+`memory_note` is the one field a node never sets: `main.py`'s `_state_with_memory`
+computes it — a call to `app/memory/episodic.py`'s `recall_similar` and
+`app/memory/semantic.py`'s `recall_facts` — before `initial_state()`'s dict is
+ever handed to `graph.invoke`/`graph.stream`, and `generate` reads it as one more
+line appended to the context. See `docs/CODE_NOTES.md` for why this lives outside
+the graph rather than as its own node.
 
 ---
 
@@ -403,9 +411,13 @@ adaptive-crag/
 │   │   │   └── tavily_search.py       # optional upgrade
 │   │   ├── schemas/crag_state.py      # CRAGState (canonical definition)
 │   │   ├── guardrails/validators.py   # groundedness + PII
+│   │   ├── memory/                    # episodic + semantic, cross-query (app/memory/)
+│   │   │   ├── store.py               # lazy handle to the crag_memory_episodes collection
+│   │   │   ├── episodic.py            # similar-question recall by real vector similarity
+│   │   │   └── semantic.py            # facts distilled from clusters of ungrounded episodes
 │   │   └── __main__.py                # `python -m app "question"` CLI
 │   ├── data/                          # 7-doc controlled corpus with a deliberate gap
-│   ├── tests/                         # 75 tests — routing, grading, validation, retrieval, corpus, API
+│   ├── tests/                         # 122 tests — routing, grading, validation, retrieval, corpus, API, memory
 │   ├── vectorstore/                   # persisted Chroma index (gitignored)
 │   ├── ingest.py                      # docs -> chunks -> embeddings -> Chroma
 │   ├── main.py                        # FastAPI app
