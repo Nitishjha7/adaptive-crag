@@ -103,9 +103,15 @@ def _describe_update(node_name: str, partial: dict) -> str:
     return node_name
 
 
-def run_query_stream(question: str, graph=None):
+def run_query_stream(question: str, graph=None, state: CRAGState | None = None):
     """Same query as `graph.invoke(initial_state(question))`, yielded one node
     at a time.
+
+    `state` lets a caller (main.py's `/api/query/stream`) pass in an
+    `initial_state()` already populated with `memory_note` - see
+    `_state_with_memory` in main.py - rather than this function reaching into
+    `app.memory` itself and coupling a graph-execution helper to a feature
+    that lives one layer above it.
 
     A local hit finishes in 3 LLM calls; the correction path takes 4 plus a web
     round trip — `graph.invoke` makes both look identical to a caller until the
@@ -125,7 +131,7 @@ def run_query_stream(question: str, graph=None):
     per request, matching `/api/query`.
     """
     started = time.perf_counter()
-    state: CRAGState = initial_state(question)
+    state = state if state is not None else initial_state(question)
     graph = graph or build_crag_graph()
 
     for update in graph.stream(state, stream_mode="updates"):
