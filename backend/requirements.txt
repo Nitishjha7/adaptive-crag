@@ -15,16 +15,16 @@ langchain-text-splitters>=0.3.5
 fastembed>=0.5.0
 
 # --- Hybrid retrieval + reranking (Phase 9) ------------------------------
-# BM25: keyword-based scoring. Vector search identifiers aur exact tokens pe
-# kamzor hai; BM25 wahan strong hai. Dono ko RRF se fuse karte hain.
+# BM25: keyword-based scoring. Vector search is weak on identifiers and exact
+# tokens; BM25 is strong there. The two are fused with RRF.
 rank-bm25>=0.2.2
-# Reranker cross-encoder fastembed me hi aata hai (TextCrossEncoder) — koi
-# nayi dependency nahi, aur wahi local / ONNX / no-key rehta hai.
+# The reranker cross-encoder ships inside fastembed itself (TextCrossEncoder) —
+# no new dependency, and it stays local / ONNX / no-key like everything else.
 
 # --- Web search fallback (Phase 3) ---------------------------------------
-# Default provider: koi API key nahi chahiye
+# Default provider: no API key needed
 ddgs>=9.0.0
-# Optional upgrade: behtar snippets, par signup chahiye (SEARCH_PROVIDER=tavily)
+# Optional upgrade: better snippets, but needs a signup (SEARCH_PROVIDER=tavily)
 tavily-python>=0.5.0
 
 # --- API layer (Phase 5) -------------------------------------------------
@@ -36,7 +36,7 @@ prometheus-client>=0.21.0
 
 # --- Tests ---------------------------------------------------------------
 pytest>=8.3.0
-httpx>=0.28.0        # fastapi TestClient ke liye
+httpx>=0.28.0        # needed for fastapi's TestClient
 
 # --- Config / validation -------------------------------------------------
 pydantic>=2.10.4

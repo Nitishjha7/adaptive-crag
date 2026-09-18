@@ -313,7 +313,7 @@ async def stats():
 
     try:
         chunks = collection_count()
-    except Exception:  # noqa: BLE001 — store abhi bana hi na ho
+    except Exception:  # noqa: BLE001 — the store may not exist yet
         chunks = 0
 
     # Eval results are optional — the UI has to work on a fresh clone that has
@@ -410,7 +410,7 @@ async def documents():
     # one abstract is split across several chunks, and the UI wants documents.
     try:
         raw = get_vectorstore()._collection.get(include=["metadatas"])
-    except Exception:  # noqa: BLE001 — collection abhi bana hi na ho
+    except Exception:  # noqa: BLE001 — the collection may not exist yet
         return {"corpus": s.CORPUS, "documents": []}
 
     seen = {}
