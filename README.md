@@ -179,6 +179,13 @@ Beyond the batch `POST /api/query`, the same graph is exposed three more ways:
   "3 calls vs 4 calls" proxy the eval fell back on after latency proved
   unmeasurable. Both `/api/query` and `/api/query/stream` return `token_usage`
   with real input/output tokens and USD cost per model.
+- **Cross-query memory (`app/memory/`)** — episodic and semantic, both real
+  vector similarity through the same FastEmbed/Chroma pair `retrieve` already
+  uses, in a separate collection so a stored episode can never leak into
+  retrieval results. Verified live: the same question rephrased a second
+  time surfaced the first attempt's groundedness precedent as `memory_note`
+  in the response, with no restart in between — see docs/CODE_NOTES.md for a
+  real Chroma cross-process caching bug this surfaced and how it was fixed.
 
 ---
 
@@ -214,10 +221,16 @@ Stated rather than hidden — the System Status page says the same thing in the 
 - **The full 5k SciFact corpus + 300-query set.** Needs ~8 GB to Docker; this
   laptop gives 3.5. That run is what would settle the reranking question.
 - No document upload API (ingestion is a deliberate offline step), no context
-  filter, no prompt-injection defence, no conversation memory — every query runs
-  independently.
+  filter, no prompt-injection defence. Each *query's own state* still runs
+  independently (`CRAGState` carries nothing between requests) — but
+  `app/memory/` now remembers *across* queries: episodic (has a similar
+  question been asked before, and did its answer pass groundedness),
+  semantic (a repeated failure pattern distilled into a fact). No long-term
+  memory here, and that is stated rather than invented — this project has no
+  client identity of any kind to scope one to. See
+  [docs/CODE_NOTES.md](docs/CODE_NOTES.md).
 
-104 tests, no API key needed: `.\dev.ps1 test`
+122 tests, no API key needed: `.\dev.ps1 test`
 
 ---
 
