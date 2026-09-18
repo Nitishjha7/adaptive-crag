@@ -106,10 +106,35 @@ def consolidate_facts() -> int:
                 texts=[question], metadatas=[{"fact": fact, "cluster_size": len(cluster)}]
             )
             written += 1
+        if written:
+            _clear_chroma_client_cache()
         return written
     except Exception as exc:  # noqa: BLE001 - fail open
         log.warning("consolidate_facts failed (%s)", exc)
         return 0
+
+
+def _clear_chroma_client_cache() -> None:
+    """Force the next `_facts_store()`/`get_memory_store()` call to open a
+    fresh client for this path.
+
+    Chroma's `PersistentClient` is cached process-wide, keyed by persist
+    directory (`chromadb.api.client.SharedSystemClient._identifier_to_system`)
+    - not something this module opted into, and not documented anywhere
+    obvious. Caught live: writing a fact via `POST /api/memory/consolidate`
+    and then querying from the *same running process* returned no fact,
+    while a fresh `python -c` process against the same directory saw it
+    immediately. Without this, "run consolidation, then ask a question" would
+    silently not work until the process restarted - exactly the kind of gap
+    that looks fine in every unit test (each test process is fresh) and only
+    shows up against a long-running server.
+    """
+    try:
+        from chromadb.api.client import SharedSystemClient
+
+        SharedSystemClient.clear_system_cache()
+    except Exception as exc:  # noqa: BLE001 - fail open; worst case is the old staleness, not a crash
+        log.warning("Could not clear Chroma client cache (%s)", exc)
 
 
 def recall_facts(question: str, limit: int = 3) -> list[str]:
