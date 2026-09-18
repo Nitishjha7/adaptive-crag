@@ -74,6 +74,14 @@ class CRAGState(TypedDict, total=False):
     logs: Annotated[List[str], operator.add]
     """Node-by-node execution trace. Additive — each node appends one line."""
 
+    # --- cross-query memory (app/memory/) -----------------------------------
+    memory_note: str
+    """Precedent from similar past questions, folded into the generation
+    prompt by `generate` — set once, before the graph starts, in
+    `run_query`/`run_query_stream`, not by a node. See app/memory/episodic.py
+    and app/memory/semantic.py. Empty string, not absent, when memory is off
+    or nothing matched."""
+
 
 def initial_state(question: str) -> CRAGState:
     """Builds a fresh state for one query.
@@ -95,4 +103,5 @@ def initial_state(question: str) -> CRAGState:
         "generation": "",
         "final_output": "",
         "logs": [],
+        "memory_note": "",
     }
