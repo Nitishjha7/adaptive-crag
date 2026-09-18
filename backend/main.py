@@ -22,8 +22,26 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.graph.build_graph import build_crag_graph, run_query_stream
 from app.logging_config import configure_json_logging
+from app.memory.episodic import (
+    format_episodes_for_prompt,
+    recall_similar,
+    record_episode_from_state,
+)
+from app.memory.semantic import format_facts_for_prompt, recall_facts
 from app.schemas.crag_state import initial_state
 from app.token_usage import new_tracker
+
+
+def _state_with_memory(question: str) -> dict:
+    """`initial_state` plus `memory_note` - kept out of `initial_state` itself
+    so that function stays a pure schema constructor with no I/O, and both
+    `/api/query` and `/api/query/stream` compute this identically before
+    invoking the graph. See app/memory/episodic.py and semantic.py."""
+    state = initial_state(question)
+    episodes = recall_similar(question)
+    facts = recall_facts(question)
+    state["memory_note"] = format_facts_for_prompt(facts) or format_episodes_for_prompt(episodes)
+    return state
 
 # Configured before any module-level `logging.getLogger(...)` call below does
 # its first logging — see app/logging_config.py.
@@ -73,6 +91,7 @@ class QueryOut(BaseModel):
     logs: List[str]           # node-by-node trace          -> UI trace viewer
     elapsed_ms: int
     token_usage: dict         # per-model tokens/cost for this query — see app/token_usage.py
+    memory_note: str = ""     # precedent from similar past questions — see app/memory/
 
 
 def _query_response(final: dict, elapsed_ms: int, token_usage: dict) -> QueryOut:
@@ -90,6 +109,7 @@ def _query_response(final: dict, elapsed_ms: int, token_usage: dict) -> QueryOut
         logs=final.get("logs", []),
         elapsed_ms=elapsed_ms,
         token_usage=token_usage,
+        memory_note=final.get("memory_note", ""),
     )
 
 
@@ -106,7 +126,7 @@ async def query(body: QueryIn) -> QueryOut:
     # threadpool so one slow request cannot stall the whole event loop.
     from starlette.concurrency import run_in_threadpool
 
-    final = await run_in_threadpool(_graph.invoke, initial_state(body.question))
+    final = await run_in_threadpool(_graph.invoke, _state_with_memory(body.question))
 
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     usage = tracker.summary()
@@ -114,6 +134,7 @@ async def query(body: QueryIn) -> QueryOut:
     from app.metrics import record_query
 
     record_query(final, usage, elapsed_ms, primary_model=get_settings().LLM_MODEL)
+    record_episode_from_state(final)
 
     logger.info(
         "query completed",
@@ -159,13 +180,15 @@ async def query_stream(body: QueryIn) -> StreamingResponse:
 
     def produce() -> None:
         try:
-            for kind, payload in run_query_stream(body.question, graph=_graph):
+            initial = _state_with_memory(body.question)
+            for kind, payload in run_query_stream(body.question, graph=_graph, state=initial):
                 if kind == "done":
                     elapsed_ms = int((time.perf_counter() - started) * 1000)
                     usage = tracker.summary()
                     from app.metrics import record_query
 
                     record_query(payload, usage, elapsed_ms, primary_model=get_settings().LLM_MODEL)
+                    record_episode_from_state(payload)
                     payload = _query_response(payload, elapsed_ms, usage).model_dump()
                 asyncio.run_coroutine_threadsafe(queue.put((kind, payload)), loop).result()
         except Exception as exc:  # noqa: BLE001 - reported to the client as an event, not a 500
@@ -223,6 +246,19 @@ async def health():
         "llm_model": s.LLM_MODEL,
         "groq_key_set": bool(s.GROQ_API_KEY),
     }
+
+
+@app.post("/api/memory/consolidate")
+async def consolidate_memory():
+    """Manually run semantic-fact consolidation over recorded episodes.
+
+    Deliberately not on a schedule inside this process - see the module
+    docstring in app/memory/semantic.py for why this is a periodic, explicit
+    job rather than something every query pays for.
+    """
+    from app.memory.semantic import consolidate_facts
+
+    return {"facts_written": consolidate_facts()}
 
 
 @app.get("/api/stats")
