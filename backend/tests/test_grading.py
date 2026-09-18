@@ -1,8 +1,8 @@
-"""Grader ka defensive output parsing.
+"""The grader's defensive output parsing.
 
-Prompt kitna bhi tight ho, LLM kabhi kabhi extra text de deta hai. Agar exact
-on an exact match, every such case would quietly become `no` and trigger a
-pointless web call — or worse, become `yes`.
+No matter how tight the prompt, the LLM sometimes returns extra text around
+the verdict. If parsing relied on an exact match, every such case would
+quietly become `no` and trigger a pointless web call — or worse, become `yes`.
 """
 
 import pytest

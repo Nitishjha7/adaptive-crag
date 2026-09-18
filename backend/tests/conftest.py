@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableLambda
 
 
 class _Msg:
-    """LangChain ke AIMessage ka minimal stand-in — nodes sirf `.content` padhte hain."""
+    """A minimal stand-in for LangChain's AIMessage — nodes only ever read `.content`."""
 
     def __init__(self, content: str):
         self.content = content
@@ -83,5 +83,5 @@ def graph():
 
 
 def node_order(final_state):
-    """Trace logs se sirf node ke naam nikalta hai — assertions padhne layak rehti hain."""
+    """Pulls just the node names out of the trace logs, so assertions stay readable."""
     return [line.split(" ->")[0] for line in final_state["logs"]]

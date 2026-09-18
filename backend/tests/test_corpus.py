@@ -51,8 +51,8 @@ class TestBeirSubset:
         root = tmp_path / "scifact"
         (root / "qrels").mkdir(parents=True)
 
-        # 10 docs; gold wale jaan-boojh ke *aakhir me* rakhe hain, taaki naive
-        # truncation unhe kaate aur test us bug ko pakde.
+        # 10 docs; the gold ones are deliberately placed *at the end*, so a
+        # naive truncation would cut them and the test would catch that bug.
         with (root / "corpus.jsonl").open("w", encoding="utf-8") as fh:
             for i in range(10):
                 fh.write(json.dumps({

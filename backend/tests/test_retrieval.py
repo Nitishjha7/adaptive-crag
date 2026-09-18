@@ -44,8 +44,8 @@ class TestBM25:
 
 class TestRRF:
     def test_document_in_both_lists_ranks_above_one_in_either(self):
-        """RRF ka poora point yahi hai — dono retrievers jispe agree karte hain
-        wo upar aata hai."""
+        """This is the whole point of RRF — whatever both retrievers agree on
+        ranks above what only one of them found."""
         a = [("both", "s"), ("only_a", "s")]
         b = [("only_b", "s"), ("both", "s")]
 

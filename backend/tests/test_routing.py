@@ -141,7 +141,7 @@ def test_fallback_replaces_sources_too(graph, fake_llm, monkeypatch):
         "https://example.com/b",
     ], final["sources"]
     assert not any(s.endswith(".md") for s in final["sources"]), (
-        "reject kiye hue local docs abhi bhi cite ho rahe hain"
+        "rejected local docs are still being cited"
     )
 
 

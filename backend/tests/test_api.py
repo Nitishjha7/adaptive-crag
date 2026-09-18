@@ -20,7 +20,7 @@ def test_health_makes_no_llm_call(client):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ok"
-    assert body["indexed_chunks"] > 0, "vectorstore khaali hai -- `ingest.py` chalaya?"
+    assert body["indexed_chunks"] > 0, "vectorstore is empty -- did you run `ingest.py`?"
     assert "search_provider" in body
 
 
@@ -53,12 +53,12 @@ def test_response_shape(client, fake_llm, fake_search):
 class TestStats:
     """`/api/stats` feeds the dashboard. Every number has to come from a real
     source — this is the endpoint where hardcoded demo values would quietly
-    jaati hain."""
+    slip through."""
 
     def test_counts_come_from_the_real_corpus(self, client):
         body = client.get("/api/stats").json()
         assert body["documents"] > 0, "corpus documents were not counted"
-        assert body["chunks"] > 0, "vectorstore khaali hai -- `ingest.py` chalaya?"
+        assert body["chunks"] > 0, "vectorstore is empty -- did you run `ingest.py`?"
 
     def test_config_is_echoed_not_invented(self, client):
         cfg = client.get("/api/stats").json()["config"]
@@ -81,7 +81,7 @@ class TestStats:
 
     def test_makes_no_llm_call(self, client):
         """The dashboard hits this on every page load -- one LLM call here
-        rate limit ko UI ke saath baandh deta."""
+        would tie the UI's responsiveness to the rate limit."""
         assert client.get("/api/stats").status_code == 200
 
 

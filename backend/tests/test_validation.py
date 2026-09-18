@@ -18,8 +18,9 @@ class TestPII:
         assert check_pii(text) == []
 
     def test_technical_text_is_not_a_false_positive(self):
-        """Regex tight rakhne ka test. Loose pattern (koi bhi lamba number) har
-        technical answer — dimensions, chunk sizes, version numbers."""
+        """Tests that the regex stays tight. A loose pattern (any long number)
+        would false-positive on every technical answer — dimensions, chunk
+        sizes, version numbers."""
         text = "The model produces 384-dimensional vectors with chunk size 800 and overlap 100."
         assert check_pii(text) == []
 
@@ -53,8 +54,9 @@ class TestGroundedness:
     def test_check_failure_fails_open(self, monkeypatch):
         """If the check itself crashes, the answer must not be blocked.
 
-        Wo already verified context se bana hai. Fail-closed hone se ek flaky
-        network call would turn the whole system into "I cannot tell you anything".
+        It was already built from verified context. Failing closed here would
+        mean a flaky network call turns the whole system into "I cannot tell
+        you anything".
         """
         import app.guardrails.validators as validators
 
