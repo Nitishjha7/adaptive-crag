@@ -5,7 +5,7 @@ name: tests
 # control flow, not model quality. So CI needs no GROQ_API_KEY and a fork's pull
 # request runs it in full.
 #
-# It is NOT retrieval-free, though: 9 tests exercise the real hybrid pipeline and
+# It is NOT retrieval-free, though: 11 tests exercise the real hybrid pipeline and
 # need a populated Chroma index. `backend/vectorstore/` is gitignored, so CI has
 # to build the index the same way the deploy image does — by running the ingest.
 # Skipping that step is how you get a green local run and a red CI run.
@@ -21,7 +21,7 @@ on:
 
 jobs:
   backend:
-    name: backend · 75 tests
+    name: backend · 122 tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
