@@ -62,7 +62,7 @@ export function chain(logs = []) {
 
 function Tick({ state }) {
   if (state === "skipped") {
-    return <span className="mt-1 block h-4 w-4 shrink-0 rounded-full border-2 border-slate-200" />;
+    return <span className="mt-1 block h-4 w-4 shrink-0 rounded-full border-2 border-ink-700" />;
   }
   const failed = state === "failed";
   return (
@@ -106,12 +106,12 @@ export default function TraceTimeline({ logs }) {
 
         return (
           <li key={i} className="relative flex gap-3 pb-3.5 last:pb-0">
-            {!last && <span className="absolute left-2 top-5 h-full w-px bg-slate-200" />}
+            {!last && <span className="absolute left-2 top-5 h-full w-px bg-ink-700" />}
             <Tick state={state} />
             <div className="min-w-0 flex-1">
               <div
                 className={`text-sm font-medium ${
-                  s.skipped ? "text-slate-400" : failed ? "text-red-600" : "text-slate-800"
+                  s.skipped ? "text-slate-400" : failed ? "text-red-600" : "text-slate-100"
                 }`}
               >
                 {title}

@@ -73,10 +73,15 @@ export default function Sidebar({
   onDelete,
 }) {
   return (
-    <aside className="hidden w-64 shrink-0 flex-col bg-[#0f1729] text-slate-300 lg:flex">
+    <aside className="hidden w-64 shrink-0 flex-col border-r border-ink-700 bg-ink-900 text-slate-300 lg:flex">
       <div className="flex items-center gap-2.5 px-4 pb-5 pt-5">
         <Logo className="h-7 w-7" />
-        <div className="text-base font-semibold leading-none text-white">CRAG</div>
+        <div className="min-w-0">
+          <div className="text-base font-semibold leading-tight text-white">CRAG</div>
+          <div className="text-[11px] leading-tight text-slate-500">
+            Corrective retrieval
+          </div>
+        </div>
       </div>
 
       <div className="px-3 pb-3">
@@ -87,7 +92,7 @@ export default function Sidebar({
           // on Documents or Evaluation with an empty chat, clicking it did
           // nothing at all. On an empty chat the clear is a harmless no-op, but
           // the view still lands where it should.
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+          className="flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-500"
         >
           <ChatIcon className="h-4 w-4" />
           New chat
@@ -108,10 +113,10 @@ export default function Sidebar({
               // once and it was unclear which one was actionable.
               className={`flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition ${
                 isActive
-                  ? "bg-white/10 font-medium text-white"
+                  ? "bg-ink-850/10 font-medium text-white"
                   : soon
-                    ? "cursor-not-allowed text-slate-600"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    ? "cursor-not-allowed text-slate-400"
+                    : "text-slate-400 hover:bg-ink-850/5 hover:text-slate-200"
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -132,12 +137,12 @@ export default function Sidebar({
             Recent
           </span>
           {history.length > 0 && (
-            <span className="text-[10px] text-slate-600">{history.length}</span>
+            <span className="text-[10px] text-slate-400">{history.length}</span>
           )}
         </div>
 
         {history.length === 0 ? (
-          <p className="px-1 text-xs leading-relaxed text-slate-600">
+          <p className="px-1 text-xs leading-relaxed text-slate-400">
             Past queries appear here.
           </p>
         ) : (
@@ -147,7 +152,7 @@ export default function Sidebar({
                 <button
                   onClick={() => onOpen(h)}
                   className={`w-full rounded-md py-1.5 pl-2 pr-7 text-left transition ${
-                    h.id === currentId ? "bg-white/10" : "hover:bg-white/5"
+                    h.id === currentId ? "bg-ink-850/10" : "hover:bg-ink-850/5"
                   }`}
                 >
                   <div className="flex items-center gap-1.5">
@@ -163,7 +168,7 @@ export default function Sidebar({
                       {h.title}
                     </span>
                   </div>
-                  <span className="ml-3 text-[10px] text-slate-600">
+                  <span className="ml-3 text-[10px] text-slate-400">
                     {relative(h.at)}
                   </span>
                 </button>
@@ -171,7 +176,7 @@ export default function Sidebar({
                 <button
                   onClick={() => onDelete(h.id)}
                   title="Remove"
-                  className="absolute right-1 top-1.5 rounded p-1 text-slate-600 opacity-0 transition hover:text-slate-300 group-hover:opacity-100"
+                  className="absolute right-1 top-1.5 rounded p-1 text-slate-400 opacity-0 transition hover:text-slate-300 group-hover:opacity-100"
                 >
                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M18 6 6 18M6 6l12 12" />
@@ -186,7 +191,7 @@ export default function Sidebar({
       {/* This line is deliberate. History is a **log**, not memory — the graph
           is stateless and a follow-up does not use the previous context. Without
           it the UI would be making a claim that is not true. */}
-      <p className="border-t border-white/5 px-4 py-3 text-[10px] leading-relaxed text-slate-600">
+      <p className="border-t border-ink-700/5 px-4 py-3 text-[10px] leading-relaxed text-slate-400">
         Stored in this browser only. Each query runs independently — history is a
         record, not conversation memory.
       </p>

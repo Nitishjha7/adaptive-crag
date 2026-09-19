@@ -16,7 +16,7 @@ function CopyButton({ text }) {
     <button
       onClick={() => navigator.clipboard?.writeText(text)}
       title="Copy answer"
-      className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+      className="rounded-md p-1.5 text-slate-400 transition hover:bg-ink-800 hover:text-slate-400"
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <rect x="9" y="9" width="13" height="13" rx="2" />
@@ -52,7 +52,7 @@ function SourceBadgeInline({ sourceType }) {
 /**
  * Ek line ka rasta + kharcha, aur poora trace ek click door.
  *
- * The cost line deliberately names both paths. "3 calls" on its own says
+ * The cost line names both paths. "3 calls" on its own says
  * nothing; "3, and the fallback would cost 4" is the trade-off the whole case
  * for conditional routing rests on.
  */
@@ -65,10 +65,10 @@ function TraceStrip({ logs, elapsedMs }) {
   const wentWeb = steps.some((s) => s.text === "web search");
 
   return (
-    <div className="border-t border-slate-100">
+    <div className="border-t border-ink-700">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 px-4 py-2.5 text-left transition hover:bg-slate-50"
+        className="flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 px-4 py-2.5 text-left transition hover:bg-ink-900"
       >
         <svg
           viewBox="0 0 24 24"
@@ -117,10 +117,10 @@ export default function Message({ turn }) {
   if (turn.role === "user") {
     return (
       <div className="flex items-start justify-end gap-3">
-        <div className="max-w-[78%] rounded-2xl rounded-tr-sm bg-indigo-600 px-4 py-2.5 text-white">
+        <div className="max-w-[78%] rounded-2xl rounded-tr-sm bg-brand-600 px-4 py-2.5 text-white">
           {turn.text}
         </div>
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-500">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-700 text-slate-500">
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21a8 8 0 0 1 16 0" />
@@ -141,20 +141,20 @@ export default function Message({ turn }) {
 
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100">
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500/15">
         <svg viewBox="0 0 32 32" className="h-6 w-6">
           <path d="M16 7 L25 24 H7 Z" fill="none" stroke="#6366f1" strokeWidth="2.4" strokeLinejoin="round" />
           <path d="M16 14 L20.5 24 H11.5 Z" fill="#6366f1" />
         </svg>
       </div>
 
-      <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-slate-200 bg-white">
+      <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-ink-700 bg-ink-850">
         <div className="flex items-center justify-between gap-2 px-4 pt-3">
           <SourceBadgeInline sourceType={turn.source_type} />
           <CopyButton text={turn.text} />
         </div>
 
-        <p className="whitespace-pre-wrap px-4 py-3 leading-relaxed text-slate-700">
+        <p className="whitespace-pre-wrap px-4 py-3 leading-relaxed text-slate-200">
           {turn.text}
         </p>
 
@@ -182,7 +182,7 @@ export default function Message({ turn }) {
         )}
 
         {turn.sources?.length > 0 && (
-          <div className="border-t border-slate-100 px-4 py-3">
+          <div className="border-t border-ink-700 px-4 py-3">
             <Citations sources={turn.sources} sourceType={turn.source_type} />
           </div>
         )}

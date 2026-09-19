@@ -66,10 +66,10 @@ export default function DocumentsView({ stats }) {
           the thing worth saying. */}
       {isConcepts ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-800">
+          <h4 className="text-sm font-semibold text-slate-100">
             This corpus has a deliberate hole in it
           </h4>
-          <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
             No vendor pricing, no product names, no recent releases — so questions
             about live facts <em>have</em> to fall back to the web. Without a known
             gap the correction path could only fire by luck, and a demo that depends
@@ -78,10 +78,10 @@ export default function DocumentsView({ stats }) {
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-          <h4 className="text-sm font-semibold text-slate-800">
+          <h4 className="text-sm font-semibold text-slate-100">
             This corpus exists because the other one had no ground truth
           </h4>
-          <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
             SciFact is a BEIR benchmark, so it ships{" "}
             <span className="font-mono">qrels</span> — expert judgements of which
             abstract answers which claim. That makes retrieval{" "}
@@ -92,12 +92,12 @@ export default function DocumentsView({ stats }) {
         </div>
       )}
 
-      <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <ul className="divide-y divide-ink-700 overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
         {data.documents.map((d) => (
           <li key={d.id} className="flex items-center gap-3 px-4 py-3">
             <FileIcon className="h-4 w-4 shrink-0 text-slate-400" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium capitalize text-slate-800">
+              <div className="truncate text-sm font-medium capitalize text-slate-100">
                 {d.title || d.id}
               </div>
               <div className="truncate font-mono text-xs text-slate-400">{d.id}</div>

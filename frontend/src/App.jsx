@@ -152,7 +152,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900">
+    <div className="flex h-screen bg-ink-900 text-white">
       <Sidebar
         active={view}
         onSelect={setView}
@@ -196,7 +196,7 @@ export default function App() {
             target="_blank"
             rel="noopener noreferrer"
             title="Source"
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-ink-700 bg-ink-850 px-2.5 py-1 text-xs text-slate-400 transition hover:bg-ink-900"
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
               <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.9 10.9c.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.4-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.7 1.2 3.4.9.1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0C17.1 4.7 18 5 18 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z" />
@@ -218,19 +218,16 @@ export default function App() {
             view === "chat" ? "" : "hidden"
           }`}
         >
-          {/* Rail hatne ke baad chat poori chaudai le rahi thi — 1400px ki line
-              is not readable. The column is capped at a reading width. */}
-          <section
-            className={`mx-auto flex w-full max-w-4xl flex-col rounded-xl border border-slate-200 bg-white ${
-              turns.length || busy ? "min-h-[26rem] flex-1" : ""
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          {/* Capped at a reading width: without the rail the chat stretched to
+              the full 1400px, which is too wide a line to read comfortably.
+              It fills the height either way so the page has no dead space. */}
+          <section className="mx-auto flex min-h-[30rem] w-full max-w-4xl flex-1 flex-col rounded-xl border border-ink-700 bg-ink-850">
+            <div className="flex items-center justify-between border-b border-ink-700 px-5 py-4">
               <h2 className="font-semibold">Chat</h2>
               {turns.length > 0 && (
                 <button
                   onClick={newChat}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50"
+                  className="rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-slate-400 transition hover:bg-ink-900"
                 >
                   Clear chat
                 </button>
@@ -238,19 +235,41 @@ export default function App() {
             </div>
 
             <div
-              className={`space-y-5 overflow-y-auto px-5 ${
-                turns.length || busy ? "flex-1 py-5" : "pt-5"
-              }`}
+              className="flex flex-1 flex-col space-y-5 overflow-y-auto px-5 py-5"
             >
-              {/* There used to be a lecture here — explainer cards for both
-                  routes and "pick one of the four below". All of that is already
-                  in the chips below and in each answer's trace; saying it twice
-                  is what made the UI feel padded and generated. */}
               {turns.length === 0 && !busy && (
-                <p className="text-sm leading-relaxed text-slate-400">
-                  Every question is graded before it is answered. Ask one, then open
-                  the trace under the answer to see which way it went.
-                </p>
+                // The empty state carries the pipeline rather than a sentence
+                // about it: the four stages are what the trace under each
+                // answer will show, so seeing them first makes the trace legible.
+                <div className="flex flex-1 flex-col items-center justify-center py-8">
+                  <p className="max-w-lg text-center text-sm leading-relaxed text-slate-400">
+                    Every question is graded before it is answered. Ask one, then
+                    open the trace under the answer to see which way it went.
+                  </p>
+
+                  <ol className="mt-7 w-full max-w-md space-y-3.5">
+                    {[
+                      ["Retrieve", "hybrid vector + BM25, fused and reranked"],
+                      ["Grade", "are these documents relevant? yes or no"],
+                      ["Fallback", "on no, rewrite the query and search the web"],
+                      ["Generate", "answer from context, then scan for PII"],
+                    ].map(([name, what], i) => (
+                      <li key={name} className="flex gap-3">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-ink-600 bg-ink-800 text-[10px] font-semibold text-slate-400">
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0 pt-0.5">
+                          <span className="block text-xs font-medium text-slate-300">
+                            {name}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+                            {what}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               )}
 
               {turns.map((t, i) => (
@@ -259,14 +278,14 @@ export default function App() {
 
               {busy && (
                 <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-brand-500" />
                   retrieve → grade → …
                 </div>
               )}
               <div ref={endRef} />
             </div>
 
-            <div className="border-t border-slate-100 px-5 py-4">
+            <div className="border-t border-ink-700 px-5 py-4">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -279,12 +298,12 @@ export default function App() {
                   onChange={(e) => setDraft(e.target.value)}
                   disabled={busy}
                   placeholder="Ask a question about your documents or anything on the web…"
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition focus:border-indigo-300 focus:bg-white disabled:opacity-60"
+                  className="min-w-0 flex-1 rounded-xl border border-ink-700 bg-ink-900 px-4 py-2.5 outline-none transition focus:border-brand-500/40 focus:bg-ink-850 disabled:opacity-60"
                 />
                 <button
                   type="submit"
                   disabled={busy || !draft.trim()}
-                  className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2.5 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="shrink-0 rounded-xl bg-brand-600 px-4 py-2.5 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -307,7 +326,7 @@ export default function App() {
                     disabled={busy}
                     onClick={() => ask(q)}
                     title={`Expected route: ${route}`}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-40"
+                    className="rounded-full border border-ink-700 px-3 py-1 text-xs text-slate-400 transition hover:border-ink-600 hover:bg-ink-900 disabled:opacity-40"
                   >
                     <span className={route === "web" ? "text-sky-500" : "text-emerald-500"}>
                       ●

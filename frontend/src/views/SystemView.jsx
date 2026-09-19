@@ -13,10 +13,10 @@ function Row({ label, value, mono, tone }) {
     off: "text-slate-400",
   };
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-2.5 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b border-ink-700 py-2.5 last:border-0">
       <span className="text-sm text-slate-500">{label}</span>
       <span
-        className={`text-right text-sm font-medium ${tone ? tones[tone] : "text-slate-800"} ${
+        className={`text-right text-sm font-medium ${tone ? tones[tone] : "text-slate-100"} ${
           mono ? "font-mono text-xs" : ""
         }`}
       >
@@ -28,8 +28,8 @@ function Row({ label, value, mono, tone }) {
 
 function Card({ title, subtitle, children }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <h3 className="font-semibold text-slate-800">{title}</h3>
+    <div className="rounded-xl border border-ink-700 bg-ink-850 p-5">
+      <h3 className="font-semibold text-slate-100">{title}</h3>
       {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
       <div className="mt-3">{children}</div>
     </div>

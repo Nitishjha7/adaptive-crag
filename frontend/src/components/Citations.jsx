@@ -52,7 +52,7 @@ export default function Citations({ sources, sourceType }) {
             {local ? (
               <>
                 <FileIcon className="h-4 w-4 shrink-0 text-slate-400" />
-                <span className="truncate font-mono text-slate-600" title={s}>
+                <span className="truncate font-mono text-slate-400" title={s}>
                   {s}
                 </span>
                 <span className="ml-auto shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">

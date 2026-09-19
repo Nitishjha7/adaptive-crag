@@ -19,16 +19,16 @@
  */
 function Metric({ label, value, hint, tone = "slate", big }) {
   const tones = {
-    slate: "text-slate-900",
+    slate: "text-white",
     emerald: "text-emerald-600",
     amber: "text-amber-600",
   };
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
       <div className={`font-bold ${big ? "text-3xl" : "text-2xl"} ${tones[tone]}`}>
         {value}
       </div>
-      <div className="mt-1 text-sm font-medium text-slate-700">{label}</div>
+      <div className="mt-1 text-sm font-medium text-slate-200">{label}</div>
       {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
     </div>
   );
@@ -37,11 +37,11 @@ function Metric({ label, value, hint, tone = "slate", big }) {
 /** One experiment: the question, its **data**, then the conclusion. */
 function Experiment({ question, children, footnote }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <h4 className="text-sm font-semibold text-slate-800">{question}</h4>
+    <div className="rounded-xl border border-ink-700 bg-ink-850 p-5">
+      <h4 className="text-sm font-semibold text-slate-100">{question}</h4>
       <div className="mt-3">{children}</div>
       {footnote && (
-        <p className="mt-3 border-t border-slate-100 pt-3 text-sm leading-relaxed text-slate-600">
+        <p className="mt-3 border-t border-ink-700 pt-3 text-sm leading-relaxed text-slate-400">
           {footnote}
         </p>
       )}
@@ -62,12 +62,12 @@ function Compare({ head = ["", "before", "after"], rows }) {
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.label} className="border-t border-slate-100">
-            <td className="py-1.5 text-slate-600">{r.label}</td>
+          <tr key={r.label} className="border-t border-ink-700">
+            <td className="py-1.5 text-slate-400">{r.label}</td>
             <td className="py-1.5 text-right font-mono text-slate-500">{r.before}</td>
             <td
               className={`py-1.5 text-right font-mono ${
-                r.moved ? "font-semibold text-emerald-600" : "text-slate-700"
+                r.moved ? "font-semibold text-emerald-600" : "text-slate-200"
               }`}
             >
               {r.after}
@@ -85,17 +85,17 @@ function Counts({ rows }) {
     <table className="w-full text-sm">
       <tbody>
         {rows.map((r) => (
-          <tr key={r.label} className="border-t border-slate-100 first:border-0">
+          <tr key={r.label} className="border-t border-ink-700 first:border-0">
             <td
               className={`py-1.5 ${
-                r.punch ? "font-medium text-slate-800" : "text-slate-600"
+                r.punch ? "font-medium text-slate-100" : "text-slate-400"
               }`}
             >
               {r.label}
             </td>
             <td
               className={`py-1.5 text-right font-mono ${
-                r.punch ? "text-base font-bold text-slate-900" : "text-slate-500"
+                r.punch ? "text-base font-bold text-white" : "text-slate-500"
               }`}
             >
               {r.value}
@@ -247,12 +247,12 @@ export default function EvaluationView({ stats }) {
 
   if (!e) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-        <h2 className="font-semibold text-slate-800">No evaluation results yet</h2>
+      <div className="rounded-xl border border-ink-700 bg-ink-850 p-10 text-center">
+        <h2 className="font-semibold text-slate-100">No evaluation results yet</h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
           The routing eval hasn&apos;t been run for the{" "}
           <span className="font-mono">{stats?.corpus ?? "current"}</span> corpus. Run{" "}
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">
+          <span className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-xs">
             .\dev.ps1 eval
           </span>{" "}
           to measure it.
@@ -260,7 +260,7 @@ export default function EvaluationView({ stats }) {
         {/* "Not measured" and "scored zero" are different claims — the UI must
             never show a zero when no measurement happened. */}
         <p className="mt-3 text-xs text-slate-400">
-          Nothing is shown as 0 here on purpose — &quot;not measured&quot; and &quot;scored
+          Nothing is shown as 0 here: &quot;not measured&quot; and &quot;scored
           zero&quot; are different claims.
         </p>
       </div>
@@ -277,9 +277,9 @@ export default function EvaluationView({ stats }) {
         </p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h4 className="text-sm font-semibold text-slate-800">Who labelled this set</h4>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+      <div className="rounded-xl border border-ink-700 bg-ink-900 p-4">
+        <h4 className="text-sm font-semibold text-slate-100">Who labelled this set</h4>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
           {LABELLING[stats.corpus] ?? LABELLING.concepts}
         </p>
       </div>
@@ -296,8 +296,8 @@ export default function EvaluationView({ stats }) {
             breakdown — three equal cards made them look like three separate
             results. The real point is the **difference**: one is expensive, one
             is cheap. */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-sm font-medium text-slate-700">Where the errors are</div>
+        <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
+          <div className="text-sm font-medium text-slate-200">Where the errors are</div>
           <div className="mt-3 space-y-2.5">
             <div className="flex items-baseline gap-3">
               <span
@@ -308,17 +308,17 @@ export default function EvaluationView({ stats }) {
                 {e.missed_fallbacks}
               </span>
               <span className="text-xs leading-snug text-slate-500">
-                <span className="font-medium text-slate-700">missed fallbacks</span> —
+                <span className="font-medium text-slate-200">missed fallbacks</span> —
                 answered locally when it should not have. The expensive error: a confident
                 answer built on the wrong context.
               </span>
             </div>
             <div className="flex items-baseline gap-3">
-              <span className="w-8 shrink-0 text-right text-2xl font-bold text-slate-900">
+              <span className="w-8 shrink-0 text-right text-2xl font-bold text-white">
                 {e.unnecessary_fallbacks}
               </span>
               <span className="text-xs leading-snug text-slate-500">
-                <span className="font-medium text-slate-700">unnecessary fallbacks</span> —
+                <span className="font-medium text-slate-200">unnecessary fallbacks</span> —
                 searched the web when local docs would have done. Costs one extra LLM
                 call; the answer is still right.
               </span>
