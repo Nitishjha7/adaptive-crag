@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import ContextRail from "./components/ContextRail.jsx";
 import Message from "./components/Message.jsx";
 import Sidebar, { Logo } from "./components/Sidebar.jsx";
 import DocumentsView from "./views/DocumentsView.jsx";
@@ -64,13 +65,28 @@ export default function App() {
   // Each conversation has its own id; history updates on it, otherwise two
   // turns of the same chat would become two separate history entries.
   const [chatId, setChatId] = useState(() => Date.now().toString(36));
+
+  // The rail shows the most recent *answer* with the question that produced it.
+  // Turns are a flat list, so the question is the user turn before it.
+  const lastAnswerIndex = turns.map((t) => t.role).lastIndexOf("assistant");
+  const lastAnswer =
+    lastAnswerIndex === -1
+      ? null
+      : {
+          ...turns[lastAnswerIndex],
+          question: turns[lastAnswerIndex - 1]?.text ?? "",
+        };
   const history = useHistory();
   const endRef = useRef(null);
 
+  // Both in one effect: the rail shows measured stats and the corpus side by
+  // side, and two separate loading states for one panel is noise.
   useEffect(() => {
-    fetch("/api/stats")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setStats)
+    Promise.all([
+      fetch("/api/stats").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/documents").then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([s, d]) => setStats(s ? { ...s, document_list: d?.documents ?? [] } : null))
       .catch(() => setStats(null));
   }, []);
 
@@ -221,7 +237,7 @@ export default function App() {
           {/* Capped at a reading width: without the rail the chat stretched to
               the full 1400px, which is too wide a line to read comfortably.
               It fills the height either way so the page has no dead space. */}
-          <section className="mx-auto flex min-h-[30rem] w-full max-w-4xl flex-1 flex-col rounded-xl border border-ink-700 bg-ink-850">
+          <section className="mx-auto flex min-h-[30rem] w-full max-w-5xl flex-1 flex-col rounded-xl border border-ink-700 bg-ink-850">
             <div className="flex items-center justify-between border-b border-ink-700 px-5 py-4">
               <h2 className="font-semibold">Chat</h2>
               {turns.length > 0 && (
@@ -241,34 +257,71 @@ export default function App() {
                 // The empty state carries the pipeline rather than a sentence
                 // about it: the four stages are what the trace under each
                 // answer will show, so seeing them first makes the trace legible.
-                <div className="flex flex-1 flex-col items-center justify-center py-8">
-                  <p className="max-w-lg text-center text-sm leading-relaxed text-slate-400">
+                <div className="flex flex-1 flex-col items-center justify-center py-6">
+                  <h2 className="text-center text-4xl font-bold tracking-tight">
+                    <span className="text-white">Ask </span>
+                    <span className="bg-gradient-to-r from-brand-400 to-violet-400 bg-clip-text text-transparent">
+                      CRAG
+                    </span>
+                  </h2>
+                  <p className="mt-2.5 max-w-lg text-center text-sm leading-relaxed text-slate-400">
                     Every question is graded before it is answered. Ask one, then
                     open the trace under the answer to see which way it went.
                   </p>
 
-                  <ol className="mt-7 w-full max-w-md space-y-3.5">
+                  <div className="mt-7 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
                     {[
-                      ["Retrieve", "hybrid vector + BM25, fused and reranked"],
-                      ["Grade", "are these documents relevant? yes or no"],
-                      ["Fallback", "on no, rewrite the query and search the web"],
-                      ["Generate", "answer from context, then scan for PII"],
-                    ].map(([name, what], i) => (
-                      <li key={name} className="flex gap-3">
-                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-ink-600 bg-ink-800 text-[10px] font-semibold text-slate-400">
-                          {i + 1}
+                      ["Grounded", "answers from your documents first", "text-emerald-300 border-emerald-500/30 bg-emerald-500/10"],
+                      ["Self-grading", "it checks whether they were enough", "text-violet-300 border-violet-500/30 bg-violet-500/10"],
+                      ["Web-aware", "searches the web only when they are not", "text-sky-300 border-sky-500/30 bg-sky-500/10"],
+                    ].map(([name, what, tint]) => (
+                      <div
+                        key={name}
+                        className="rounded-xl border border-ink-700 bg-ink-900/60 p-4"
+                      >
+                        <span
+                          className={`inline-grid h-8 w-8 place-items-center rounded-lg border text-xs font-semibold ${tint}`}
+                        >
+                          {name[0]}
                         </span>
-                        <span className="min-w-0 pt-0.5">
-                          <span className="block text-xs font-medium text-slate-300">
-                            {name}
-                          </span>
-                          <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
-                            {what}
-                          </span>
-                        </span>
-                      </li>
+                        <p className="mt-2.5 text-sm font-medium text-slate-100">{name}</p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                          {what}
+                        </p>
+                      </div>
                     ))}
-                  </ol>
+                  </div>
+
+                  <div className="mt-7 w-full max-w-3xl rounded-xl border border-ink-700 bg-ink-900/60 p-4">
+                    <p className="mb-3.5 text-center text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      How a question is answered
+                    </p>
+                    <ol className="flex flex-wrap items-start justify-center gap-y-4">
+                      {[
+                        ["Retrieve", "hybrid + rerank"],
+                        ["Grade", "relevant? yes / no"],
+                        ["Route", "corpus or web"],
+                        ["Generate", "answer + PII scan"],
+                      ].map(([name, what], i, all) => (
+                        <li key={name} className="flex items-start">
+                          <div className="w-[7.5rem] text-center">
+                            <span className="mx-auto grid h-8 w-8 place-items-center rounded-lg border border-ink-600 bg-ink-800 text-[11px] font-semibold text-brand-400">
+                              {i + 1}
+                            </span>
+                            <p className="mt-2 text-xs font-medium text-slate-200">{name}</p>
+                            <p className="mt-0.5 text-[10px] leading-snug text-slate-500">
+                              {what}
+                            </p>
+                          </div>
+                          {i < all.length - 1 && (
+                            <span className="mt-3.5 text-slate-600" aria-hidden="true">
+                              &rarr;
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 </div>
               )}
 
@@ -339,6 +392,17 @@ export default function App() {
           </section>
         </div>
       </main>
+
+      {/* Chat only: on the other views the page is already the detail, and a
+          rail repeating it would compete with what the user opened. */}
+      {view === "chat" && (
+        <ContextRail
+          stats={stats}
+          latest={lastAnswer}
+          onOpenEval={() => setView("eval")}
+          onOpenDocs={() => setView("documents")}
+        />
+      )}
     </div>
   );
 }
