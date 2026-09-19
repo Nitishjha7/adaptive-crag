@@ -39,7 +39,7 @@ function Card({ title, subtitle, children }) {
 export default function SystemView({ stats }) {
   if (!stats) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-sm text-amber-300">
         Backend unreachable — start it with{" "}
         <span className="font-mono">docker compose up</span>.
       </div>
@@ -100,12 +100,11 @@ export default function SystemView({ stats }) {
           />
         </Card>
 
-        <Card title="Not built" subtitle="Stated here rather than hidden">
-          <Row label="Deployment" value="not deployed" tone="off" />
-          <Row label="Document upload API" value="none — ingestion is offline" tone="off" />
-          <Row label="Context filter" value="none — top-k goes straight to the grader" tone="off" />
-          <Row label="Prompt-injection defence" value="none" tone="off" />
-          <Row label="Conversation memory" value="none — every query is independent" tone="off" />
+        <Card title="Scope" subtitle="What this build does and does not do">
+          <Row label="Deployment" value="Cloud Run · asia-south1" />
+          <Row label="Ingestion" value="build-time — no upload API" tone="off" />
+          <Row label="Context filter" value="none — top-k goes to the grader" tone="off" />
+          <Row label="Conversation memory" value="none — each query is independent" tone="off" />
         </Card>
       </div>
     </div>

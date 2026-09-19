@@ -118,20 +118,16 @@ function Counts({ rows }) {
 const LABELLING = {
   concepts: (
     <>
-      20 routing cases <strong>hand-labelled by me</strong>, plus 8 ambiguous ones
-      scored only for stability. Two things follow. The bias is real — the same person
-      who chose where the corpus gap is also decided which side each question belongs
-      on. And the task is easier than the score suggests: the gap is categorical
-      (concepts in, vendor/pricing/news out), so most web cases differ along an obvious
-      axis. <strong>100% means the task is easy, not that the router is perfect.</strong>
+      20 cases hand-labelled by the author, plus 8 ambiguous ones scored only for
+      stability. The gap is categorical — concepts in, vendor and pricing out — so{" "}
+      <strong>100% means the task is easy, not that the router is perfect.</strong>
     </>
   ),
   scifact: (
     <>
-      20 local cases come from SciFact&apos;s own{" "}
-      <span className="font-mono">qrels</span> — the dataset says which abstract
-      supports which claim, so no author judgement is involved. The 8 web cases are
-      hand-written (live pricing, current limits): the easy half, and labelled as such.
+      20 local cases come from SciFact&apos;s own <span className="font-mono">qrels</span>,
+      so no author judgement is involved. The 8 web cases are hand-written: the easy
+      half, and labelled as such.
     </>
   ),
 };
@@ -162,12 +158,9 @@ const EXPERIMENTS = {
       ),
       footnote: (
         <>
-          Retrieval genuinely changed on 27 of 28 questions — and not one verdict moved.{" "}
-          <span className="font-mono">grade_documents</span> concatenates all four chunks
-          into a single prompt, so <em>ordering is invisible to it</em>; reranking can
-          only matter by changing membership, and on 22 chunks membership rarely crosses
-          a topic boundary. The honest conclusion is that this eval cannot show a benefit
-          — which is not the same as there being none.
+          Retrieval changed on 27 of 28 questions and not one verdict moved. The grader
+          reads all four chunks in one prompt, so ordering is invisible to it. This eval
+          cannot show a benefit — which is not the same as there being none.
         </>
       ),
     },
@@ -184,11 +177,10 @@ const EXPERIMENTS = {
       ),
       footnote: (
         <>
-          Run 1 looked like a clean win, and it was an artifact: local cases ran first, so
-          Groq&apos;s throttling landed entirely in their bucket. Interleaved, the web path
-          comes out <em>faster</em> — impossible, since it does strictly more work. Both
-          numbers are noise, so no latency figure appears anywhere on this page. The cost
-          argument rests on LLM call counts, which are exact by construction.
+          Run 1 was an artifact of ordering: interleaved, the web path comes out
+          <em> faster</em>, which is impossible since it does strictly more work. Both
+          numbers are noise, so no latency figure is quoted. Cost rests on LLM call
+          counts, which are exact.
         </>
       ),
     },

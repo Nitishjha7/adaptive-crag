@@ -31,7 +31,7 @@ function SourceBadgeInline({ sourceType }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
-        local ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"
+        local ? "bg-emerald-500/10 text-emerald-300" : "bg-sky-500/10 text-sky-300"
       }`}
     >
       {local ? (
@@ -132,8 +132,8 @@ export default function Message({ turn }) {
 
   if (turn.role === "error") {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-        <p className="text-sm font-medium text-red-700">Request failed</p>
+      <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4">
+        <p className="text-sm font-medium text-rose-300">Request failed</p>
         <p className="mt-1 break-words font-mono text-xs text-red-500">{turn.text}</p>
       </div>
     );
@@ -162,7 +162,7 @@ export default function Message({ turn }) {
             the clearest way to make the point that the system changed the
             query itself. */}
         {turn.transformed_query && (
-          <div className="mx-4 mb-3 flex gap-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          <div className="mx-4 mb-3 flex gap-2 rounded-lg bg-sky-500/10 px-3 py-2 text-xs text-sky-800">
             <svg
               viewBox="0 0 24 24"
               className="mt-0.5 h-3.5 w-3.5 shrink-0"

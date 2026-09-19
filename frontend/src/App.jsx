@@ -201,7 +201,7 @@ export default function App() {
               line already comes from the backend, which is the proof. Saying so
               when it is down does matter, so this only renders then. */}
           {!stats && (
-            <span className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700">
+            <span className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               backend unreachable
             </span>

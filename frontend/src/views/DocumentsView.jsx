@@ -35,7 +35,7 @@ export default function DocumentsView({ stats }) {
 
   if (failed) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+      <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-6 text-sm text-rose-300">
         Could not load the document list — is the backend running?
       </div>
     );
@@ -65,7 +65,7 @@ export default function DocumentsView({ stats }) {
           sake. The two corpora exist for different reasons, and that reason is
           the thing worth saying. */}
       {isConcepts ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
           <h4 className="text-sm font-semibold text-slate-100">
             This corpus has a deliberate hole in it
           </h4>
@@ -77,7 +77,7 @@ export default function DocumentsView({ stats }) {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
           <h4 className="text-sm font-semibold text-slate-100">
             This corpus exists because the other one had no ground truth
           </h4>

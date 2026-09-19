@@ -55,7 +55,7 @@ export default function Citations({ sources, sourceType }) {
                 <span className="truncate font-mono text-slate-400" title={s}>
                   {s}
                 </span>
-                <span className="ml-auto shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                <span className="ml-auto shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
                   Local
                 </span>
               </>
@@ -69,11 +69,11 @@ export default function Citations({ sources, sourceType }) {
                   // could reach back into this page through window.opener.
                   rel="noopener noreferrer"
                   title={s}
-                  className="truncate text-sky-600 underline decoration-sky-300 underline-offset-2 hover:text-sky-700"
+                  className="truncate text-sky-600 underline decoration-sky-300 underline-offset-2 hover:text-sky-300"
                 >
                   {label(s)}
                 </a>
-                <span className="ml-auto shrink-0 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                <span className="ml-auto shrink-0 rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
                   Web
                 </span>
               </>
