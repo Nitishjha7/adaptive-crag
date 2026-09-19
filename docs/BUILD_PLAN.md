@@ -15,7 +15,7 @@ build next.**
 The corpus came before the graph, because a controlled corpus with a *deliberate
 gap* is what makes the fallback fire predictably instead of by luck. The eval
 harness came before the retrieval work, because hybrid search and reranking are
-exactly the kind of change that feels like an improvement and has to be proved to
+the kind of change that feels like an improvement and has to be proved to
 be one.
 
 That ordering paid off twice, both times by returning a negative result:
@@ -101,9 +101,8 @@ flag, that the latency number was an artifact and had to be withdrawn, and that 
 negative results belonged in the README rather than a footnote.
 
 Those judgements, and the measurements that back them, are the project. They are
-documented in [CODE_QA.md](CODE_QA.md) — 27 questions about specific lines, with
-answers — and in [backend/eval/RESULTS.md](../backend/eval/RESULTS.md), which
-reports what the evaluation does not support as carefully as what it does.
+documented in [backend/eval/RESULTS.md](../backend/eval/RESULTS.md), which reports
+what the evaluation does not support as carefully as what it does.
 
 ---
 

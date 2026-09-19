@@ -54,7 +54,7 @@ Then run one query down each route, because they exercise different code:
 | *Why does chunk overlap matter when splitting documents?* | Local DB badge, `grade: yes` |
 | *What is the Model Context Protocol?* | Web Fallback badge, `grade: no` |
 
-The second one is the point of the project: the corpus deliberately contains no MCP
+The second one is the point of the project: the corpus contains no MCP
 material, so the grader rejects the retrieved chunks and the system searches instead
 of guessing.
 
@@ -83,7 +83,7 @@ an edit needs no rebuild. It is faster than `docker compose` for backend work.
 
 ## 5. Ingestion and switching corpus
 
-The index is built offline, on purpose — there is no upload endpoint.
+The index is built offline, — there is no upload endpoint.
 
 ```powershell
 .\dev.ps1 ingest             # embed backend/data/ into Chroma
@@ -156,7 +156,6 @@ Placeholders only in `.env.example`, always.
 | | |
 |---|---|
 | [PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md) | **Start here** — how a request flows, and how the system was built |
-| [CODE_QA.md](CODE_QA.md) | 27 questions about specific lines, with answers |
 | [backend/eval/RESULTS.md](../backend/eval/RESULTS.md) | Every measurement, including the negative ones |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Deploying to a HuggingFace Space, and why Render was ruled out |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Deploying to Cloud Run, and the memory measurements behind the sizing |
 | [ROADMAP.md](ROADMAP.md) | What exists, what does not, what is next |

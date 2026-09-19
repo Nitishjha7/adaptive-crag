@@ -6,8 +6,7 @@ and at the end how the complete system runs. If you only read one file, read thi
 What the other docs are for:
 [TECHNICAL_SPEC](TECHNICAL_SPEC.md) architecture and design decisions ·
 [CODE_NOTES](CODE_NOTES.md) file-by-file "why this exists" ·
-[INTERVIEW_NOTES](INTERVIEW_NOTES.md) the pitch and Q&A ·
-[RAG_FUNDAMENTALS](RAG_FUNDAMENTALS.md) general RAG concepts and question bank ·
+[BUILD_PLAN](BUILD_PLAN.md) the order it was built in ·
 [eval/RESULTS](../backend/eval/RESULTS.md) measured numbers ·
 [ROADMAP](ROADMAP.md) what is left.
 
@@ -80,13 +79,13 @@ There is a test asserting this, because it is the kind of thing that breaks sile
 
 ## 3. How it was built — step by step
 
-### Step 1 — A corpus with a hole in it, on purpose
+### Step 1 — A corpus with a hole in it
 
 Seven Markdown documents on RAG/agent engineering concepts → 22 chunks
 (800 chars, 100 overlap, `RecursiveCharacterTextSplitter` with `\n## ` as the first
 separator so splits land on headings).
 
-The important part is what is **deliberately absent**: no vendor pricing, no product
+The important part is what is absent: no vendor pricing, no product
 names, no recent releases, no mention of MCP. Without a known gap the correction path
 can only be triggered by luck, and a demo that depends on luck is not a demo.
 
@@ -99,11 +98,11 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, which is why 122 tests run with no API key.
+swapped for a scripted fake in one line, so 122 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
-`CRAGState` is a `TypedDict`. Two fields behave differently on purpose:
+`CRAGState` is a `TypedDict`. Two fields behave differently:
 
 - `logs` — **additive reducer** (`Annotated[List[str], operator.add]`). Every node
   appends one line and no node needs to know what ran before it. The trace assembles
@@ -121,7 +120,7 @@ START → retrieve → grade_documents → (conditional) → generate → valida
                                    ↘ transform_query → web_search_fallback ↗
 ```
 
-`decide_to_generate` is deliberately trivial — it only reads `relevance_score`. All the
+`decide_to_generate` is trivial — it only reads `relevance_score`. All the
 judgement lives in `grade_documents`, so routing and grading can be tested separately.
 
 Its default is `transform_query`, not `generate`: if the score is somehow blank, the safe
@@ -169,7 +168,7 @@ going to be the largest time sink in the build, and what was actually needed was
 things — is this answer supported by the context, and does it leak PII.
 
 The first is one temperature-0 call reusing the same `parse_verdict`. The second is four
-regexes, deliberately *not* an LLM, because PII detection should be deterministic.
+regexes, not an LLM, because PII detection should be deterministic.
 
 Two behaviours worth defending:
 
@@ -187,7 +186,7 @@ Two behaviours worth defending:
 `graph.invoke` runs in a threadpool — it is sync and blocking, and calling it directly in
 an `async def` would stall the event loop.
 
-`/health` deliberately makes **no LLM call**: if it did, one rate-limit would mark the
+`/health` makes **no LLM call**: if it did, one rate-limit would mark the
 container unhealthy and Docker would restart it in a loop.
 
 The UI is a dashboard, not just a chat box: a nav rail switching between four full-width
@@ -209,7 +208,7 @@ Three consequences, and they are the interesting part:
 - **No per-step timestamps in the trace.** The backend does not emit per-node timing, so
   printing `10:24:03` next to each step would be fabrication. Total `elapsed_ms` is real
   and is shown.
-- **"Web Search (Skipped)" is displayed on purpose.** On the local route that node never
+- **"Web Search (Skipped)" is still displayed.** On the local route that node never
   ran — showing it greyed out is what makes the fallback visibly *conditional* rather than
   a default, which is the whole thesis in one glance.
 
@@ -250,7 +249,7 @@ that no case is lost.
 
 ### Step 11 — Hybrid retrieval and reranking, once they could be measured
 
-This step was deliberately held back until Step 10 existed. Routing accuracy was at
+This step was held back until Step 10 existed. Routing accuracy was at
 100% and could not move, so adding a reranker would have produced a longer feature list
 and no evidence. **The ambiguity tier had to come first so there was a number that could
 respond.**
@@ -321,7 +320,7 @@ same flags, but against 1,717 SciFact chunks with `qrels` as ground truth.
 
 Everything moved the right way, and the mechanism is visible per case: exactly one case
 changed — **#10**, gold document `MISS → hit`, route `web → local`. Recall improved, and
-routing improved by precisely the case recall fixed.
+routing improved by the same cases recall fixed.
 
 **And that is one document out of twenty.** On a sample this size +5pp is inside noise,
 so it is reported as a mechanism, not a win. What it does prove is that Step 11's
@@ -364,7 +363,7 @@ dataset authors', not mine. Twelve of the twenty local cases carry one; claims
 whose gold documents disagree with each other are skipped, because on mixed
 evidence there is no honest answer to score against.
 
-The design decision worth defending here is what this deliberately is *not*. The
+The design decision worth defending here is what this is not. The
 obvious move is LLM-as-judge — hand the answer to a model and ask whether it is
 good. That substitutes a model's opinion for a measurement, and it tends to
 flatter whatever produced the answer. Instead the model is asked only to read:
@@ -581,7 +580,7 @@ immediately, but the long-running server did not, until restarted. The cause:
 this project opted into, and not documented anywhere obvious. Every unit test
 passed regardless, because each test process is fresh and never hits this path.
 Fixed by calling `SharedSystemClient.clear_system_cache()` after a successful
-consolidation, and reverified live: recorded three deliberately-similar failing
+consolidation, and reverified live: recorded three near-identical failing
 episodes, ran consolidation, and the same still-running process immediately
 answered a fourth, rephrased question with the new fact in `memory_note` — no
 restart needed.
