@@ -14,11 +14,11 @@ Two checks:
    guarantee — a model can still add from its training knowledge. This is a
    second, *independent* look at what came out.
 
-2. **PII (regex)** — email / phone / card / SSN patterns. Regex on purpose, not
+2. **PII (regex)** — email / phone / card / SSN patterns. Regex rather than
    an LLM: PII detection should be deterministic, and another LLM call adds
    latency without adding trust.
 
-No toxicity check, deliberately. The inputs are a controlled corpus plus search
+No toxicity check. The inputs are a controlled corpus plus search
 snippets, and without a proper classifier an LLM-based "is this toxic" check
 would be decoration — better to leave it out than to claim it and not verify it.
 """

@@ -46,7 +46,7 @@ def run(state: CRAGState) -> dict:
 
     try:
         snippets = web_search(query, max_results=max_results)
-    except Exception as exc:  # noqa: BLE001 — deliberately broad, see below
+    except Exception as exc:  # noqa: BLE001 — see the note below
         # A failed search (rate limit, network, missing key) is recoverable, and
         # all three want the same behaviour. `generate` will say plainly that it
         # found no context. Raising here would 500 the whole request and stop a

@@ -6,8 +6,8 @@
 # Frontend: http://localhost:3001   (Nginx, proxies /api/ to the backend)
 # Backend:  http://localhost:8001/docs
 #
-# Ports are 3001/8001 rather than 3000/8000 because other projects on this
-# machine hold those. Override with FRONTEND_PORT / BACKEND_PORT in `.env`.
+# Ports are 3001/8001 because other projects on this machine hold 3000/8000.
+# Override with FRONTEND_PORT / BACKEND_PORT in `.env`.
 
 services:
   backend:
@@ -18,16 +18,14 @@ services:
       - .env
     environment:
       # One-line corpus switch: `CORPUS=scifact docker compose up -d`.
-      # `environment` wins over `env_file`, and the default stays concepts —
-      # otherwise changing corpus means editing .env every time.
+      # `environment` wins over `env_file`, so the default stays concepts.
       CORPUS: ${CORPUS:-concepts}
     volumes:
-      # Persist the Chroma index, or every container start re-embeds the whole
-      # corpus — slow and pointless.
+      # Persist the Chroma index; otherwise every start re-embeds the corpus.
       - ./backend/vectorstore:/app/vectorstore
     healthcheck:
-      # /health deliberately makes no LLM call, so this is cheap and a rate
-      # limit can never mark the container unhealthy.
+      # /health makes no LLM call, so a rate limit cannot mark the container
+      # unhealthy.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
@@ -40,10 +38,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3001}:80"
     depends_on:
-      # `service_healthy`, not `service_started`. It was `started` once, and that
-      # caused a real bug: Nginx came up before uvicorn had bound, so the first
-      # query right after `docker compose up` returned a 502.
-      # /health makes no LLM call, so this check is cheap and reliable.
+      # service_healthy, not service_started: Nginx coming up before uvicorn has
+      # bound returns a 502 on the first query after `docker compose up`.
       backend:
         condition: service_healthy
     restart: unless-stopped

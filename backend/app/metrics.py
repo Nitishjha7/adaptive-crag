@@ -6,7 +6,7 @@ afterwards:
 - **Routing** (`vector_db` vs `web_search`) is the eval's headline number.
 - **Groundedness pass/fail** comes straight out of `validate_guardrails`.
 
-**What is deliberately not here:** `eval/RESULTS.md`'s missed-fallback /
+**What is not here:** `eval/RESULTS.md`'s missed-fallback /
 unnecessary-fallback taxonomy needs a ground-truth label for whether a
 question actually required `web` — that label only exists in
 `eval/scenarios.json`, written by hand against the corpus. A live production
@@ -14,7 +14,7 @@ request carries no such label, so a live "missed fallback" counter would have
 to guess at the very thing the eval exists to check, and a guessed metric
 with a real-sounding name is worse than no metric. That distinction stays an
 eval-only measurement; `crag_groundedness_total` is the live signal that
-correlates with it (an answer built on a missed fallback is exactly the case
+correlates with it (an answer built on a missed fallback is the case
 `validate_guardrails` is most likely to catch as ungrounded).
 - **Tokens and cost** are the precise replacement for the "3 calls vs 4 calls"
   proxy — see app/token_usage.py.

@@ -26,7 +26,7 @@ from typing import List, Optional, Tuple
 
 from app.config import get_settings, get_vectorstore
 
-# Simple tokenizer: lowercase, alphanumeric runs. No stemming, deliberately —
+# Simple tokenizer: lowercase, alphanumeric runs. No stemming —
 # the benefit of another dependency (nltk/snowball) could not be measured on 22
 # chunks, and this project only adds what it can measure.
 _TOKEN = re.compile(r"[a-z0-9]+")

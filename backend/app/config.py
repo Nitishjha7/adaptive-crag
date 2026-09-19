@@ -151,13 +151,11 @@ def get_llm(temperature: float = 0.0):
     so the grader/router calls (0.0) and any caller wanting slack share one
     client rather than opening a fresh one each time.
 
-    **Why a gateway matters here specifically:** this project has already hit
-    a dead model id in production (docs/BUILD_PLAN.md — Groq retired
-    `llama-3.3-70b-versatile` mid-project, a 404 `model_not_found` no mock
-    ever caught, fixed by switching to `openai/gpt-oss-120b`). A retired or
-    saturated model is not a bug in this code, and none of the four call
-    sites below can tell "the model is gone" apart from "my prompt is wrong"
-    unless something sits in front of the client and retries elsewhere.
+    The gateway covers retired model ids, which Groq does without much
+    notice. A retired or saturated model is not a bug in this code, and none
+    of the four call sites below can tell "the model is gone" apart from "my
+    prompt is wrong" unless something sits in front of the client and retries
+    elsewhere.
 
     `with_fallbacks` was chosen over a hand-rolled try/except around every
     call site because it returns something that still satisfies the plain

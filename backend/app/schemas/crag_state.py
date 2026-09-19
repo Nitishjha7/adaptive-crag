@@ -90,7 +90,7 @@ def initial_state(question: str) -> CRAGState:
     a list and would crash on `None`, so it has to start as `[]`.
 
     Every request builds a new one. There is no checkpointer and no memory — the
-    graph is stateless, which is why the UI's history is labelled a record rather
+    graph is stateless, so the UI's history is labelled a record rather
     than conversation memory.
     """
     return {

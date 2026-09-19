@@ -67,7 +67,7 @@ app = FastAPI(
 
 # The deploy image serves the built frontend from this same app, so production
 # is same-origin and this middleware never fires there. It exists for the local
-# split setup (Vite on :5173, Nginx on :3001) — which is why the default is
+# split setup (Vite on :5173, Nginx on :3001), so the default is
 # those two origins rather than `*`. Override with CORS_ORIGINS for a split
 # deployment.
 app.add_middleware(
@@ -96,7 +96,7 @@ class QueryOut(BaseModel):
 
 def _query_response(final: dict, elapsed_ms: int, token_usage: dict) -> QueryOut:
     """One function so `/api/query` and `/api/query/stream`'s final event build
-    the exact same payload — building it twice is exactly the kind of drift
+    the same payload — building it twice is the kind of drift
     that would make a streamed result quietly disagree with the non-streamed
     one."""
     return QueryOut(
@@ -430,7 +430,7 @@ async def documents():
     }
 
 
-# Mounted last, and deliberately so: a mount at "/" swallows every path beneath
+# Mounted last: a mount at "/" swallows every path beneath
 # it, so every /api route above has to be registered first or it becomes
 # unreachable.
 #

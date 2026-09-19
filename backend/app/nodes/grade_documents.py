@@ -66,7 +66,7 @@ def run(state: CRAGState) -> dict:
             # All chunks in one call. Per-chunk grading would be more granular but
             # costs k times the LLM calls, and the whole cost argument rests on
             # call counts. One consequence worth knowing: joining them means
-            # ordering is invisible to the grader, which is why reranking could
+            # ordering is invisible to the grader, so reranking could
             # not move the routing numbers (see eval/RESULTS.md).
             "documents": "\n\n---\n\n".join(documents),
         }

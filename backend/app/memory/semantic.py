@@ -125,7 +125,7 @@ def _clear_chroma_client_cache() -> None:
     and then querying from the *same running process* returned no fact,
     while a fresh `python -c` process against the same directory saw it
     immediately. Without this, "run consolidation, then ask a question" would
-    silently not work until the process restarted - exactly the kind of gap
+    silently not work until the process restarted - the kind of gap
     that looks fine in every unit test (each test process is fresh) and only
     shows up against a long-running server.
     """

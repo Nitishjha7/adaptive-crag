@@ -145,7 +145,7 @@ def run_query_stream(question: str, graph=None, state: CRAGState | None = None):
             # here only ever carries *that node's* single new line, not the
             # accumulated list. Overwriting with `state.update(partial)`
             # would leave `state["logs"]` holding only the last node's line
-            # by the time this generator finishes — exactly the bug caught by
+            # by the time this generator finishes — the bug caught by
             # `test_stream_endpoint_matches_non_streaming_payload_shape`.
             label = _describe_update(node_name, partial)
             # Pop before merging: `state.update` below would otherwise

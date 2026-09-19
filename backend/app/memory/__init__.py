@@ -6,7 +6,7 @@ checkpointer and no memory — the graph is stateless"). That is still true of
 `CRAGState` itself. This package adds something orthogonal: memory that spans
 *across* queries, not state inside one.
 
-Two of the three usual memory types, not three - deliberately:
+Two of the three usual memory types, not three:
 
 * **episodic** (`episodic.py`) - has a similar question been asked before, and
   was the answer to it grounded (`guardrail_passed`) or not. Retrieved by real

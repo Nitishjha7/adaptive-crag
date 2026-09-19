@@ -20,7 +20,7 @@ def load_documents(data_dir: Path):
 
     data/README.md is skipped — it is notes *about* the corpus, not part of it.
     Ingesting it would put "what is not in here" meta-text into the corpus, which
-    is exactly the sort of thing that confuses the grader.
+    is the sort of thing that confuses the grader.
     """
     from langchain_core.documents import Document
 
