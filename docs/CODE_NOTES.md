@@ -110,7 +110,7 @@ request counters. `crag_queries_total{route}` (routing), `crag_groundedness_tota
 `crag_llm_fallback_triggered_total` (the gateway's own health signal — did a model other
 than the configured primary answer).
 
-**What is deliberately absent:** `RESULTS.md`'s missed-fallback / unnecessary-fallback
+**What is absent:** `RESULTS.md`'s missed-fallback / unnecessary-fallback
 taxonomy needs a ground-truth label for whether a question actually required `web`, and
 that label only exists in `eval/scenarios.json`, written by hand. A live request has no
 such label, so a live "missed fallback" counter would have to guess at the exact thing
@@ -235,12 +235,12 @@ which is faster to iterate in.
 
 **Why no real LLM calls in the tests:** these test **control flow**, not model quality.
 Real calls are slow, cost money, need a key and are non-deterministic — that is, flaky
-in CI. Giving the grader a scripted verdict is exactly the thing under test: *"if the
+in CI. Giving the grader a scripted verdict is the thing under test: *"if the
 grader says 'no', does the graph take the right path?"* The grader's **accuracy** is a
 different question, and it belongs to the eval harness, not here.
 
 **The most important test:** `test_fallback_replaces_local_docs_instead_of_merging`. If
-rejected local documents survived alongside the web snippets, the whole point of CRAG
+rejected local documents survived alongside the web snippets, the point of CRAG
 would be gone — and that can break silently, so it is asserted.
 
 ---
@@ -253,7 +253,7 @@ partial update to it.
 - `question` — the original, never mutated.
 - `transformed_query` — set only by the `transform_query` node.
 - `documents` — **overwrite** semantics (no reducer). `retrieve` sets it,
-  `web_search_fallback` **replaces** it. An additive reducer is *deliberately* absent:
+  `web_search_fallback` **replaces** it. There is no additive reducer:
   appending would leave rejected local documents in context alongside the web
   snippets, which is the hallucination risk the grading step exists to remove.
 - `relevance_score` — `"yes"` / `"no"`; the conditional edge routes on it.
@@ -272,7 +272,7 @@ partial update to it.
 
 ## backend/app/memory/ — episodic and semantic, cross-query
 
-`CRAGState` is deliberately stateless between requests — see the schema note
+`CRAGState` is stateless between requests — see the schema note
 above, and `initial_state`'s own docstring. This package is the one thing that
 crosses that boundary: memory that spans multiple queries, not state inside one.
 
@@ -337,7 +337,7 @@ Graph wiring — register nodes, define edges, `compile()`.
 state. A linear chain cannot express that.
 
 **Why `decide_to_generate` is its own function:** separating routing logic from grading
-logic means both can be tested independently. The function is deliberately trivial —
+logic means both can be tested independently. The function is trivial —
 the entire decision happens in `grade_documents`, and this only reads the result.
 
 **Why it defaults to `transform_query` rather than `generate`:** if `relevance_score`
@@ -601,7 +601,7 @@ limitation is real.
 **Zero-score chunks are dropped:** in BM25, 0 means no query term appears in that chunk
 at all. Ranking those only adds noise to the fusion.
 
-**Stemming is deliberately absent:** another dependency (nltk, snowball) whose benefit
+**Stemming is absent:** another dependency (nltk, snowball) whose benefit
 cannot be measured on 22 chunks — and this project runs on the rule that every addition
 has to be measurable.
 
@@ -751,7 +751,7 @@ pulled at build time so the first request does not wait for a download; then `ap
 **`Dockerfile` (repo root)** — the single-service deploy image. Builds the React app in a
 node stage, then serves both the API and the bundle from one FastAPI process. It
 **runs the ingest at build time** and asserts the index is non-empty, because
-`backend/vectorstore/` is gitignored: a fresh clone — which is what a HuggingFace Space
+`backend/vectorstore/` is gitignored: a fresh clone — which is what Cloud Build
 builds from — would otherwise boot with an empty index. `backend/data/` is in git, so
 the image can build the index itself, and it can never drift from the corpus it claims
 to represent.
@@ -813,7 +813,7 @@ SPA-fallback rule. It uses `pushState` + `popstate` rather than `replaceState`: 
 fixes the refresh but creates no history entry, so the back button would not move
 between views.
 
-### What the UI deliberately does *not* show
+### What the UI does *not* show
 
 These follow from one rule: **no number on screen without a real source behind it.**
 
@@ -826,7 +826,7 @@ has to be an answer — and on a binary verdict the question cannot arise.
 printing `10:24:03` would be inventing a number. The total `elapsed_ms` is real, and
 that is what is shown.
 
-**"Web Search (skipped)" is shown on purpose.** On the local route that node never ran —
+**"Web Search (skipped)" is still shown.** On the local route that node never ran —
 showing it greyed out is what makes clear that the fallback is **conditional, not the
 default**. It puts the project's thesis on screen at a glance.
 

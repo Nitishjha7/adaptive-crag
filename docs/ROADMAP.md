@@ -109,14 +109,14 @@ most of the difference. The reason not to: the System Status page would then rea
 about exactly that pipeline. The live demo would not be running the thing being
 measured. Switching off the best work to fit a smaller box is the wrong trade.
 
-**Target: [HuggingFace Spaces](https://huggingface.co/spaces)** — 16 GB free, Docker
-SDK, no sleep.
+**Deployed on [Google Cloud Run](https://adaptive-crag-906520260355.asia-south1.run.app)**
+— `asia-south1`, 1 GiB, scale to zero.
 
 | Piece | Where | Why |
 |---|---|---|
-| Whole stack, one image | HF Space (Docker SDK) | 16 GB RAM, persistent, no sleep |
+| Whole stack, one image | Cloud Run | 1 GiB, scale to zero, free tier covers the usage |
 | Vector DB | Chroma, **baked into the image** | 12 MB — no volume needed |
-| LLM | [Groq](https://console.groq.com) | Free and fast. Key goes in HF **Secrets** |
+| LLM | [Groq](https://console.groq.com) | Free and fast. Key lives in Secret Manager |
 | Web search | DuckDuckGo | No signup, no key |
 
 The three prerequisites this needed — a single-service image, CORS no longer

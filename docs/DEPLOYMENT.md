@@ -5,18 +5,28 @@ hybrid retrieval and cross-encoder reranking included.
 
 ---
 
-## What is left
+## Live
 
-The image is built and verified locally. These steps have to be done by hand:
+**https://adaptive-crag-906520260355.asia-south1.run.app** — Google Cloud Run,
+`asia-south1` (Mumbai), deployed from GitHub via Cloud Build on every push to `main`.
 
-- [ ] Create the Space (Step 2)
-- [ ] Set `GROQ_API_KEY` in the Space's **Settings → Secrets** (Step 3)
-- [ ] Push (Step 4) and wait for the build — first build is slow, it pulls two models
-- [ ] Open the URL, run one local query and one web-fallback query (Step 5)
-- [ ] Put the live URL in the README
+| Setting | Value | Why |
+|---|---|---|
+| Memory | 1 GiB | 489 MiB measured after a query, plus headroom |
+| CPU | 1 | |
+| Concurrency | 8 | each query holds the reranker in memory; 80 would exhaust 1 GiB |
+| Min instances | 0 | scale to zero, so idle costs nothing |
+| Max instances | 3 | caps the bill if the URL is shared |
+| Request timeout | 300s | a web-fallback query runs ~8s; cold start is longer |
+| Billing | Request-based | no background work outlives a response |
 
-Everything the code needed is done: the single-service image exists, CORS no longer
-defaults to `*`, and the Chroma index is built into the image at build time.
+The only secret is `GROQ_API_KEY`, mounted from Secret Manager as an environment
+variable. `SEARCH_PROVIDER=duckduckgo` needs no key, so the deploy has
+one secret rather than two.
+
+**Cold start is slow** — the image is 1.32 GB because the embedding model, the
+cross-encoder and the Chroma index are all baked in at build time. That is the
+trade for a first request that does not wait on a model download.
 
 ---
 
@@ -56,82 +66,43 @@ wrong trade.
 
 ---
 
-## HuggingFace Spaces
+## Cloud Run, and what it cost in failures
 
-16 GB RAM on the free tier, Docker support, no sleep, and persistent storage — an
-ML demo's natural home.
+The image and the sizing work above were done against a HuggingFace Space. Cloud
+Run was chosen instead so that all three portfolio projects sit on one platform
+with one billing account, one region and one set of console habits, rather than
+three providers to keep alive.
 
-### Step 1 — prerequisites (done)
+The deploy itself is four steps — create the secret, point Cloud Run at the
+GitHub repo, set the container limits, mount the secret — but two of them went
+wrong in ways worth recording.
 
-| | |
-|---|---|
-| Single-service image | `Dockerfile` at the repo root — FastAPI serves the API *and* the built SPA |
-| CORS | `CORS_ORIGINS` setting; default is the two local dev origins, not `*` |
-| Vector index | built **into the image** at build time via `ingest.py`, then asserted non-empty |
+### The env var name is not the secret name
 
-The index is built rather than copied on purpose: `backend/vectorstore/` is gitignored,
-so a fresh clone — which is what a Space builds from — has nothing to copy and would boot
-with an empty index. `backend/data/` *is* in git, so the image can build the index itself,
-and it can never drift from the corpus it represents.
-
-### Step 2 — create the Space
-
-[huggingface.co/new-space](https://huggingface.co/new-space) → **Docker** SDK → blank
-template → free CPU hardware.
-
-### Step 3 — the Space README
-
-A Space is configured by YAML front matter in its own `README.md`. Create it in the
-Space repo (not this one — this repo's README is for GitHub):
+Cloud Run's secret form has two fields, and they are easy to conflate. The
+resulting YAML was:
 
 ```yaml
----
-title: Adaptive CRAG
-emoji: 🔍
-colorFrom: indigo
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
+- name: crag-groq-api-key        # env var name inside the container
+  valueFrom:
+    secretKeyRef:
+      name: crag-groq-api-key    # the Secret Manager secret
 ```
 
-`app_port: 7860` matches the `EXPOSE`/`CMD` default in the Dockerfile.
+The secret mounted correctly; it just arrived under the wrong name, so
+`settings.GROQ_API_KEY` stayed empty. The revision was green, the container was
+healthy, `/health` returned 200 — and every query returned a 500.
 
-Then **Settings → Variables and secrets → New secret**: `GROQ_API_KEY`.
+**What made it findable:** `/health` reports `groq_key_set` as a boolean. `false`
+on a healthy container says the key is absent, not wrong — an invalid key would
+have produced a 401 from Groq instead. The fix is `name: GROQ_API_KEY` on the
+outer field.
 
-> Secrets go here, never in the Dockerfile and never in `.env.example` — that file is
-> committed. A real key did once reach `.env.example` in this repo's history; it was
-> purged and revoked, which is a lesson worth not repeating.
+### Health check path
 
-### Step 4 — push
-
-```bash
-git remote add space https://huggingface.co/spaces/<user>/adaptive-crag
-git push space main
-```
-
-The first build takes a while: it installs dependencies, pulls the embedding and
-reranker models (~100 MB), and runs the ingest. Subsequent builds reuse the layers.
-
-### Step 5 — verify
-
-```bash
-curl https://<user>-adaptive-crag.hf.space/health
-# {"status":"ok","indexed_chunks":22,...}   <- 22 is the check; 0 means ingest failed
-```
-
-Then in the UI run both routes, because they exercise different code:
-
-| Question | Expected |
-|---|---|
-| *Why does chunk overlap matter when splitting documents?* | Local DB badge, `grade: yes` |
-| *What is the current pricing of the Tavily search API?* | Web Fallback badge, `grade: no` |
-
-Both were verified against this exact image locally — 15.9 s and 9.1 s respectively.
-
----
-
+This project serves `/health`, not `/api/health`. An HTTP startup probe pointed
+at the wrong path fails a container that is working. The default TCP probe on
+the container port is enough here and is what the service uses.
 ## Gotchas
 
 - **Groq retires model ids.** `llama-3.3-70b-versatile` already 404s. Check before a demo:

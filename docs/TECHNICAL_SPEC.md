@@ -163,7 +163,7 @@ class CRAGState(TypedDict, total=False):
 **Only `logs` has a reducer.** It is additive (`operator.add`), so every node appends one
 line and no node needs to know what ran before it — the execution trace assembles itself.
 
-`documents` and `sources` deliberately have **no reducer**: they use plain overwrite
+`documents` and `sources` have **no reducer**: they use plain overwrite
 semantics. An additive reducer there would mean local chunks that were just graded
 *irrelevant* stay in the context window alongside the web snippets that replaced them —
 re-introducing the exact hallucination risk the grading step exists to remove. Same for

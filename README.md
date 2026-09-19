@@ -11,6 +11,8 @@
 [![Groq](https://img.shields.io/badge/Groq-gpt--oss--120b-f97316)](backend/app/config.py)
 [![license](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
 
+**[Live demo](https://adaptive-crag-906520260355.asia-south1.run.app)** · Cloud Run, `asia-south1`
+
 </div>
 
 Naive RAG trusts whatever the vector DB returns. CRAG adds a verification step: a
@@ -193,14 +195,12 @@ Beyond the batch `POST /api/query`, the same graph is exposed three more ways:
 
 | | |
 |---|---|
-| **[PROJECT_WALKTHROUGH.md](docs/PROJECT_WALKTHROUGH.md)** | **Start here.** Flowchart, how it was built step by step, how it runs |
-| [CODE_QA.md](docs/CODE_QA.md) | 27 questions with answers about the code — why the grader is binary, why `no` parses before `yes`, why the fallback replaces documents instead of merging |
+| **[PROJECT_WALKTHROUGH.md](docs/PROJECT_WALKTHROUGH.md)** | **Start here.** How the pipeline works end to end, and how it was built |
 | [RESULTS.md](backend/eval/RESULTS.md) | Every measurement, including the negative ones |
-| [INTERVIEW_NOTES.md](docs/INTERVIEW_NOTES.md) | Pitch, trade-offs, anticipated Q&A |
 | [TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) · [CODE_NOTES.md](docs/CODE_NOTES.md) | Architecture, state schema, file-by-file notes |
-| [RAG_FUNDAMENTALS.md](docs/RAG_FUNDAMENTALS.md) | RAG concepts, and an honest map of which pipeline stages this project skips |
+| [BUILD_PLAN.md](docs/BUILD_PLAN.md) | The order things were built in, and where the time actually went |
 | [ROADMAP.md](docs/ROADMAP.md) · [SETUP.md](docs/SETUP.md) | What was built when; environment setup |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploying to a HuggingFace Space, and the memory measurements that ruled Render out |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploying to Cloud Run, and the memory measurements behind the sizing |
 
 ---
 
@@ -214,8 +214,8 @@ Stated rather than hidden — the System Status page says the same thing in the 
   non-empty, because `vectorstore/` is gitignored and a fresh clone would
   otherwise boot empty. Verified locally: both routes answer, `indexed_chunks: 22`.
   Render was measured and ruled out — **698 MB peak against a 512 MB limit**, no
-  persistent disk, and it sleeps. Target is a HuggingFace Space (16 GB);
-  step-by-step in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+  persistent disk, and it sleeps. Deployed on Cloud Run instead; the sizing and
+  the two failures it took are in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - **The answer-correctness A/B.** Only the baseline arm ran — the treatment arm
   hit Groq's daily token cap. Whether reranking improves *answers* is still open.
 - **The full 5k SciFact corpus + 300-query set.** Needs ~8 GB to Docker; this
