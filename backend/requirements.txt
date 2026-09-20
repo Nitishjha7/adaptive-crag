@@ -1,47 +1,47 @@
 # --- Agent orchestration -------------------------------------------------
-langgraph>=0.2.60
-langchain-core>=0.3.29
+langgraph==1.2.11
+langchain-core==1.6.3
 
 # --- LLM provider (Groq: free tier, very fast inference) ------------------
-langchain-groq>=0.2.3
+langchain-groq==1.1.3
 
 # --- Local knowledge base ------------------------------------------------
-langchain-chroma>=0.2.0
-chromadb>=0.5.23
+langchain-chroma==1.1.0
+chromadb==1.5.9
 
 # --- Embeddings (local ONNX, no API key needed) --------------------------
-langchain-community>=0.3.14
-langchain-text-splitters>=0.3.5
-fastembed>=0.5.0
+langchain-community==0.4.2
+langchain-text-splitters==1.1.2
+fastembed==0.8.0
 
 # --- Hybrid retrieval + reranking (Phase 9) ------------------------------
 # BM25: keyword-based scoring. Vector search is weak on identifiers and exact
 # tokens; BM25 is strong there. The two are fused with RRF.
-rank-bm25>=0.2.2
+rank-bm25==0.2.2
 # The reranker cross-encoder ships inside fastembed itself (TextCrossEncoder) —
 # no new dependency, and it stays local / ONNX / no-key like everything else.
 
 # --- Web search fallback (Phase 3) ---------------------------------------
 # Default provider: no API key needed
-ddgs>=9.0.0
+ddgs==9.16.0
 # Optional upgrade: better snippets, but needs a signup (SEARCH_PROVIDER=tavily)
-tavily-python>=0.5.0
+tavily-python==0.8.4
 
 # --- API layer (Phase 5) -------------------------------------------------
-fastapi>=0.115.6
-uvicorn[standard]>=0.34.0
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
 
 # --- Monitoring (Phase 10) ------------------------------------------------
-prometheus-client>=0.21.0
+prometheus-client==0.26.0
 
 # --- Tests ---------------------------------------------------------------
-pytest>=8.3.0
-httpx>=0.28.0        # needed for fastapi's TestClient
+pytest==9.1.1
+httpx==0.28.1
 
 # --- Config / validation -------------------------------------------------
-pydantic>=2.10.4
-pydantic-settings>=2.7.0
-python-dotenv>=1.0.1
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
 
 # Upload path: PDF text extraction, and the form parser FastAPI needs for
 # multipart bodies.
