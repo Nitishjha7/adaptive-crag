@@ -68,7 +68,7 @@ an edit needs no rebuild. It is faster than `docker compose` for backend work.
 ```powershell
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 124 tests, no API key needed
+.\dev.ps1 test               # 129 tests, no API key needed
 .\dev.ps1 eval               # routing eval — real LLM and live web calls
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit
 .\dev.ps1 serve -Port 8042   # FastAPI alone
@@ -83,7 +83,8 @@ an edit needs no rebuild. It is faster than `docker compose` for backend work.
 
 ## 5. Ingestion and switching corpus
 
-The index is built offline, — there is no upload endpoint.
+The built-in index is created offline. A visitor can also upload a PDF at runtime
+(`POST /api/upload`), which is indexed into a session-scoped collection.
 
 ```powershell
 .\dev.ps1 ingest             # embed backend/data/ into Chroma

@@ -417,7 +417,7 @@ adaptive-crag/
 │   │   │   └── semantic.py            # facts distilled from clusters of ungrounded episodes
 │   │   └── __main__.py                # `python -m app "question"` CLI
 │   ├── data/                          # 7-doc controlled corpus with a deliberate gap
-│   ├── tests/                         # 124 tests — routing, grading, validation, retrieval, corpus, API, memory
+│   ├── tests/                         # 129 tests — routing, grading, validation, retrieval, corpus, API, memory
 │   ├── vectorstore/                   # persisted Chroma index (gitignored)
 │   ├── ingest.py                      # docs -> chunks -> embeddings -> Chroma
 │   ├── main.py                        # FastAPI app

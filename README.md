@@ -143,6 +143,11 @@ Backend-only dev loop (`.\dev.ps1 test`, `ingest`, `eval`, `ask`) is in
 5. **`generate`** — answers strictly from the surviving context.
 6. **`validate_guardrails`** — independent groundedness check plus PII redaction.
 
+The corpus is whatever the container was started with, or a PDF the visitor
+uploads: `POST /api/upload` parses and indexes it into a session-scoped
+collection, and queries carrying `corpus=upload:<session>` retrieve from that
+instead. Same chunker, same embeddings, same graph.
+
 | Layer | Technology |
 |---|---|
 | Orchestration | LangGraph (StateGraph), conditional edges |
@@ -220,8 +225,8 @@ Stated rather than hidden — the System Status page says the same thing in the 
   hit Groq's daily token cap. Whether reranking improves *answers* is still open.
 - **The full 5k SciFact corpus + 300-query set.** Needs ~8 GB to Docker; this
   laptop gives 3.5. That run is what would settle the reranking question.
-- No document upload API (ingestion is a deliberate offline step), no context
-  filter, no prompt-injection defence. Each *query's own state* still runs
+- No context filter, no prompt-injection defence. Uploads are session-scoped and
+  live on the container filesystem, so they survive until the instance restarts. Each *query's own state* still runs
   independently (`CRAGState` carries nothing between requests) — but
   `app/memory/` now remembers *across* queries: episodic (has a similar
   question been asked before, and did its answer pass groundedness),
@@ -230,7 +235,7 @@ Stated rather than hidden — the System Status page says the same thing in the 
   client identity of any kind to scope one to. See
   [docs/CODE_NOTES.md](docs/CODE_NOTES.md).
 
-124 tests, no API key needed: `.\dev.ps1 test`
+129 tests, no API key needed: `.\dev.ps1 test`
 
 ---
 

@@ -98,7 +98,7 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, so 124 tests run with no API key.
+swapped for a scripted fake in one line, so 129 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
@@ -483,7 +483,7 @@ this and should not be claimed as such.
 
 | | |
 |---|---|
-| **124 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence · episodic/semantic memory recall against a real embedding model. No API key needed |
+| **129 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence · episodic/semantic memory recall against a real embedding model. No API key needed |
 | **Routing eval** (`.\dev.ps1 eval`) | 20 labelled cases — 20/20, 0 missed fallbacks, 3 runs |
 | **Ambiguity eval** (`--repeat 3`) | 8 half-covered cases, scored for route stability |
 | **Retrieval A/B** | Same 44 cases with `USE_HYBRID`/`USE_RERANKER` off vs on — see [RESULTS](../backend/eval/RESULTS.md) |
@@ -585,7 +585,7 @@ episodes, ran consolidation, and the same still-running process immediately
 answered a fourth, rephrased question with the new fact in `memory_note` — no
 restart needed.
 
-124 tests now pass (up from 104), the memory tests using the real embedding model
+129 tests now pass (up from 104), the memory tests using the real embedding model
 rather than a fake — unlike `fake_llm`, a fake embedding would not exercise the
 actual similarity search under test.
 
@@ -600,7 +600,7 @@ docker compose up --build     # full stack → :3001 (UI) · :8001 (API docs)
 
 .\dev.ps1 ingest [-Reset]     # backend/data/ → Chroma
 .\dev.ps1 ask "..."           # one query, full trace, no server
-.\dev.ps1 test                # 124 tests, no API key needed
+.\dev.ps1 test                # 129 tests, no API key needed
 .\dev.ps1 eval                # 20 labelled cases — real LLM + live web
 .\dev.ps1 eval --repeat 3     # + 8 ambiguous cases, scored for stability
 .\dev.ps1 serve -Port 8042    # API alone

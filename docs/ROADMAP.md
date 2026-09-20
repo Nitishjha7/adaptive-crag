@@ -18,7 +18,7 @@ in [BUILD_PLAN.md](BUILD_PLAN.md). This file is the current state.
 | **Dashboard** | React + Vite + Tailwind — Chat, Documents, Evaluation, System Status. View lives in the URL hash, so refresh and back both work |
 | **Eval harness** | `backend/eval/` — routing accuracy, fallback recall/precision, groundedness, per-route LLM call counts, retrieval recall@k, answer correctness |
 | **Second corpus** | BEIR SciFact — 500 abstracts whose relevance labels ship with the dataset |
-| **Tests** | 124, no API key required |
+| **Tests** | 129, no API key required |
 | **Streaming** | `POST /api/query/stream` — SSE, one progress event per graph node, phrased around the routing decision |
 | **LLM gateway** | `get_llm()` — Groq → Groq `with_fallbacks()` chain, off by default, temperature preserved through the chain |
 | **Token/cost tracking** | Per-query, per-model tokens and USD cost — the precise upgrade to the "3 vs 4 calls" proxy |
@@ -65,7 +65,9 @@ Full analysis: [backend/eval/RESULTS.md](../backend/eval/RESULTS.md).
 - **The full 5k SciFact corpus with a 300-query set** — needs roughly 8 GB of Docker
   memory against the 3.5 GB available here. That run is what would settle the
   reranking question.
-- **No document upload API.** Ingestion is a deliberate offline step.
+- **Uploads are ephemeral.** A visitor's PDF is indexed into a session-scoped
+  collection on the container filesystem, which Cloud Run recycles. Durable
+  storage means object storage plus a hosted vector DB.
 - **No long-term memory.** Episodic and semantic memory across queries shipped
   (`app/memory/`, see Built above). Long-term (per-client preferences, what
   the sibling Self-Healing SQL Agent scopes by `thread_id`) genuinely does
