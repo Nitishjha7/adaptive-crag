@@ -214,7 +214,7 @@ which is faster to iterate in.
 
 ---
 
-## backend/tests/ — 122 tests, `.\dev.ps1 test`
+## backend/tests/ — 124 tests, `.\dev.ps1 test`
 
 | File | What it covers |
 |---|---|

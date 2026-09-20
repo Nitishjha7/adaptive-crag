@@ -230,7 +230,7 @@ Stated rather than hidden — the System Status page says the same thing in the 
   client identity of any kind to scope one to. See
   [docs/CODE_NOTES.md](docs/CODE_NOTES.md).
 
-122 tests, no API key needed: `.\dev.ps1 test`
+124 tests, no API key needed: `.\dev.ps1 test`
 
 ---
 

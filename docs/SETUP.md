@@ -68,7 +68,7 @@ an edit needs no rebuild. It is faster than `docker compose` for backend work.
 ```powershell
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 122 tests, no API key needed
+.\dev.ps1 test               # 124 tests, no API key needed
 .\dev.ps1 eval               # routing eval — real LLM and live web calls
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit
 .\dev.ps1 serve -Port 8042   # FastAPI alone
