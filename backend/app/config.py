@@ -5,6 +5,7 @@ objects. Every node takes its LLM, embeddings and vector store from here, so
 swapping a model is a one-place change and mocking in tests is easy.
 """
 
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 
@@ -200,18 +201,59 @@ def get_embeddings():
     return FastEmbedEmbeddings(model_name=get_settings().EMBEDDING_MODEL)
 
 
+# Which corpus this request is reading. CORPUS in the environment is the
+# default; a request may override it, and the API serves concurrent requests,
+# so a module global would let one request answer from another's index.
+_CURRENT_CORPUS: ContextVar[str | None] = ContextVar("crag_corpus", default=None)
+
+
+def set_current_corpus(corpus: str | None) -> None:
+    """Pin this request to a corpus. Called once, by the API layer."""
+    _CURRENT_CORPUS.set(corpus or None)
+
+
+def active_corpus() -> str:
+    """The corpus this request reads: the override, else the configured one."""
+    return _CURRENT_CORPUS.get() or get_settings().CORPUS
+
+
+def collection_for(corpus: str) -> str:
+    """One Chroma collection per corpus - see Settings.collection_name.
+
+    ``upload:<session>`` addresses a session's own uploaded documents. Routing it
+    through the same function means the retriever, BM25 and the stats endpoints
+    all follow an upload without any of them knowing uploads exist.
+    """
+    if corpus.startswith("upload:"):
+        from app.tools.uploads import session_collection
+
+        return session_collection(corpus.split(":", 1)[1])
+    return "crag_docs" if corpus == "concepts" else f"crag_{corpus}"
+
+
 @lru_cache
+def _vectorstore_for(collection: str):
+    """One handle per collection. Cached on the collection name rather than on
+    nothing, so switching corpus does not hand back the previous index."""
+    from langchain_chroma import Chroma
+
+    return Chroma(
+        collection_name=collection,
+        embedding_function=get_embeddings(),
+        persist_directory=get_settings().VECTORSTORE_DIR,
+    )
+
+
+def reset_vectorstore_cache() -> None:
+    """Drop the cached handles. Ingestion calls this after writing, so the next
+    read sees the new chunks rather than a handle opened before them."""
+    _vectorstore_for.cache_clear()
+
+
 def get_vectorstore():
-    """Handle to the persisted Chroma collection.
+    """Handle to the persisted Chroma collection for the active corpus.
 
     Embedded mode — no separate database service, just a directory. The same
     directory the ingestion script writes and the `retrieve` node reads.
     """
-    from langchain_chroma import Chroma
-
-    s = get_settings()
-    return Chroma(
-        collection_name=s.collection_name,
-        embedding_function=get_embeddings(),
-        persist_directory=s.VECTORSTORE_DIR,
-    )
+    return _vectorstore_for(collection_for(active_corpus()))

@@ -42,3 +42,8 @@ httpx>=0.28.0        # needed for fastapi's TestClient
 pydantic>=2.10.4
 pydantic-settings>=2.7.0
 python-dotenv>=1.0.1
+
+# Upload path: PDF text extraction, and the form parser FastAPI needs for
+# multipart bodies.
+pypdf==5.1.0
+python-multipart==0.0.20

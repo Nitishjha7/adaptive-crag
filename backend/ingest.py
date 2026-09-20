@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.config import get_settings, get_vectorstore
+from app.config import get_settings, get_vectorstore, reset_vectorstore_cache
 
 
 def load_documents(data_dir: Path):
@@ -97,7 +97,7 @@ def main() -> int:
     if args.corpus:
         s.CORPUS = args.corpus
         # collection_name derives from CORPUS, so the cached store is stale
-        get_vectorstore.cache_clear()
+        reset_vectorstore_cache()
 
     store_dir = Path(s.VECTORSTORE_DIR)
     store = get_vectorstore()
@@ -112,7 +112,7 @@ def main() -> int:
             store._client.delete_collection(s.collection_name)
         except Exception:  # noqa: BLE001 — the collection may not exist yet
             pass
-        get_vectorstore.cache_clear()
+        reset_vectorstore_cache()
         store = get_vectorstore()
 
     from app.tools.vector_search import collection_count

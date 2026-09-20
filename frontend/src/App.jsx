@@ -5,8 +5,9 @@ import Message from "./components/Message.jsx";
 import Sidebar, { Logo } from "./components/Sidebar.jsx";
 import DocumentsView from "./views/DocumentsView.jsx";
 import EvaluationView from "./views/EvaluationView.jsx";
-import SystemView from "./views/SystemView.jsx";
 import useHistory from "./useHistory.js";
+import useUploads from "./useUploads.js";
+import UploadPanel from "./components/UploadPanel.jsx";
 
 /** Fixed demo queries with their expected route. Typing something at random in
  *  a live demo and hoping the fallback fires is the mistake that breaks demos.
@@ -45,7 +46,7 @@ const SUGGESTIONS_BY_CORPUS = {
  * SPA-fallback rule. With path routing, refreshing on `/eval` would 404, because
  * no such file exists.
  */
-const VIEWS = ["chat", "documents", "eval", "system"];
+const VIEWS = ["chat", "documents", "eval"];
 
 function viewFromHash() {
   const v = window.location.hash.replace(/^#\/?/, "");
@@ -77,6 +78,7 @@ export default function App() {
           question: turns[lastAnswerIndex - 1]?.text ?? "",
         };
   const history = useHistory();
+  const uploads = useUploads();
   const endRef = useRef(null);
 
   // Both in one effect: the rail shows measured stats and the corpus side by
@@ -127,7 +129,9 @@ export default function App() {
       const res = await fetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        // corpus rides along so an uploaded document is what gets searched.
+        // Empty means the corpus the container was started with.
+        body: JSON.stringify({ question, corpus: uploads.corpus }),
       });
 
       if (!res.ok) {
@@ -225,7 +229,6 @@ export default function App() {
           <div className="p-6">
             {view === "eval" && <EvaluationView stats={stats} />}
             {view === "documents" && <DocumentsView stats={stats} />}
-            {view === "system" && <SystemView stats={stats} />}
           </div>
         )}
 
@@ -292,6 +295,13 @@ export default function App() {
                     ))}
                   </div>
 
+                  {/* Upload sits above the pipeline diagram because it is the
+                      first thing a visitor can act on: the demo answers from
+                      their document, not only from the shipped corpus. */}
+                  <div className="mt-7 w-full max-w-2xl">
+                    <UploadPanel uploads={uploads} />
+                  </div>
+
                   <div className="mt-7 w-full max-w-3xl rounded-xl border border-ink-700 bg-ink-900/60 p-4">
                     <p className="mb-3.5 text-center text-[11px] font-medium uppercase tracking-wide text-slate-500">
                       How a question is answered
@@ -339,6 +349,14 @@ export default function App() {
             </div>
 
             <div className="border-t border-ink-700 px-5 py-4">
+              {/* Once a document is uploaded the answers come from it, and
+                  that has to be visible during the conversation too - not only
+                  on the empty state where the upload happened. */}
+              {uploads.files.length > 0 && (
+                <div className="mb-3">
+                  <UploadPanel uploads={uploads} compact />
+                </div>
+              )}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();

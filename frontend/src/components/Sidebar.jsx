@@ -14,7 +14,6 @@ const NAV = [
   { id: "chat", label: "Chat", icon: ListIcon },
   { id: "documents", label: "Documents", icon: DocIcon },
   { id: "eval", label: "Evaluation", icon: ChartIcon },
-  { id: "system", label: "System Status", icon: PulseIcon },
 ];
 
 function ChatIcon(p) {
@@ -43,13 +42,6 @@ function ListIcon(p) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
       <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
-    </svg>
-  );
-}
-function PulseIcon(p) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...p}>
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
     </svg>
   );
 }

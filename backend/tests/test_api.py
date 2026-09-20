@@ -125,3 +125,108 @@ def test_documents_makes_no_llm_call(client):
     r = client.get("/api/documents")
     assert r.status_code == 200
     assert "corpus" in r.json()
+
+
+class TestUploads:
+    """The upload path: parse, chunk, index, and keep sessions apart.
+
+    These exercise the parser and the session scoping, not the LLM - an upload
+    that indexes into the wrong collection is the failure that matters, because
+    on a public demo it would answer one visitor from another's document.
+    """
+
+    def _pdf(self, pages: int = 3, line: str = "The Zorblax protocol uses seven nodes."):
+        """A minimal valid PDF, built by hand so the test needs no fixture file."""
+        import io
+
+        objs = []
+        kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(pages))
+        objs.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+        objs.append(f"<< /Type /Pages /Kids [{kids}] /Count {pages} >>".encode())
+        objs.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+        for i in range(pages):
+            stream = f"BT /F1 11 Tf 50 750 Td ({line} Page {i + 1}.) Tj ET".encode()
+            objs.append(
+                f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources "
+                f"<< /Font << /F1 3 0 R >> >> /Contents {5 + 2 * i} 0 R >>".encode()
+            )
+            objs.append(
+                b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream"
+            )
+
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n")
+        offsets = []
+        for i, o in enumerate(objs, 1):
+            offsets.append(out.tell())
+            out.write(f"{i} 0 obj\n".encode() + o + b"\nendobj\n")
+        xref = out.tell()
+        out.write(f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode())
+        for o in offsets:
+            out.write(f"{o:010d} 00000 n \n".encode())
+        out.write(
+            f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF".encode()
+        )
+        return out.getvalue()
+
+    def test_pdf_is_parsed_chunked_and_indexed(self, client):
+        r = client.post(
+            "/api/upload",
+            data={"session": "pytestalpha"},
+            files={"file": ("spec.pdf", self._pdf(), "application/pdf")},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["chunks"] > 0
+        assert body["characters"] > 0
+        client.delete("/api/upload/pytestalpha")
+
+    def test_sessions_cannot_see_each_other(self, client):
+        """The reason uploads are session-scoped at all."""
+        client.post(
+            "/api/upload",
+            data={"session": "pytestone"},
+            files={"file": ("one.pdf", self._pdf(line="Alpha fact."), "application/pdf")},
+        )
+        r = client.get("/api/documents?corpus=upload:pytesttwo")
+        assert r.json()["documents"] == [], "a second session saw the first one's upload"
+        client.delete("/api/upload/pytestone")
+
+    def test_an_unsupported_type_is_a_400_not_a_500(self, client):
+        r = client.post(
+            "/api/upload",
+            data={"session": "pytestalpha"},
+            files={"file": ("photo.png", b"\x89PNG\r\n", "image/png")},
+        )
+        assert r.status_code == 400
+        assert "unsupported" in r.json()["detail"].lower()
+
+    def test_a_pdf_with_no_text_layer_says_so(self, client):
+        """A scan indexes nothing. Silently succeeding would look like a
+        retrieval bug rather than an unsupported input."""
+        import pytest as _pytest
+        from pypdf import PdfWriter
+
+        from app.tools.uploads import UploadError, extract_text
+
+        # A real blank page, not a page whose text happens to be a space -
+        # pypdf still finds the glyphs in the latter.
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        import io
+
+        buf = io.BytesIO()
+        writer.write(buf)
+
+        with _pytest.raises(UploadError, match="text layer"):
+            extract_text("scan.pdf", buf.getvalue())
+
+    def test_clearing_a_session_removes_its_documents(self, client):
+        client.post(
+            "/api/upload",
+            data={"session": "pytestclear"},
+            files={"file": ("gone.pdf", self._pdf(), "application/pdf")},
+        )
+        assert client.get("/api/documents?corpus=upload:pytestclear").json()["documents"]
+        client.delete("/api/upload/pytestclear")
+        assert client.get("/api/documents?corpus=upload:pytestclear").json()["documents"] == []

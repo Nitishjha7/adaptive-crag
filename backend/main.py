@@ -13,13 +13,13 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
+from app.config import active_corpus, get_settings, set_current_corpus
 from app.graph.build_graph import build_crag_graph, run_query_stream
 from app.logging_config import configure_json_logging
 from app.memory.episodic import (
@@ -80,6 +80,9 @@ app.add_middleware(
 
 class QueryIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
+    # Which index to answer from. Empty means the configured default, so an
+    # older client that does not send it keeps working.
+    corpus: str = Field(default="", max_length=32)
 
 
 class QueryOut(BaseModel):
@@ -119,8 +122,11 @@ async def query(body: QueryIn) -> QueryOut:
 
     # One tracker per request via a contextvar (app/token_usage.py) — the LLM
     # clients are cached and shared across requests, so this is what keeps
-    # concurrent requests' token counts from mixing.
+    # concurrent requests' token counts from mixing. The corpus rides the same
+    # mechanism: run_in_threadpool copies the context, so the retriever below
+    # reads whichever index this request asked for.
     tracker = new_tracker()
+    set_current_corpus(body.corpus)
 
     # graph.invoke is synchronous and blocks on LLM and search calls. Run it in a
     # threadpool so one slow request cannot stall the whole event loop.
@@ -171,6 +177,8 @@ async def query_stream(body: QueryIn) -> StreamingResponse:
     """
     import asyncio
     import json
+
+    set_current_corpus(body.corpus)
 
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_event_loop()
@@ -262,7 +270,7 @@ async def consolidate_memory():
 
 
 @app.get("/api/stats")
-async def stats():
+async def stats(corpus: str = ""):
     """Feeds the dashboard's Evaluation and System views.
 
     Every value comes from a **real source** — documents counted for real, chunk
@@ -278,6 +286,9 @@ async def stats():
     from app.config import BACKEND_DIR
     from app.tools.vector_search import collection_count
 
+    # The picker asks for a corpus; without one this reports the configured
+    # default, which is what every caller did before the picker existed.
+    set_current_corpus(corpus)
     s = get_settings()
 
     # On SciFact "documents" means the corpus's abstracts, not files — counting
@@ -286,7 +297,7 @@ async def stats():
     # to show "—" while the same page said "500 documents" below it, and the
     # comment in `/api/documents` claimed stats provided the count when it did
     # not. Dedupe from the chunks: one abstract is split across several.
-    if s.CORPUS != "concepts":
+    if active_corpus() != "concepts":
         try:
             from app.config import get_vectorstore
 
@@ -323,7 +334,7 @@ async def stats():
     evaluation = None
     # One results file per corpus. Concepts and SciFact numbers are different
     # things, and mixing them would make both meaningless.
-    results_name = "results.json" if s.CORPUS == "concepts" else f"results_{s.CORPUS}.json"
+    results_name = "results.json" if active_corpus() == "concepts" else f"results_{active_corpus()}.json"
     results_path = BACKEND_DIR / "eval" / results_name
     if results_path.exists():
         try:
@@ -353,7 +364,7 @@ async def stats():
             evaluation = None
 
     return {
-        "corpus": s.CORPUS,
+        "corpus": active_corpus(),
         "documents": documents,
         "chunks": chunks,
         "evaluation": evaluation,
@@ -363,7 +374,7 @@ async def stats():
             "reranker_model": s.RERANKER_MODEL if s.USE_RERANKER else None,
             "search_provider": s.SEARCH_PROVIDER,
             "top_k": s.TOP_K,
-            "corpus": s.CORPUS,
+            "corpus": active_corpus(),
             "hybrid": s.USE_HYBRID,
             "reranker": s.USE_RERANKER,
             "groq_key_set": bool(s.GROQ_API_KEY),
@@ -371,8 +382,54 @@ async def stats():
     }
 
 
+@app.post("/api/upload")
+async def upload(session: str = Form(...), file: UploadFile = File(...)):
+    """Index one uploaded document into that session's own corpus.
+
+    Scoped per session because the deployed demo is public: indexing into the
+    shared corpus would let one visitor's document answer another's question.
+    Query it back by passing `corpus=upload:<session>`.
+
+    The work is CPU-bound (PDF parsing, then embedding every chunk), so it runs
+    in a threadpool rather than blocking the event loop the way a large file
+    otherwise would.
+    """
+    from starlette.concurrency import run_in_threadpool
+
+    from app.tools.uploads import UploadError, ingest_upload
+
+    blob = await file.read()
+    try:
+        result = await run_in_threadpool(
+            ingest_upload, session, file.filename or "upload", blob
+        )
+    except UploadError as exc:
+        # The user picked a file this cannot read; that is a 400, not a bug.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - the boundary has to be broad
+        logger.exception("upload failed")
+        raise HTTPException(status_code=500, detail=f"indexing failed: {exc}") from exc
+
+    # A new collection invalidates the BM25 index, which is cached per corpus.
+    from app.tools.bm25_search import bust_cache
+
+    bust_cache()
+    return result
+
+
+@app.delete("/api/upload/{session}")
+async def clear_upload(session: str):
+    """Drop everything a session uploaded, so the demo can be reset."""
+    from app.tools.bm25_search import bust_cache
+    from app.tools.uploads import clear_session
+
+    clear_session(session)
+    bust_cache()
+    return {"cleared": session}
+
+
 @app.get("/api/documents")
-async def documents():
+async def documents(corpus: str = ""):
     """What is in the index — the source for the UI's Documents view.
 
     Two different sources, because the corpora have different shapes:
@@ -388,12 +445,13 @@ async def documents():
 
     from app.config import get_vectorstore
 
+    set_current_corpus(corpus)
     s = get_settings()
 
-    if s.CORPUS == "concepts":
+    if active_corpus() == "concepts":
         data_dir = Path(s.DATA_DIR)
         if not data_dir.exists():
-            return {"corpus": s.CORPUS, "documents": []}
+            return {"corpus": active_corpus(), "documents": []}
 
         # How many chunks each file became. A file list alone says nothing a
         # directory listing does not; the chunk count is what makes the page
@@ -409,7 +467,7 @@ async def documents():
             counts = {}
 
         return {
-            "corpus": s.CORPUS,
+            "corpus": active_corpus(),
             "documents": sorted(
                 (
                     {
@@ -430,7 +488,7 @@ async def documents():
     try:
         raw = get_vectorstore()._collection.get(include=["metadatas"])
     except Exception:  # noqa: BLE001 — the collection may not exist yet
-        return {"corpus": s.CORPUS, "documents": []}
+        return {"corpus": active_corpus(), "documents": []}
 
     seen = {}
     for meta in raw.get("metadatas") or []:
@@ -442,7 +500,7 @@ async def documents():
     # count comes from `/api/stats`; this is a sample.
     docs = list(seen.values())
     return {
-        "corpus": s.CORPUS,
+        "corpus": active_corpus(),
         "total": len(docs),
         "documents": docs[:60],
         "truncated": len(docs) > 60,

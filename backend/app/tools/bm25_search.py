@@ -24,7 +24,7 @@ import re
 from functools import lru_cache
 from typing import List, Optional, Tuple
 
-from app.config import get_settings, get_vectorstore
+from app.config import active_corpus, get_settings, get_vectorstore
 
 # Simple tokenizer: lowercase, alphanumeric runs. No stemming —
 # the benefit of another dependency (nltk/snowball) could not be measured on 22
@@ -37,7 +37,7 @@ def tokenize(text: str) -> List[str]:
 
 
 @lru_cache
-def _build_index():
+def _build_index(corpus: str):
     """Load the whole corpus into memory and build the BM25 index.
 
     **Why the whole corpus:** BM25's IDF depends on a term's *corpus-wide*
@@ -48,8 +48,8 @@ def _build_index():
     real inverted index (Elasticsearch / OpenSearch / Tantivy). The limitation is
     real and is written down in the docs.
 
-    `lru_cache` so the index is built once. It has to be cleared after ingestion
-    — see `bust_cache()`.
+    Keyed on the corpus, so switching does not hand back the previous index.
+    Built once per corpus; cleared after ingestion - see `bust_cache()`.
     """
     from rank_bm25 import BM25Okapi
 
@@ -81,7 +81,7 @@ def bm25_search(query: str, k: Optional[int] = None) -> List[Tuple[str, str]]:
     whole retrieval down.
     """
     k = k or get_settings().TOP_K
-    index, texts, sources = _build_index()
+    index, texts, sources = _build_index(active_corpus())
     if index is None:
         return []
 

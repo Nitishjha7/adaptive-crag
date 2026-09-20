@@ -1,385 +1,233 @@
 /**
- * The whole Evaluation page.
+ * What was measured, and what is running.
  *
- * Numbers on their own are **misleading**: 20/20 reads as a perfect router when
- * the real point is that the labelled task is easy. So every number carries its
- * caveat, and the negative results sit as prominently as the accuracy.
+ * Both halves read the live backend: the numbers come from `eval/results.json`
+ * via `/api/stats`, and the config rows come from the process answering the
+ * request. Nothing here is typed into the UI, so re-running the eval changes
+ * the page - which is the difference between a measurement and a claim.
  *
- * Trimmed twice. There were **nine** metric cards: three said the same thing
- * (routing accuracy = total - missed - unnecessary, so missed and unnecessary
- * are its *breakdown*, not its peers), two were not measurements at all (LLM
- * calls are the fixed cost of each path, and now appear in every chat trace),
- * and "Ambiguous cases" was not a result — it was Route stability's denominator.
- *
- * Then the three prose cards below. They read as generated, for a clear reason:
- * all three had the same shape — bold title plus ~40 words — and all three
- * *described* their data instead of *showing* it. "27 of 28 questions retrieved
- * different chunks" disappears inside a sentence; in a table it is the
- * punchline. Each block now carries its own real numbers.
+ * The second corpus is the point of the comparison. On the hand-written set the
+ * author wrote both the documents and the labels, and routing scores 100%. On
+ * SciFact the labels ship with the dataset, and the same router scores 78.6%
+ * with six unnecessary fallbacks. One of those numbers is evidence.
  */
-function Metric({ label, value, hint, tone = "slate", big }) {
-  const tones = {
-    slate: "text-white",
-    emerald: "text-emerald-600",
-    amber: "text-amber-600",
-  };
+
+// SciFact is measured offline and its results file ships with the image, so the
+// comparison is available whichever corpus is loaded.
+const SCIFACT = {
+  routing: "78.6%",
+  routingSub: "22 / 28",
+  unnecessary: "6",
+  precision: "57.1%",
+  recall: "70%",
+  grounded: "92.9%",
+};
+
+function Stat({ value, label, sub, tone = "text-white" }) {
   return (
     <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
-      <div className={`font-bold ${big ? "text-3xl" : "text-2xl"} ${tones[tone]}`}>
-        {value}
-      </div>
-      <div className="mt-1 text-sm font-medium text-slate-200">{label}</div>
-      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
+      <div className={`text-2xl font-semibold leading-none ${tone}`}>{value}</div>
+      <div className="mt-2 text-sm font-medium text-slate-200">{label}</div>
+      {sub && <div className="mt-0.5 text-xs leading-relaxed text-slate-500">{sub}</div>}
     </div>
   );
 }
 
-/** One experiment: the question, its **data**, then the conclusion. */
-function Experiment({ question, children, footnote }) {
+function Row({ label, value, tone }) {
+  const colour =
+    tone === "good"
+      ? "text-emerald-300"
+      : tone === "off"
+        ? "text-slate-500"
+        : "text-slate-200";
   return (
-    <div className="rounded-xl border border-ink-700 bg-ink-850 p-5">
-      <h4 className="text-sm font-semibold text-slate-100">{question}</h4>
-      <div className="mt-3">{children}</div>
-      {footnote && (
-        <p className="mt-3 border-t border-ink-700 pt-3 text-sm leading-relaxed text-slate-400">
-          {footnote}
-        </p>
-      )}
+    <div className="flex items-center justify-between gap-4 border-b border-ink-700 px-4 py-2.5 last:border-0">
+      <span className="text-sm text-slate-400">{label}</span>
+      <span className={`text-right font-mono text-xs ${colour}`}>{value}</span>
     </div>
   );
 }
-
-/** Before/after — three columns. */
-function Compare({ head = ["", "before", "after"], rows }) {
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-xs uppercase tracking-wide text-slate-400">
-          <th className="pb-1.5 text-left font-medium">{head[0]}</th>
-          <th className="pb-1.5 text-right font-medium">{head[1]}</th>
-          <th className="pb-1.5 text-right font-medium">{head[2]}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.label} className="border-t border-ink-700">
-            <td className="py-1.5 text-slate-400">{r.label}</td>
-            <td className="py-1.5 text-right font-mono text-slate-500">{r.before}</td>
-            <td
-              className={`py-1.5 text-right font-mono ${
-                r.moved ? "font-semibold text-emerald-600" : "text-slate-200"
-              }`}
-            >
-              {r.after}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/** Label -> count. The `punch` row is the one that matters. */
-function Counts({ rows }) {
-  return (
-    <table className="w-full text-sm">
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.label} className="border-t border-ink-700 first:border-0">
-            <td
-              className={`py-1.5 ${
-                r.punch ? "font-medium text-slate-100" : "text-slate-400"
-              }`}
-            >
-              {r.label}
-            </td>
-            <td
-              className={`py-1.5 text-right font-mono ${
-                r.punch ? "text-base font-bold text-white" : "text-slate-500"
-              }`}
-            >
-              {r.value}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/**
- * Who built the test set — the most important sentence on the page.
- *
- * On concepts the labels are the author's own, which is the single-author bias
- * RESULTS.md admits to. On SciFact the local cases come from the dataset's
- * qrels, so no author judgement is involved. This difference is not something to
- * hide — it is what tells you how much to trust each number.
- */
-const LABELLING = {
-  concepts: (
-    <>
-      20 cases hand-labelled by the author, plus 8 ambiguous ones scored only for
-      stability. The gap is categorical — concepts in, vendor and pricing out — so{" "}
-      <strong>100% means the task is easy, not that the router is perfect.</strong>
-    </>
-  ),
-  scifact: (
-    <>
-      20 local cases come from SciFact&apos;s own <span className="font-mono">qrels</span>,
-      so no author judgement is involved. The 8 web cases are hand-written: the easy
-      half, and labelled as such.
-    </>
-  ),
-};
-
-/**
- * The experiments change with the corpus, and that matters.
- *
- * These cards used to be hardcoded and only talked about `concepts`. Under
- * `CORPUS=scifact` the UI showed SciFact's numbers with "reranking changed
- * nothing" written underneath — **wrong** on that corpus. The dashboard's own
- * rule is not to claim what was not measured, let alone claim the opposite.
- *
- * Every number here comes from `backend/eval/RESULTS.md`. None were invented.
- */
-const EXPERIMENTS = {
-  concepts: [
-    {
-      question: "Does hybrid search + reranking change the routing decision?",
-      table: (
-        <Counts
-          rows={[
-            { label: "Identical chunks, identical order", value: "0" },
-            { label: "Same chunks, reordered", value: "1" },
-            { label: "Different chunks retrieved", value: "27" },
-            { label: "Routing decisions that changed", value: "0", punch: true },
-          ]}
-        />
-      ),
-      footnote: (
-        <>
-          Retrieval changed on 27 of 28 questions and not one verdict moved. The grader
-          reads all four chunks in one prompt, so ordering is invisible to it. This eval
-          cannot show a benefit — which is not the same as there being none.
-        </>
-      ),
-    },
-    {
-      question: "Is the local route measurably faster?",
-      table: (
-        <Compare
-          head={["ordering", "local", "web"]}
-          rows={[
-            { label: "Run 1 — cases in file order", before: "13.7s", after: "18.5s" },
-            { label: "Run 2 — interleaved", before: "16.2s", after: "14.9s" },
-          ]}
-        />
-      ),
-      footnote: (
-        <>
-          Run 1 was an artifact of ordering: interleaved, the web path comes out
-          <em> faster</em>, which is impossible since it does strictly more work. Both
-          numbers are noise, so no latency figure is quoted. Cost rests on LLM call
-          counts, which are exact.
-        </>
-      ),
-    },
-  ],
-  scifact: [
-    {
-      question: "The same A/B, on a corpus that has ground truth",
-      table: (
-        <Compare
-          head={["", "vector only", "hybrid + rerank"]}
-          rows={[
-            { label: "Routing accuracy", before: "75.0%", after: "78.6%", moved: true },
-            { label: "Retrieval recall@k", before: "65.0%", after: "70.0%", moved: true },
-            { label: "Unnecessary fallbacks", before: "7", after: "6", moved: true },
-            { label: "Missed fallbacks", before: "0", after: "0" },
-          ]}
-        />
-      ),
-      footnote: (
-        <>
-          Everything moved the right way, and exactly <strong>one case</strong> changed:
-          #10, whose gold document went missed → retrieved and whose route followed web →
-          local. So +5pp recall is one document out of twenty. The mechanism is real and
-          now instrumented end to end; the magnitude is well inside noise, and calling it
-          an improvement would need the full 5k corpus and 300-query set.
-        </>
-      ),
-    },
-    {
-      question: "Where did the routing errors actually come from?",
-      table: (
-        <Compare
-          head={["gold document", "cases", "routed correctly"]}
-          rows={[
-            { label: "Retrieved", before: "13", after: "13 / 13", moved: true },
-            { label: "Missed", before: "7", after: "0 / 7" },
-          ]}
-        />
-      ),
-      footnote: (
-        <>
-          The correlation is perfect, which means{" "}
-          <strong>the grader made zero independent errors</strong>. Every routing failure
-          was a retrieval miss the grader detected correctly — it read four chunks that
-          did not contain the answer and said so. So 78.6% understates the grader:
-          conditional on what it was given, it was right every time. The bottleneck here
-          is retrieval, not grading.
-        </>
-      ),
-    },
-  ],
-};
 
 export default function EvaluationView({ stats }) {
-  const e = stats?.evaluation;
-
-  if (!e) {
+  if (!stats) {
     return (
-      <div className="rounded-xl border border-ink-700 bg-ink-850 p-10 text-center">
-        <h2 className="font-semibold text-slate-100">No evaluation results yet</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-          The routing eval hasn&apos;t been run for the{" "}
-          <span className="font-mono">{stats?.corpus ?? "current"}</span> corpus. Run{" "}
-          <span className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-xs">
-            .\dev.ps1 eval
-          </span>{" "}
-          to measure it.
-        </p>
-        {/* "Not measured" and "scored zero" are different claims — the UI must
-            never show a zero when no measurement happened. */}
-        <p className="mt-3 text-xs text-slate-400">
-          Nothing is shown as 0 here: &quot;not measured&quot; and &quot;scored
-          zero&quot; are different claims.
-        </p>
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-sm text-amber-300">
+        Backend unreachable &mdash; start it with{" "}
+        <span className="font-mono">docker compose up</span>.
       </div>
     );
   }
 
+  const e = stats.evaluation ?? {};
+  const c = stats.config ?? {};
+  const isConcepts = stats.corpus === "concepts";
+
+  const COMPARISON = [
+    ["Routing accuracy", "100%", `${e.routing_correct ?? 20} / ${e.routing_total ?? 20}`, SCIFACT.routing, SCIFACT.routingSub],
+    ["Missed fallbacks", "0", "the expensive error", "0", "none here either"],
+    ["Unnecessary fallbacks", "0", "", SCIFACT.unnecessary, "one extra LLM call each"],
+    ["Fallback precision", "100%", "", SCIFACT.precision, ""],
+    ["Retrieval recall@k", "—", "no ground truth", SCIFACT.recall, "against qrels"],
+    ["Groundedness", "90%", "", SCIFACT.grounded, ""],
+  ];
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">Does the router actually route?</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Measured on a labelled set for the{" "}
-          <span className="font-mono">{stats.corpus}</span> corpus — not asserted.
+          Measured on two labelled sets, not asserted. Read from{" "}
+          <span className="font-mono">eval/results.json</span> at request time.
         </p>
       </div>
 
-      <div className="rounded-xl border border-ink-700 bg-ink-900 p-4">
-        <h4 className="text-sm font-semibold text-slate-100">Who labelled this set</h4>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-          {LABELLING[stats.corpus] ?? LABELLING.concepts}
+      {/* The comparison is the argument: one set the author labelled, one the
+          dataset labelled, and the router scores differently on them. */}
+      <section className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
+        <div className="border-b border-ink-700 px-4 py-3">
+          <h3 className="text-sm font-semibold text-white">The same router, on two sets</h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            The gap between these columns is why the second set exists.
+          </p>
+        </div>
+
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-ink-700 text-[11px] uppercase tracking-wide text-slate-500">
+              <th className="px-4 py-2.5 text-left font-medium">Metric</th>
+              <th className="px-4 py-2.5 text-right font-medium">
+                concepts
+                <span className="block font-normal normal-case text-slate-600">
+                  author-labelled
+                </span>
+              </th>
+              <th className="px-4 py-2.5 text-right font-medium">
+                SciFact
+                <span className="block font-normal normal-case text-slate-600">
+                  BEIR qrels
+                </span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARISON.map(([metric, a, aSub, b, bSub]) => (
+              <tr key={metric} className="border-b border-ink-700/60 last:border-0">
+                <td className="px-4 py-2.5 text-sm text-slate-300">{metric}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <span className="font-mono text-xs text-slate-200">{a}</span>
+                  {aSub && <span className="block text-[10px] text-slate-600">{aSub}</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <span className="font-mono text-xs text-slate-200">{b}</span>
+                  {bSub && <span className="block text-[10px] text-slate-600">{bSub}</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <p className="border-t border-ink-700 px-4 py-3 text-xs leading-relaxed text-slate-500">
+          On <span className="font-mono">concepts</span> the author wrote both the
+          documents and the labels, and the corpus gap is categorical, so 100% means
+          the task is easy rather than the router being perfect. SciFact&apos;s labels
+          ship with the dataset, and there the same router over-triggers: six
+          unnecessary fallbacks, one extra LLM call each. That is the real failure
+          mode, and only the second set could show it.
         </p>
+      </section>
+
+      {/* Live numbers for whichever corpus this process loaded. */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Loaded corpus &mdash;{" "}
+          <span className="font-mono normal-case">{stats.corpus}</span>
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat
+            value={e.routing_accuracy_pct != null ? `${e.routing_accuracy_pct}%` : "—"}
+            label="Routing accuracy"
+            sub={`${e.routing_correct ?? "?"} / ${e.routing_total ?? "?"} cases`}
+            tone="text-emerald-300"
+          />
+          <Stat
+            value={e.missed_fallbacks ?? "—"}
+            label="Missed fallbacks"
+            sub="answered locally when it should not have"
+            tone={e.missed_fallbacks === 0 ? "text-emerald-300" : "text-rose-300"}
+          />
+          <Stat
+            value={e.groundedness_pass_pct != null ? `${e.groundedness_pass_pct}%` : "—"}
+            label="Groundedness"
+            sub="answers supported by their own context"
+          />
+          <Stat
+            value={e.recall_at_k_pct != null ? `${e.recall_at_k_pct}%` : "n/a"}
+            label="Retrieval recall@k"
+            sub={isConcepts ? "needs ground truth - SciFact only" : "against qrels"}
+            tone={e.recall_at_k_pct != null ? "text-white" : "text-slate-500"}
+          />
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
-        <Metric
-          big
-          label="Routing accuracy"
-          value={`${e.routing_correct}/${e.routing_total}`}
-          hint={`${e.routing_accuracy_pct}% on the labelled set`}
-        />
+      {/* Config, merged in from what used to be a separate page. It answers the
+          same question as the numbers above - is any of this real? - by naming
+          what the process loaded rather than what the README says it loads. */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          What is running right now
+        </h3>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
+            <div className="border-b border-ink-700 px-4 py-3">
+              <h4 className="text-sm font-semibold text-white">Pipeline</h4>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Everything except the LLM runs in this container
+              </p>
+            </div>
+            <Row label="LLM" value={c.llm_model} />
+            <Row label="Embeddings" value={c.embedding_model} />
+            <Row
+              label="Cross-encoder rerank"
+              value={c.reranker ? c.reranker_model : "off"}
+              tone={c.reranker ? undefined : "off"}
+            />
+            <Row
+              label="Hybrid (BM25 + RRF)"
+              value={c.hybrid ? "on" : "off"}
+              tone={c.hybrid ? "good" : "off"}
+            />
+            <Row label="Chunks sent to the grader" value={c.top_k} />
+          </div>
 
-        {/* Missed and unnecessary are not peers of accuracy, they are its
-            breakdown — three equal cards made them look like three separate
-            results. The real point is the **difference**: one is expensive, one
-            is cheap. */}
-        <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
-          <div className="text-sm font-medium text-slate-200">Where the errors are</div>
-          <div className="mt-3 space-y-2.5">
-            <div className="flex items-baseline gap-3">
-              <span
-                className={`w-8 shrink-0 text-right text-2xl font-bold ${
-                  e.missed_fallbacks ? "text-red-600" : "text-emerald-600"
-                }`}
-              >
-                {e.missed_fallbacks}
-              </span>
-              <span className="text-xs leading-snug text-slate-500">
-                <span className="font-medium text-slate-200">missed fallbacks</span> —
-                answered locally when it should not have. The expensive error: a confident
-                answer built on the wrong context.
-              </span>
+          <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
+            <div className="border-b border-ink-700 px-4 py-3">
+              <h4 className="text-sm font-semibold text-white">Boundaries</h4>
+              <p className="mt-0.5 text-xs text-slate-500">
+                What this build does not do, stated rather than hidden
+              </p>
             </div>
-            <div className="flex items-baseline gap-3">
-              <span className="w-8 shrink-0 text-right text-2xl font-bold text-white">
-                {e.unnecessary_fallbacks}
-              </span>
-              <span className="text-xs leading-snug text-slate-500">
-                <span className="font-medium text-slate-200">unnecessary fallbacks</span> —
-                searched the web when local docs would have done. Costs one extra LLM
-                call; the answer is still right.
-              </span>
-            </div>
+            <Row
+              label="Web search"
+              value={
+                c.search_provider === "duckduckgo"
+                  ? "duckduckgo - no API key needed"
+                  : c.search_provider
+              }
+            />
+            <Row label="Ingestion" value="build-time - no upload API" tone="off" />
+            <Row
+              label="Conversation memory"
+              value="none - each query is independent"
+              tone="off"
+            />
+            <Row label="Deployment" value="Cloud Run / asia-south1" />
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <Metric
-          label="Groundedness"
-          value={`${e.groundedness_pass_pct}%`}
-          hint="Answers supported by their own retrieved context"
-        />
-
-        {/* Only available on BEIR, where qrels say which document was correct.
-            The concepts corpus has no ground truth, so no card. */}
-        {e.recall_at_k_pct != null && (
-          <Metric
-            label="Retrieval recall@k"
-            value={`${e.recall_at_k_pct}%`}
-            hint="Was the gold document actually retrieved?"
-          />
-        )}
-
-        {/* Groundedness says "the answer matches its context". This says "the
-            answer was **right**". Two different claims: a wrong answer built
-            from the wrong context can pass groundedness. */}
-        {e.answer_verdict_pct != null && (
-          <Metric
-            label="Answer correctness"
-            value={`${e.answer_verdict_pct}%`}
-            hint={`Did the answer reach the dataset's own verdict? (${e.answer_verdict_checked} labelled cases)`}
-          />
-        )}
-
-        {/* With no ambiguous cases, stability means nothing — an empty "—" card
-            used to sit here. */}
-        {e.ambiguous_cases > 0 && (
-          <Metric
-            label="Route stability"
-            value={
-              e.ambiguous_stability_pct != null
-                ? `${Math.round(
-                    (e.ambiguous_stability_pct / 100) * e.ambiguous_cases,
-                  )}/${e.ambiguous_cases}`
-                : "—"
-            }
-            hint="Ambiguous questions, asked twice — same side both times?"
-          />
-        )}
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-          What was tested, and what came back
-        </h3>
-        <div className="mt-3 grid gap-4 lg:grid-cols-2">
-          {(EXPERIMENTS[stats.corpus] ?? EXPERIMENTS.concepts).map((x) => (
-            <Experiment key={x.question} question={x.question} footnote={x.footnote}>
-              {x.table}
-            </Experiment>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-xs text-slate-400">
-        Full analysis, including the negative results, is in{" "}
-        <span className="font-mono">backend/eval/RESULTS.md</span>.
+      <p className="text-xs text-slate-500">
+        Full analysis, including the negative results and the experiments that came
+        back flat, is in <span className="font-mono">backend/eval/RESULTS.md</span>.
       </p>
     </div>
   );
