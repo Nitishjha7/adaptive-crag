@@ -109,6 +109,54 @@ def _enforce(limiter: RateLimiter, request: Request) -> None:
         )
 
 
+def _groq_rate_limit_error():
+    """The Groq client's rate-limit exception, or None if the SDK is absent.
+
+    Imported lazily and defensively: `groq` is a transitive dependency of
+    `langchain-groq`, and an exception handler is not worth a hard import that
+    could break startup if that ever changes.
+    """
+    try:
+        from groq import RateLimitError
+
+        return RateLimitError
+    except Exception:  # noqa: BLE001
+        return None
+
+
+_GROQ_RATE_LIMIT = _groq_rate_limit_error()
+
+if _GROQ_RATE_LIMIT is not None:
+
+    @app.exception_handler(_GROQ_RATE_LIMIT)
+    async def _upstream_throttled(request, exc):
+        """Groq's own per-minute token limit, surfaced as 503 rather than 500.
+
+        The free tier allows 8000 tokens a minute across the whole account, and
+        a query costs roughly 2500, so a handful of people using the demo at
+        once is enough to hit it. That is not a bug in this service and a 500
+        says it is: the request was fine, the upstream model was momentarily
+        unavailable, and retrying shortly works.
+
+        The provider's message carries its own wait hint, but parsing prose for
+        a number is brittle, so this advertises a flat 10s - inside the 60s
+        window the limit resets on.
+        """
+        logger.warning("upstream rate limit: %s", exc)
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=503,
+            headers={"Retry-After": "10"},
+            content={
+                "detail": (
+                    "the language model is rate limited right now - "
+                    "wait a few seconds and ask again"
+                )
+            },
+        )
+
+
 @app.exception_handler(ValueError)
 async def _value_error_is_a_client_error(request, exc: ValueError):
     """A bad `corpus` reaches the app as a plain ValueError from
@@ -501,10 +549,12 @@ async def upload(
         logger.exception("upload failed")
         raise HTTPException(status_code=500, detail=f"indexing failed: {exc}") from exc
 
-    # A new collection invalidates the BM25 index, which is cached per corpus.
+    # A new document invalidates the BM25 index for this session's corpus only.
+    # Clearing all of them would make one visitor's upload rebuild every other
+    # session's index.
     from app.tools.bm25_search import bust_cache
 
-    bust_cache()
+    bust_cache(f"upload:{session}")
     return result
 
 
@@ -515,7 +565,7 @@ async def clear_upload(session: str):
     from app.tools.uploads import clear_session
 
     clear_session(session)
-    bust_cache()
+    bust_cache(f"upload:{session}")
     return {"cleared": session}
 
 
