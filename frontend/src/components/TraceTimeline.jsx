@@ -1,5 +1,5 @@
 /**
- * Node-by-node execution timeline — UI ka sabse asli hissa.
+ * Node-by-node execution timeline - the most honest part of the UI.
  *
  * Every backend node appends one line to `logs` (an additive reducer). Those
  * lines become this timeline, so you can see what the system decided:

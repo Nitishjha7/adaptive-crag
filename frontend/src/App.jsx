@@ -48,6 +48,54 @@ const SUGGESTIONS_BY_CORPUS = {
  */
 const VIEWS = ["chat", "documents", "eval"];
 
+/**
+ * Read the SSE stream from /api/query/stream.
+ *
+ * `onProgress` fires with each node's label as it finishes; the resolved value
+ * is the `done` payload, which is byte-identical to what /api/query returns
+ * (both are built by `_query_response` on the backend), so everything
+ * downstream of here is unchanged.
+ *
+ * Parsing is done on a buffer rather than per chunk because a network read can
+ * split anywhere - including mid-event - and "\n\n" is the only reliable
+ * delimiter. Splitting each chunk on its own would drop events that straddle a
+ * boundary, which is the kind of bug that only shows up on a slow connection.
+ */
+async function readEventStream(response, onProgress) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done = null;
+
+  for (;;) {
+    const { value, done: finished } = await reader.read();
+    if (finished) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let split;
+    while ((split = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, split);
+      buffer = buffer.slice(split + 2);
+
+      let event = "message";
+      const dataLines = [];
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      if (!dataLines.length) continue;
+
+      const payload = JSON.parse(dataLines.join("\n"));
+      if (event === "progress") onProgress(payload.label || payload.node);
+      else if (event === "done") done = payload;
+      else if (event === "error") throw new Error(payload.detail || "stream failed");
+    }
+  }
+
+  if (!done) throw new Error("the stream ended without returning an answer");
+  return done;
+}
+
 function viewFromHash() {
   const v = window.location.hash.replace(/^#\/?/, "");
   return VIEWS.includes(v) ? v : "chat";
@@ -57,6 +105,9 @@ export default function App() {
   const [turns, setTurns] = useState([]);
   const [stats, setStats] = useState(null);
   const [busy, setBusy] = useState(false);
+  // The node the backend is on right now, from the SSE progress events. Null
+  // between requests.
+  const [progress, setProgress] = useState(null);
   // The sidebar switches the **whole main view**. It used to change a small tab
   // inside the right rail, so clicking "Evaluation" looked like nothing had
   // happened — and that tab was often below the fold.
@@ -122,11 +173,19 @@ export default function App() {
     if (!question.trim() || busy) return;
     setDraft("");
     setBusy(true);
+    setProgress(null);
     setTurns((t) => [...t, { role: "user", text: question, at: Date.now() }]);
 
     try {
+      // The streaming endpoint, not /api/query. The correction path takes a
+      // web round trip on top of an extra LLM call, and a single POST makes a
+      // 3-second local hit and an 8-second fallback look identical until both
+      // finish. Reading the events as they arrive means the routing decision -
+      // the thing this project is actually about - is visible while it happens
+      // instead of being reconstructed from a log after the fact.
+      //
       // Relative path — Vite proxies it in dev, Nginx in production.
-      const res = await fetch("/api/query", {
+      const res = await fetch("/api/query/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // corpus rides along so an uploaded document is what gets searched.
@@ -141,7 +200,7 @@ export default function App() {
         throw new Error(`HTTP ${res.status} — ${body.slice(0, 300)}`);
       }
 
-      const data = await res.json();
+      const data = await readEventStream(res, (label) => setProgress(label));
       setTurns((t) => {
         const next = [
           ...t,
@@ -156,6 +215,7 @@ export default function App() {
       setTurns((t) => [...t, { role: "error", text: err.message, at: Date.now() }]);
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -323,8 +383,16 @@ export default function App() {
                               {what}
                             </p>
                           </div>
+                          {/* Hidden until the row actually fits on one line.
+                              The list wraps at narrow widths, so below `sm`
+                              these arrows pointed at the end of a row and into
+                              empty space - the steps still read top to bottom
+                              without them. */}
                           {i < all.length - 1 && (
-                            <span className="mt-3.5 text-slate-600" aria-hidden="true">
+                            <span
+                              className="mt-3.5 hidden text-slate-600 sm:inline"
+                              aria-hidden="true"
+                            >
                               &rarr;
                             </span>
                           )}
@@ -339,10 +407,18 @@ export default function App() {
                 <Message key={i} turn={t} />
               ))}
 
+              {/* The live node label from the SSE stream. This used to be the
+                  fixed string "retrieve → grade → …", which sat unchanged for
+                  the 3-8 seconds a query takes and told the user nothing about
+                  which route was chosen. The label the backend sends names the
+                  decision, e.g. "grade_documents: relevance=no (not relevant,
+                  falling back to web)". */}
               {busy && (
                 <div className="flex items-center gap-2 text-sm text-slate-400">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-brand-500" />
-                  retrieve → grade → …
+                  <span className="font-mono text-xs">
+                    {progress || "starting…"}
+                  </span>
                 </div>
               )}
               <div ref={endRef} />
@@ -368,11 +444,17 @@ export default function App() {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   disabled={busy}
+                  // A placeholder is not a label: it disappears on focus and is
+                  // not reliably announced.
+                  aria-label="Ask a question"
                   placeholder="Ask a question about your documents or anything on the web…"
                   className="min-w-0 flex-1 rounded-xl border border-ink-700 bg-ink-900 px-4 py-2.5 outline-none transition focus:border-brand-500/40 focus:bg-ink-850 disabled:opacity-60"
                 />
                 <button
                   type="submit"
+                  // The button's only content is an SVG, so without this a
+                  // screen reader announces it as "button" and nothing else.
+                  aria-label="Send question"
                   disabled={busy || !draft.trim()}
                   className="shrink-0 rounded-xl bg-brand-600 px-4 py-2.5 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
