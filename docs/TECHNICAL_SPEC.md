@@ -1,35 +1,44 @@
-# Adaptive CRAG: Technical Specification & Implementation Guide
+# Architecture
 
-Adaptive Corrective Retrieval-Augmented Generation with web-search fallback.
+How the system is put together: the graph, the state that flows through it, and
+the shape of each node. [CODE_NOTES](CODE_NOTES.md) covers why each file exists ·
+[PROJECT_WALKTHROUGH](PROJECT_WALKTHROUGH.md) follows one question end to end.
 
-**Core framework:** LangGraph (StateGraph) · LangChain · FastAPI (Python 3.11, ASGI) · React + Vite
-**Target domain:** Agentic RAG, retrieval verification, hallucination mitigation
-**Pattern references:** LangGraph CRAG cookbook, Self-RAG, Corrective RAG (Yan et al. 2024)
-
----
-
-## 1. Executive Summary & Core Value Proposition
-
-Standard RAG architectures assume retrieved vector chunks are always relevant, which leads
-to hallucinations or ungrounded responses when the local data is out-of-domain, ambiguous,
-or stale. Adaptive CRAG overcomes this through **active evaluation**:
-
-- **Self-grading context** — a dedicated node assesses whether retrieved local documents
-  sufficiently answer the query, before any answer is generated.
-- **Autonomous query transformation** — if local documents are insufficient, the agent
-  refactors the query into optimized keyword searches for a search engine.
-- **Live web fallback** — a real-time web search API fetches up-to-date external context
-  only when it's actually needed.
-- **Hallucination & policy guardrails** — an output-validation layer prevents context
-  leakage and enforces grounded, factual responses.
-
-The key design decision: **web search is a fallback, not a default.** A local hit is fast
-and cheap; the fallback fires only when grading says the local context can't answer the
-question.
+Built on LangGraph's `StateGraph` with LangChain, FastAPI on Python 3.11, and a
+React + Vite frontend. The corrective-RAG pattern comes from Yan et al. (2024);
+the routing and the evaluation around it are this project's own.
 
 ---
 
-## 2. System Architecture
+## 1. What problem the shape solves
+
+A vector store always returns *k* results. Ask it something the corpus does not
+cover and it still hands back the four nearest chunks, because "nearest" is all it
+knows — there is no score below which it says *I don't have this*. The model then
+answers from those chunks and cites them, which makes a wrong answer look more
+trustworthy rather than less.
+
+So the shape of this system is one extra step: **grade the retrieved context before
+generating anything.**
+
+- **`grade_documents`** decides whether the chunks can answer the question, and it
+  runs before a single token of the answer exists.
+- **`transform_query`** turns the question into search keywords, but only when the
+  grader said no.
+- **`web_search_fallback`** fetches live context and *replaces* the rejected chunks
+  rather than adding to them.
+- **`validate_guardrails`** checks the finished answer against the context it was
+  built from, and redacts PII on the way out.
+
+**Web search is the fallback, not the default.** A local hit costs 3 LLM calls, the
+correction path costs 4 plus a web round trip. The extra cost is only paid when
+grading says the local context cannot answer the question — and how often that
+judgement is right is measured, not assumed (see [ROADMAP](ROADMAP.md) for the
+numbers).
+
+---
+
+## 2. The pieces, and how they connect
 
 ```
 [ React + Vite + Tailwind Dashboard ]
@@ -68,7 +77,7 @@ question.
 [ Output validation ]  LLM groundedness check + regex PII redaction
 ```
 
-### Component matrix
+### What each part is for
 
 | Component | Technology | Primary role |
 |---|---|---|
@@ -85,10 +94,10 @@ question.
 
 ---
 
-## 3. LangGraph CRAG State Machine & Routing Logic
+## 3. The graph, and the decision it turns on
 
-The graph models an adaptive decision loop where context grading dictates the downstream
-execution path.
+The whole design rests on one conditional edge. Everything before it is ordinary
+retrieval; everything after it depends on a verdict the system produced itself.
 
 ```
                        +-------------------+
@@ -139,7 +148,7 @@ execution path.
                        +--------------------+
 ```
 
-### CRAGState schema definition
+### The state schema
 
 ```python
 import operator
@@ -182,7 +191,7 @@ the graph rather than as its own node.
 
 ---
 
-## 4. Node Breakdown & Core Execution Logic
+## 4. What each node does
 
 | Graph node | Primary operation | Output / transition |
 |---|---|---|
@@ -193,7 +202,7 @@ the graph rather than as its own node.
 | `generate` | Synthesizes a natural-language answer grounded exclusively in verified context | Produces draft answer in `generation` |
 | `validate_guardrails` | Scans output for hallucination, PII leakage, toxic content | Returns validated `final_output` and full execution trace |
 
-### Conditional edge
+### The conditional edge
 
 ```python
 def decide_to_generate(state: CRAGState) -> str:
@@ -208,7 +217,7 @@ graph.add_conditional_edges(
 
 ---
 
-## 5. Reference Implementation Snippets
+## 5. The code behind each node
 
 ### A. Graph construction — `backend/app/graph/build_graph.py`
 
@@ -374,7 +383,7 @@ async def health():
 
 ---
 
-## 6. Implementation & Build Guide
+## 6. Building it
 
 1. **Vector store initialization** — ingest local documents into a ChromaDB collection
    using fast local embeddings (FastEmbed). Persist to a Docker volume.
@@ -387,13 +396,14 @@ async def health():
 
 ---
 
-## 7. Project File Structure
+## 7. Where everything lives
 
 ```
 adaptive-crag/
 ├── backend/
 │   ├── app/
 │   │   ├── config.py                  # Settings + LLM / embedding / vectorstore factories
+│   │   ├── rate_limit.py              # fixed-window cap on the endpoints that cost money
 │   │   ├── graph/
 │   │   │   ├── state.py               # re-export of CRAGState
 │   │   │   └── build_graph.py         # StateGraph wiring + conditional edge
@@ -406,6 +416,9 @@ adaptive-crag/
 │   │   │   └── validate_guardrails.py
 │   │   ├── tools/
 │   │   │   ├── vector_search.py
+│   │   │   ├── bm25_search.py         # keyword half of hybrid; index cached per corpus
+│   │   │   ├── reranker.py            # cross-encoder + RRF fusion
+│   │   │   ├── uploads.py             # PDF/MD/TXT -> session-scoped collection
 │   │   │   ├── web_search.py          # provider switch (SEARCH_PROVIDER)
 │   │   │   ├── duckduckgo_search.py   # default — no API key
 │   │   │   └── tavily_search.py       # optional upgrade
@@ -417,7 +430,7 @@ adaptive-crag/
 │   │   │   └── semantic.py            # facts distilled from clusters of ungrounded episodes
 │   │   └── __main__.py                # `python -m app "question"` CLI
 │   ├── data/                          # 7-doc controlled corpus with a deliberate gap
-│   ├── tests/                         # 129 tests — routing, grading, validation, retrieval, corpus, API, memory
+│   ├── tests/                         # 147 tests — routing, grading, validation, retrieval, corpus, API, memory
 │   ├── vectorstore/                   # persisted Chroma index (gitignored)
 │   ├── ingest.py                      # docs -> chunks -> embeddings -> Chroma
 │   ├── main.py                        # FastAPI app
@@ -441,7 +454,7 @@ adaptive-crag/
 
 ---
 
-## 8. Containerization & Deployment Model
+## 8. How it ships
 
 Multi-service Docker Compose:
 
@@ -457,7 +470,7 @@ Single command: `docker compose up --build`.
 
 ---
 
-## 9. Future Extensions
+## 9. What would come next
 
 | Phase | Enhancement | Technical impact |
 |---|---|---|

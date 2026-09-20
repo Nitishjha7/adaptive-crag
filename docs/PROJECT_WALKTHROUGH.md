@@ -1,14 +1,15 @@
-# Project Walkthrough — what was built, how, and how it works
+# Walkthrough
 
-This is the whole project **in one place**: the flowchart, what each step does and why,
-and at the end how the complete system runs. If you only read one file, read this one.
+**Start here.** One question followed through the whole system, then the build in
+the order it happened, then how the finished thing runs. If you read one file in
+this folder, read this one.
 
-What the other docs are for:
-[TECHNICAL_SPEC](TECHNICAL_SPEC.md) architecture and design decisions ·
-[CODE_NOTES](CODE_NOTES.md) file-by-file "why this exists" ·
-[BUILD_PLAN](BUILD_PLAN.md) the order it was built in ·
-[eval/RESULTS](../backend/eval/RESULTS.md) measured numbers ·
-[ROADMAP](ROADMAP.md) what is left.
+The rest: [TECHNICAL_SPEC](TECHNICAL_SPEC.md) architecture ·
+[CODE_NOTES](CODE_NOTES.md) why each file exists ·
+[BUILD_PLAN](BUILD_PLAN.md) where the time went ·
+[eval/RESULTS](../backend/eval/RESULTS.md) the measurements ·
+[ROADMAP](ROADMAP.md) what is built and what is not ·
+[SETUP](SETUP.md) running it · [DEPLOYMENT](DEPLOYMENT.md) shipping it.
 
 ---
 
@@ -98,7 +99,7 @@ bite in Step 6.
 live *inside* the functions so importing a module doesn't drag in ONNX runtimes.
 
 This looked like over-engineering until the first test run: every LLM node could be
-swapped for a scripted fake in one line, so 129 tests run with no API key.
+swapped for a scripted fake in one line, so 147 tests run with no API key.
 
 ### Step 3 — The state, and one reducer decision
 
@@ -483,7 +484,7 @@ this and should not be claimed as such.
 
 | | |
 |---|---|
-| **129 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence · episodic/semantic memory recall against a real embedding model. No API key needed |
+| **147 tests** (`.\dev.ps1 test`) | Both routes · docs-replace invariant · citations swap · search failure · `parse_verdict` · PII · fail-open · API shape · BM25 · RRF · reranker fallback · retrieval flags · LLM gateway fallback · token/cost tracking · Prometheus metrics · JSON logging · SSE streaming event sequence · episodic/semantic memory recall against a real embedding model. No API key needed |
 | **Routing eval** (`.\dev.ps1 eval`) | 20 labelled cases — 20/20, 0 missed fallbacks, 3 runs |
 | **Ambiguity eval** (`--repeat 3`) | 8 half-covered cases, scored for route stability |
 | **Retrieval A/B** | Same 44 cases with `USE_HYBRID`/`USE_RERANKER` off vs on — see [RESULTS](../backend/eval/RESULTS.md) |
@@ -501,6 +502,16 @@ None of these were caught by tests, which is the point.
 | First query after `compose up` → 502 | `depends_on: service_started` let Nginx start before uvicorn bound the port |
 | 8 eval cases silently vanished | `interleave()` dropped any label that wasn't `local`/`web` |
 | A real API key reached a committed file | `.env.example` is tracked; `.env` is not. The key was pushed to a public repo and had to be revoked |
+| `/api/query/stream` never streamed | `TestClient` buffers the whole body, so five passing streaming tests could not tell a trickle from a burst. Every event arrived together after 8.5s of work |
+| Oversized uploads were held in memory | The 20 MB check ran *after* `await file.read()`, so a rejected request cost as much memory as an accepted one: six concurrent 115 MB uploads took the container from 560 MiB to 1.2 GiB |
+| Groq throttling surfaced as a 500 | The free tier is 8000 tokens/min across the account; twenty concurrent queries returned eleven bare 500s. Nothing mocked can produce a provider rate limit |
+| One upload cleared every corpus's BM25 index | `cache_clear()` on an `lru_cache` evicts everything. Harmless with one corpus, which is all a test has |
+
+The first three came out of an audit that measured the running container rather than
+reading the code — wall-clock arrival times against the `elapsed_ms` inside each event,
+`docker stats` during concurrent uploads. The tests that now cover them assert timing and
+memory, not shape, and each one was checked against the old code first: the streaming
+test reports *"first event arrived at 4.13s of a 4.13s request"* before the fix.
 
 ---
 
@@ -600,7 +611,7 @@ docker compose up --build     # full stack → :3001 (UI) · :8001 (API docs)
 
 .\dev.ps1 ingest [-Reset]     # backend/data/ → Chroma
 .\dev.ps1 ask "..."           # one query, full trace, no server
-.\dev.ps1 test                # 129 tests, no API key needed
+.\dev.ps1 test                # 147 tests, no API key needed
 .\dev.ps1 eval                # 20 labelled cases — real LLM + live web
 .\dev.ps1 eval --repeat 3     # + 8 ambiguous cases, scored for stability
 .\dev.ps1 serve -Port 8042    # API alone

@@ -1,6 +1,10 @@
-# Setup Guide — Adaptive CRAG
+# Setup
 
-Running it, the loops you work in, and every error this project actually hit.
+Running it locally, the loops you work in day to day, and every error this project
+actually hit — with what fixed each one.
+
+[DEPLOYMENT](DEPLOYMENT.md) is the same thing for Cloud Run ·
+[PROJECT_WALKTHROUGH](PROJECT_WALKTHROUGH.md) is what the system does once it runs.
 
 ---
 
@@ -68,7 +72,7 @@ an edit needs no rebuild. It is faster than `docker compose` for backend work.
 ```powershell
 .\dev.ps1 build              # only when requirements.txt changes
 .\dev.ps1 ask "why does chunk overlap matter?"
-.\dev.ps1 test               # 129 tests, no API key needed
+.\dev.ps1 test               # 147 tests, no API key needed
 .\dev.ps1 eval               # routing eval — real LLM and live web calls
 .\dev.ps1 eval --limit 6     # smoke run, saves rate limit
 .\dev.ps1 serve -Port 8042   # FastAPI alone
@@ -136,6 +140,24 @@ size.
 **Queries get slower the more you run.** Groq throttles under sustained load, badly
 enough that it once made a latency comparison in the eval look like a real result when
 it was an artifact. If you are timing anything, this is the first thing to rule out.
+
+**429 from your own API while load-testing.** `/api/query`, `/api/query/stream` and
+`/api/upload` are rate limited (`app/rate_limit.py`), because the deployed demo is
+public and every query spends Groq credits. Set `DISABLE_RATE_LIMIT=true` to turn it off
+locally; the test suite sets it already, since the whole suite shares one client address.
+
+**503 with `Retry-After` under concurrent queries.** That is Groq's limit, not this
+service's: the free tier allows 8000 tokens a minute across the account and one query
+costs roughly 2500, so about three simultaneous queries is the ceiling. It used to
+surface as a 500.
+
+**413 on an upload.** Over 20 MB (`MAX_UPLOAD_BYTES`). Nginx rejects anything past 25 MB
+before it reaches the app at all.
+
+**`curl -F "file=@/tmp/x.txt"` fails with `HTTP 000` on Windows.** Not the API: Git
+Bash's `/tmp` is not a path the Windows `curl.exe` can open, so nothing is ever sent. Use
+a real Windows path (`C:/Users/.../file.txt`). This wasted an hour during an audit,
+looking like an upload regression that did not exist.
 
 ---
 

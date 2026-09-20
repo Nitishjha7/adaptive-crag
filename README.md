@@ -10,7 +10,7 @@ RAG that grades its own retrieval before answering, and searches the web only wh
 [![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-4f46e5)](backend/app/graph/build_graph.py)
 [![license](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
 
-**[Live demo](https://adaptive-crag-906520260355.asia-south1.run.app)**
+**[Try it →](https://adaptive-crag-906520260355.asia-south1.run.app)**
 
 </div>
 
@@ -153,11 +153,12 @@ Sizing and the failures it took are in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 | [RESULTS.md](backend/eval/RESULTS.md) | Every measurement, including the negative ones |
 | [TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) · [CODE_NOTES.md](docs/CODE_NOTES.md) | Architecture, state schema, file-by-file notes |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Cloud Run sizing, and the failures it took |
-| [ROADMAP.md](docs/ROADMAP.md) · [SETUP.md](docs/SETUP.md) | What was built when; local setup |
+| [ROADMAP.md](docs/ROADMAP.md) · [BUILD_PLAN.md](docs/BUILD_PLAN.md) | What is built and what is not; where the time went |
+| [SETUP.md](docs/SETUP.md) | Running it locally, and the errors that cost real time |
 
 ---
 
-**133 tests**, no API key required. CI builds the index the same way the deploy
+**147 tests**, no API key required. CI builds the index the same way the deploy
 image does, then boots that image and checks it serves.
 
 ---

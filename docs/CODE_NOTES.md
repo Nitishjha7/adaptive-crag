@@ -1,8 +1,12 @@
-# Code Notes — what each file is for
+# Code notes — why each file exists
 
-Every file and dependency, with the reason it exists. Phases 1–10 are done (eval
-harness, citations, hybrid retrieval + reranking, BEIR SciFact corpus). Deployment is
-the remaining gap.
+The reason behind every file and dependency, in the order you would meet them
+reading the codebase. What the code *does* is in the code; this is the part that
+is not visible there — what was chosen, and what it was chosen over.
+
+Looking for something else? [PROJECT_WALKTHROUGH](PROJECT_WALKTHROUGH.md) follows
+one question through the whole system · [TECHNICAL_SPEC](TECHNICAL_SPEC.md) is the
+architecture · [ROADMAP](ROADMAP.md) is what is built and what is not.
 
 ---
 
@@ -25,6 +29,13 @@ the remaining gap.
 | `pydantic` / `pydantic-settings` | Validation and typed config | Request/response models; typed settings from `.env` |
 | `python-dotenv` | Loads `.env` in dev | Local environment variables |
 | `prometheus-client` | `/metrics` exposition format | The text format has escaping/type-comment rules a real Prometheus server is unforgiving about; this is what production FastAPI services use rather than hand-rolling it |
+| `pypdf` · `python-multipart` | Upload path | PDF text extraction, and the form parser FastAPI needs for multipart bodies |
+
+**Everything is pinned with `==`, not `>=`.** It used to be `>=` for nineteen of these,
+including the whole LangChain stack, which moves fast enough that a rebuild months later
+would not reproduce the build the tests and the deployed image were verified against —
+`langchain-community` already emits a sunset warning. The pins are the versions the suite
+actually passes on, read out of the running container rather than guessed.
 
 ---
 
@@ -128,6 +139,30 @@ what they were before metrics existed.
 
 ---
 
+## backend/app/rate_limit.py
+
+A fixed-window limiter over a `deque` of timestamps per caller. No `slowapi`, no Redis:
+the whole thing is about fifty lines and the alternative is a service to run and pay for
+on a demo that scales to zero.
+
+It exists because `/api/query` spends real money — three LLM calls, about $0.0007 a query
+— and the deployed URL is public and unauthenticated, so without a cap a loop costs
+whatever someone feels like spending. Cloud Run's `max-instances: 3` caps the compute
+bill but says nothing about the Groq bill.
+
+**Fixed window, not sliding.** A burst straddling a window boundary can briefly send
+double the rate. That is fine for cost control, where the goal is stopping a runaway
+loop rather than precise fairness, and a sliding window costs more bookkeeping than the
+problem is worth.
+
+**Per-instance, and the docs say so rather than implying otherwise.** With three
+instances the real ceiling is three times the configured number. Naming that is more
+useful than a limiter that looks global and is not.
+
+See `main.py` below for how the caller is identified and why the test suite disables it.
+
+---
+
 ## backend/app/logging_config.py
 
 Stdlib JSON log formatter — one `logging.Formatter` subclass, no `structlog` or
@@ -214,7 +249,7 @@ which is faster to iterate in.
 
 ---
 
-## backend/tests/ — 129 tests, `.\dev.ps1 test`
+## backend/tests/ — 147 tests, `.\dev.ps1 test`
 
 | File | What it covers |
 |---|---|
@@ -605,8 +640,15 @@ at all. Ranking those only adds noise to the fusion.
 cannot be measured on 22 chunks — and this project runs on the rule that every addition
 has to be measurable.
 
-The index is built under `lru_cache`; `ingest.py` calls `bust_cache()` at the end, or a
-stale index would persist in the same process after ingestion.
+The index is cached in a plain dict keyed by corpus, and `ingest.py` calls `bust_cache()`
+at the end, or a stale index would persist in the same process after ingestion.
+
+**Why a dict and not `lru_cache`.** It was `lru_cache` first, and `bust_cache()` was
+`cache_clear()` — which throws away *every* corpus, not the one that changed. Each upload
+lands in its own corpus, so on a public demo one visitor uploading a PDF made every other
+session rebuild its BM25 index from Chroma. `lru_cache` cannot evict a single key, so the
+dict is what buys targeted invalidation. `bust_cache()` with no argument still clears
+everything, which is what `ingest.py` wants, since a re-ingest can rewrite any collection.
 
 ---
 
@@ -704,8 +746,59 @@ Groq and real DuckDuckGo: a local-route and a web-fallback query each produced t
 correct progress sequence, and the final SSE `done` event matched `/api/query`'s
 response for the same question field-for-field (`elapsed_ms` aside).
 
+**The producer runs as a task, not an await.** This endpoint originally did
+`await run_in_threadpool(produce)` and *then* drained the queue, which runs the whole
+graph to completion before yielding the first event — a non-streaming endpoint wearing
+an SSE content-type. Measured against the container: every event arrived in one 0.43s
+burst after 8.5s of work, while the `retrieve` event carried `elapsed_ms=2229`. All five
+streaming tests passed throughout, because `TestClient` buffers the response body and
+cannot tell a trickle from a burst. `test_first_event_arrives_before_the_query_finishes`
+runs a real uvicorn server and measures arrival time instead; against the old code it
+reports "first event arrived at 4.13s of a 4.13s request". After the fix, the first event
+lands at **1457ms of a 5825ms query** (3129ms of 12187ms on a slower one), and the UI
+renders each node's label as it happens rather than a fixed string.
+
+**Provider rate limits are a 503, not a 500.** Groq's free tier allows 8000 tokens a
+minute across the whole account and one query costs roughly 2500, so a few simultaneous
+visitors trip it. Twenty concurrent queries against the container returned eleven bare
+500s with `groq.RateLimitError` in the log — which tells the caller this service is
+broken when the request was fine and the upstream model was briefly unavailable. An
+exception handler maps it to 503 with `Retry-After: 10`.
+
+**`POST /api/upload`** — reads the body in 1 MB pieces and aborts the moment it passes
+`MAX_UPLOAD_BYTES`, returning **413**. It used to `await file.read()` with no argument,
+so the whole upload landed in memory and only then failed the size check inside
+`extract_text`: a rejected request cost exactly as much memory as an accepted one. Six
+concurrent 115 MB uploads took the container from 560 MiB to **1.226 GiB** while every
+one of them correctly returned 400 — and the deployed instance has 1 GiB with a
+concurrency of 8, so that is an out-of-memory kill caused by requests the API is already
+refusing, with no authentication needed. After the fix the same test peaks at 382 MiB
+against a 314 MiB baseline. `client_max_body_size 25m` in `frontend/nginx.conf` rejects
+the worst of it at the proxy first; 25 rather than 20 so the API's own error message is
+what the user sees rather than Nginx's HTML page.
+
 **`GET /metrics`** — the Prometheus scrape target, `prometheus_client.generate_latest()`
 verbatim. No business logic here; `app/metrics.py` owns what is tracked and why.
+
+**Rate limiting** (`app/rate_limit.py`) — on `/api/query`, `/api/query/stream` and
+`/api/upload` only. The read endpoints are exempt: the dashboard hits `/api/stats` and
+`/api/documents` on every page load and neither makes an LLM call.
+
+In-process and per-instance on purpose. A shared counter means Redis, which is a service
+to run and pay for on a demo that scales to zero; with `max-instances: 3` the real
+ceiling is 3× what is configured, which is accounted for rather than pretended away. The
+caller is identified by the first entry in `X-Forwarded-For`, because Cloud Run
+terminates TLS and `request.client.host` is the load balancer — without that every
+visitor would share one bucket. It is spoofable, and the goal is stopping an accidental
+loop rather than defeating a determined attacker.
+
+`DISABLE_RATE_LIMIT=true` turns it off, and `tests/conftest.py` sets it: the suite shares
+one process and one client address, so the sixth test to post an upload would otherwise
+get a 429 for reasons unrelated to what it asserts.
+
+**A bad `corpus` is a 422, not a 500.** The value reaches `collection_for()`, which
+interpolates it into a Chroma collection name, and Chroma rejects anything outside
+`[a-zA-Z0-9._-]` by raising. A pattern on `QueryIn` catches it first now.
 
 **Token tracking**: `new_tracker()` (a contextvar, `app/token_usage.py`) is opened once
 per request/stream — the LLM clients `get_llm()` returns are `@lru_cache`'d and shared

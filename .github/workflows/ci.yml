@@ -21,7 +21,7 @@ on:
 
 jobs:
   backend:
-    name: backend · 129 tests
+    name: backend · 147 tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,9 +82,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Builds the image the HuggingFace Space deploys. It ingests at build time
+      # Builds the image Cloud Run deploys. It ingests at build time
       # and asserts the index is non-empty, so a broken ingest fails the build
-      # rather than shipping a Space that answers everything from web search.
+      # rather than shipping a service that answers everything from web search.
       - name: Build the single-service image
         run: docker build -f Dockerfile -t adaptive-crag:ci .
 

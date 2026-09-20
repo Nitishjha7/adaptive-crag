@@ -1,4 +1,4 @@
-# Build Plan — how this was actually built
+# Build plan
 
 [ROADMAP.md](ROADMAP.md) is what exists. [PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md)
 is how the system works. This file is the *process*: the order things were built in,

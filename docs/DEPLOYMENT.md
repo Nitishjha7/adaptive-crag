@@ -1,7 +1,10 @@
 # Deployment
 
-Goal: one public URL, free, that runs **the pipeline the Evaluation page describes** —
-hybrid retrieval and cross-encoder reranking included.
+One public URL, free, running **the same pipeline the Evaluation page describes** —
+hybrid retrieval and cross-encoder reranking included, not a cut-down version of it.
+Below is what it runs on, and the six things that had to be fixed to get there.
+
+Sizing decisions are here; [CODE_NOTES](CODE_NOTES.md) has the code they constrain.
 
 ---
 
@@ -110,6 +113,18 @@ the container port is enough here and is what the service uses.
 - **Groq rate limits.** Under sustained load, call latency rises sharply — this is what
   made the eval's latency comparison unusable (see `backend/eval/RESULTS.md`). For a live
   demo, prefer the UI's fixed question chips over free-form typing.
+- **Groq's token limit reaches the user as a 503**, not a 500. The free tier allows 8000
+  tokens a minute for the whole account and a query costs roughly 2500, so a handful of
+  simultaneous visitors is enough. A 500 would say this service is broken when the
+  request was fine and the model was briefly unavailable.
+- **The 1 GiB instance is why uploads are capped the way they are.** The size check runs
+  while the body is still arriving, so a refused upload costs almost nothing. Checking
+  after `await file.read()` made six concurrent 115 MB uploads peak at 1.2 GiB — an
+  out-of-memory kill from requests the API was already rejecting, no login required.
+  `client_max_body_size 25m` in `frontend/nginx.conf` stops the worst at the proxy.
+- **Rate limiting is per-instance.** `max-instances: 3` means the real ceiling is three
+  times what `app/rate_limit.py` configures. A shared counter would need Redis, which is
+  a service to pay for on something that scales to zero.
 - **`.env` is never committed**, and `.env.example` never holds a real key.
 - **SciFact is not deployed.** The image ingests the `concepts` corpus only. SciFact
   needs the BEIR download and considerably more memory; its numbers ship as JSON that
