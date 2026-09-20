@@ -56,11 +56,11 @@ export default function ContextRail({ stats, latest, onOpenEval }) {
           <Stat
             value={ev ? ev.missed_fallbacks : "—"}
             label="Missed fallbacks"
-            sub="never answered from a bad corpus hit"
+            sub="never answered from the wrong documents"
             tone="text-emerald-300"
           />
           <Stat value={stats?.chunks ?? "—"} label="Indexed chunks" sub={stats?.corpus} />
-          <Stat value={docs ?? "—"} label="Documents" sub="in this corpus" />
+          <Stat value={docs ?? "—"} label="Documents" sub="indexed" />
         </div>
 
         {/* 100% invites the obvious question, so the answer is on the card

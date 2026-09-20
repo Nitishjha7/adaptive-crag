@@ -82,11 +82,10 @@ export default function UploadPanel({ uploads, compact = false }) {
         ) : (
           <>
             <p className="text-sm font-medium text-slate-200">
-              Drop a PDF here, or click to choose
+              Drop a PDF here to ask questions about it
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              It is chunked, embedded and searched the same way the built-in corpus
-              is. Up to 400 pages.
+              Up to 400 pages. Nothing leaves this browser session.
             </p>
           </>
         )}

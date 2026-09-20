@@ -228,7 +228,7 @@ export default function App() {
         {view !== "chat" && (
           <div className="p-6">
             {view === "eval" && <EvaluationView stats={stats} />}
-            {view === "documents" && <DocumentsView stats={stats} />}
+            {view === "documents" && <DocumentsView stats={stats} uploads={uploads} />}
           </div>
         )}
 
@@ -310,7 +310,7 @@ export default function App() {
                       {[
                         ["Retrieve", "hybrid + rerank"],
                         ["Grade", "relevant? yes / no"],
-                        ["Route", "corpus or web"],
+                        ["Route", "your docs or web"],
                         ["Generate", "answer + PII scan"],
                       ].map(([name, what], i, all) => (
                         <li key={name} className="flex items-start">
