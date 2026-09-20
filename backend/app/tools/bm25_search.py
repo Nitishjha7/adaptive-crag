@@ -21,7 +21,6 @@ an eval that measures it rather than assuming it.
 """
 
 import re
-from functools import lru_cache
 from typing import List, Optional, Tuple
 
 from app.config import active_corpus, get_settings, get_vectorstore
@@ -36,7 +35,13 @@ def tokenize(text: str) -> List[str]:
     return _TOKEN.findall(text.lower())
 
 
-@lru_cache
+# Keyed by corpus, so one corpus can be dropped without discarding the others.
+# `lru_cache` cannot evict a single key - only `cache_clear()`, which throws away
+# every corpus - and on a public demo one visitor's upload would then force every
+# other session to rebuild its index.
+_INDEX_CACHE: dict = {}
+
+
 def _build_index(corpus: str):
     """Load the whole corpus into memory and build the BM25 index.
 
@@ -51,6 +56,9 @@ def _build_index(corpus: str):
     Keyed on the corpus, so switching does not hand back the previous index.
     Built once per corpus; cleared after ingestion - see `bust_cache()`.
     """
+    if corpus in _INDEX_CACHE:
+        return _INDEX_CACHE[corpus]
+
     from rank_bm25 import BM25Okapi
 
     store = get_vectorstore()
@@ -63,14 +71,29 @@ def _build_index(corpus: str):
     sources = [(m or {}).get("source", "unknown") for m in metas]
 
     if not texts:
+        # Not cached: an empty corpus usually means ingestion has not run yet,
+        # and caching that would keep returning nothing after it does.
         return None, [], []
 
-    return BM25Okapi([tokenize(t) for t in texts]), texts, sources
+    built = (BM25Okapi([tokenize(t) for t in texts]), texts, sources)
+    _INDEX_CACHE[corpus] = built
+    return built
 
 
-def bust_cache() -> None:
-    """The index goes stale after ingestion. Ingest and the tests clear it."""
-    _build_index.cache_clear()
+def bust_cache(corpus: str | None = None) -> None:
+    """Drop a stale index after ingestion.
+
+    With a corpus, drops only that one. Uploading a document invalidates that
+    session's index and nothing else, so a visitor's upload no longer makes
+    every other session rebuild.
+
+    Without one, drops everything - which is what `ingest.py` wants, since a
+    re-ingest can rewrite any collection.
+    """
+    if corpus is None:
+        _INDEX_CACHE.clear()
+    else:
+        _INDEX_CACHE.pop(corpus, None)
 
 
 def bm25_search(query: str, k: Optional[int] = None) -> List[Tuple[str, str]]:

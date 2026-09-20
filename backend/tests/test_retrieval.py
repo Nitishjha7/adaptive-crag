@@ -137,3 +137,45 @@ class TestRetrieveNodeFlags:
 
         assert baseline["documents"] and full["documents"]
         assert baseline["source_type"] == full["source_type"] == "vector_db"
+
+
+class TestBm25CacheScoping:
+    """`bust_cache()` used to be `lru_cache.cache_clear()`, which discards every
+    corpus at once.
+
+    On the public demo each upload lands in its own corpus, so one visitor
+    uploading a PDF made every other session rebuild its BM25 index from Chroma.
+    The cache is a plain dict now so a single key can be dropped.
+    """
+
+    def test_dropping_one_corpus_leaves_the_others(self):
+        from app.tools import bm25_search
+
+        bm25_search.bust_cache()
+        bm25_search._INDEX_CACHE["upload:alpha"] = ("index-a", ["a"], ["a.pdf"])
+        bm25_search._INDEX_CACHE["upload:beta"] = ("index-b", ["b"], ["b.pdf"])
+
+        bm25_search.bust_cache("upload:alpha")
+
+        assert "upload:alpha" not in bm25_search._INDEX_CACHE
+        assert "upload:beta" in bm25_search._INDEX_CACHE, (
+            "one session's upload cleared another session's index"
+        )
+        bm25_search.bust_cache()
+
+    def test_no_argument_still_clears_everything(self):
+        """`ingest.py` re-ingests and can rewrite any collection, so it wants
+        the whole cache gone."""
+        from app.tools import bm25_search
+
+        bm25_search._INDEX_CACHE["concepts"] = ("index", ["x"], ["x.md"])
+        bm25_search._INDEX_CACHE["upload:gamma"] = ("index", ["y"], ["y.pdf"])
+
+        bm25_search.bust_cache()
+
+        assert bm25_search._INDEX_CACHE == {}
+
+    def test_dropping_a_corpus_that_was_never_built_is_not_an_error(self):
+        from app.tools import bm25_search
+
+        bm25_search.bust_cache("upload:never-existed")
