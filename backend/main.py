@@ -13,7 +13,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List
 
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from app.config import active_corpus, get_settings, set_current_corpus
 from app.graph.build_graph import build_crag_graph, run_query_stream
 from app.logging_config import configure_json_logging
+from app.rate_limit import RateLimiter
 from app.memory.episodic import (
     format_episodes_for_prompt,
     recall_similar,
@@ -78,11 +79,62 @@ app.add_middleware(
 )
 
 
+# The endpoints that cost money or CPU. Read endpoints (`/health`, `/api/stats`,
+# `/api/documents`) are left alone: the dashboard hits them on every page load
+# and they make no LLM call.
+_QUERY_LIMITER = RateLimiter(limit=15, window_seconds=60)
+_UPLOAD_LIMITER = RateLimiter(limit=5, window_seconds=300)
+
+
+def _client_key(request: Request) -> str:
+    """Who to count against. Cloud Run terminates TLS and forwards the caller in
+    X-Forwarded-For, so `request.client.host` alone is the load balancer and
+    would rate-limit every visitor as one. First entry in the chain is the
+    original client; it is spoofable, but the goal here is stopping an
+    accidental or lazy loop, not defeating a determined attacker.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce(limiter: RateLimiter, request: Request) -> None:
+    key = _client_key(request)
+    if not limiter.allow(key):
+        raise HTTPException(
+            status_code=429,
+            detail="too many requests - this is a public demo with a real API bill",
+            headers={"Retry-After": str(limiter.retry_after(key))},
+        )
+
+
+@app.exception_handler(ValueError)
+async def _value_error_is_a_client_error(request, exc: ValueError):
+    """A bad `corpus` reaches the app as a plain ValueError from
+    `config.collection_for`, on the GET endpoints that take it as a query
+    parameter rather than through `QueryIn`'s pattern. Without this it surfaces
+    as a 500, which says "the server is broken" about a request the client got
+    wrong. One handler rather than a try/except at each of the three call sites,
+    so a fourth one cannot forget it.
+    """
+    from fastapi.responses import JSONResponse
+
+    logger.warning("rejected request: %s", exc)
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
 class QueryIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     # Which index to answer from. Empty means the configured default, so an
     # older client that does not send it keeps working.
-    corpus: str = Field(default="", max_length=32)
+    #
+    # The pattern is not decoration: this value reaches `collection_for()`,
+    # which interpolates it into a Chroma collection name. Chroma rejects
+    # anything outside [a-zA-Z0-9._-] with an exception, so "../../etc" used to
+    # surface as a 500 rather than a 422. Rejecting it here makes it a client
+    # error, which is what it is. `:` is allowed for the `upload:<session>` form.
+    corpus: str = Field(default="", max_length=32, pattern=r"^[a-zA-Z0-9_:.-]*$")
 
 
 class QueryOut(BaseModel):
@@ -117,7 +169,8 @@ def _query_response(final: dict, elapsed_ms: int, token_usage: dict) -> QueryOut
 
 
 @app.post("/api/query", response_model=QueryOut)
-async def query(body: QueryIn) -> QueryOut:
+async def query(body: QueryIn, request: Request) -> QueryOut:
+    _enforce(_QUERY_LIMITER, request)
     started = time.perf_counter()
 
     # One tracker per request via a contextvar (app/token_usage.py) — the LLM
@@ -158,7 +211,7 @@ async def query(body: QueryIn) -> QueryOut:
 
 
 @app.post("/api/query/stream")
-async def query_stream(body: QueryIn) -> StreamingResponse:
+async def query_stream(body: QueryIn, request: Request) -> StreamingResponse:
     """Same query as `/api/query`, as Server-Sent Events.
 
     The correction path (grade -> transform_query -> web_search_fallback ->
@@ -178,6 +231,7 @@ async def query_stream(body: QueryIn) -> StreamingResponse:
     import asyncio
     import json
 
+    _enforce(_QUERY_LIMITER, request)
     set_current_corpus(body.corpus)
 
     queue: asyncio.Queue = asyncio.Queue()
@@ -208,18 +262,31 @@ async def query_stream(body: QueryIn) -> StreamingResponse:
             asyncio.run_coroutine_threadsafe(queue.put((SENTINEL, None)), loop).result()
 
     async def event_source():
+        import contextlib
+
         from starlette.concurrency import run_in_threadpool
 
-        await run_in_threadpool(produce)
-        # produce() has already fully populated the queue by the time
-        # run_in_threadpool returns (each put is awaited via
-        # run_coroutine_threadsafe before the next one), so draining it here
-        # is sequential, not racy.
-        while True:
-            kind, payload = await queue.get()
-            if kind is SENTINEL:
-                return
-            yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+        # The producer runs as a task rather than being awaited here. Awaiting it
+        # ran the whole graph to completion before the first event was yielded,
+        # which is a non-streaming endpoint wearing an SSE content-type: measured
+        # against the running server, every event arrived in one 0.43s burst
+        # after 8.5s of work, with the `retrieve` event claiming elapsed_ms=2229.
+        # Starting it concurrently and draining as it goes is the whole point of
+        # the queue.
+        worker = asyncio.create_task(run_in_threadpool(produce))
+        try:
+            while True:
+                kind, payload = await queue.get()
+                if kind is SENTINEL:
+                    return
+                yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+        finally:
+            # On a client disconnect the generator is closed mid-drain. The
+            # worker thread cannot be cancelled (it is blocked in sync LLM
+            # calls), but awaiting it surfaces any error instead of leaving the
+            # task orphaned and its exception unretrieved.
+            with contextlib.suppress(Exception):
+                await worker
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
 
@@ -383,7 +450,9 @@ async def stats(corpus: str = ""):
 
 
 @app.post("/api/upload")
-async def upload(session: str = Form(...), file: UploadFile = File(...)):
+async def upload(
+    request: Request, session: str = Form(...), file: UploadFile = File(...)
+):
     """Index one uploaded document into that session's own corpus.
 
     Scoped per session because the deployed demo is public: indexing into the
@@ -393,12 +462,34 @@ async def upload(session: str = Form(...), file: UploadFile = File(...)):
     The work is CPU-bound (PDF parsing, then embedding every chunk), so it runs
     in a threadpool rather than blocking the event loop the way a large file
     otherwise would.
+
+    The body is read in chunks and abandoned the moment it exceeds the limit.
+    `await file.read()` with no argument would pull the whole upload into memory
+    first and only then let `extract_text` reject it, so a rejected request cost
+    as much memory as an accepted one: six concurrent 115 MB uploads took this
+    container from 560 MiB to 1.2 GiB while every one of them correctly returned
+    400. The deployed instance has 1 GiB and a concurrency of 8, so that is an
+    out-of-memory kill from requests the API is already refusing.
     """
     from starlette.concurrency import run_in_threadpool
 
-    from app.tools.uploads import UploadError, ingest_upload
+    from app.tools.uploads import MAX_UPLOAD_BYTES, UploadError, ingest_upload
 
-    blob = await file.read()
+    _enforce(_UPLOAD_LIMITER, request)
+
+    pieces: list[bytes] = []
+    total = 0
+    while piece := await file.read(1024 * 1024):
+        total += len(piece)
+        if total > MAX_UPLOAD_BYTES:
+            # 413, not 400: the request was well-formed, just too big.
+            raise HTTPException(
+                status_code=413,
+                detail=f"file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB",
+            )
+        pieces.append(piece)
+    blob = b"".join(pieces)
+
     try:
         result = await run_in_threadpool(
             ingest_upload, session, file.filename or "upload", blob
@@ -426,6 +517,52 @@ async def clear_upload(session: str):
     clear_session(session)
     bust_cache()
     return {"cleared": session}
+
+
+@app.get("/api/documents/{doc_id}")
+async def document_text(doc_id: str, corpus: str = ""):
+    """The text of one indexed document.
+
+    The grader's verdict is the project's central decision, and it is only
+    checkable if the documents it read are readable too. Without this a `no`
+    has to be taken on trust, which is the opposite of what the evaluation
+    page is arguing for.
+
+    Built-in documents are read from disk. Uploaded ones no longer exist as
+    files - only as chunks - so they are reassembled from the index in chunk
+    order.
+    """
+    from pathlib import Path
+
+    from app.config import get_vectorstore
+
+    set_current_corpus(corpus)
+
+    if active_corpus() == "concepts":
+        # Resolve inside the data directory and refuse anything that escapes it:
+        # doc_id arrives from the client, and "../../etc/passwd" is the obvious
+        # thing to try.
+        data_dir = Path(get_settings().DATA_DIR).resolve()
+        target = (data_dir / doc_id).resolve()
+        if data_dir not in target.parents or not target.is_file():
+            raise HTTPException(status_code=404, detail=f"no document '{doc_id}'")
+        return {"id": doc_id, "text": target.read_text(encoding="utf-8")}
+
+    try:
+        raw = get_vectorstore()._collection.get(include=["documents", "metadatas"])
+    except Exception:  # noqa: BLE001 - the collection may not exist yet
+        raise HTTPException(status_code=404, detail=f"no document '{doc_id}'") from None
+
+    pairs = [
+        (meta or {}, text)
+        for meta, text in zip(raw.get("metadatas") or [], raw.get("documents") or [])
+        if (meta or {}).get("source") == doc_id
+    ]
+    if not pairs:
+        raise HTTPException(status_code=404, detail=f"no document '{doc_id}'")
+
+    pairs.sort(key=lambda p: p[0].get("chunk", 0))
+    return {"id": doc_id, "text": "\n\n".join(text for _, text in pairs)}
 
 
 @app.get("/api/documents")

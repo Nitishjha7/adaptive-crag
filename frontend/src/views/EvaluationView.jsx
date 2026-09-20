@@ -26,7 +26,7 @@ const SCIFACT = {
 function Stat({ value, label, sub, tone = "text-white" }) {
   return (
     <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
-      <div className={`text-2xl font-semibold leading-none ${tone}`}>{value}</div>
+      <div className={`text-[26px] font-semibold leading-none tabular-nums ${tone}`}>{value}</div>
       <div className="mt-2 text-sm font-medium text-slate-200">{label}</div>
       {sub && <div className="mt-0.5 text-xs leading-relaxed text-slate-500">{sub}</div>}
     </div>
@@ -74,7 +74,7 @@ export default function EvaluationView({ stats }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Does the router actually route?</h2>
+        <h2 className="text-xl font-semibold text-white">Does the router actually route?</h2>
         <p className="mt-1 text-sm text-slate-500">
           Measured on two labelled sets, not asserted. Read from{" "}
           <span className="font-mono">eval/results.json</span> at request time.
@@ -85,7 +85,7 @@ export default function EvaluationView({ stats }) {
           dataset labelled, and the router scores differently on them. */}
       <section className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
         <div className="border-b border-ink-700 px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">The same router, on two sets</h3>
+          <h3 className="text-sm font-medium text-white">The same router, on two sets</h3>
           <p className="mt-0.5 text-xs text-slate-500">
             The gap between these columns is why the second set exists.
           </p>
@@ -128,18 +128,19 @@ export default function EvaluationView({ stats }) {
 
         <p className="border-t border-ink-700 px-4 py-3 text-xs leading-relaxed text-slate-500">
           On <span className="font-mono">concepts</span> the author wrote both the
-          documents and the labels, and the corpus gap is categorical, so 100% means
-          the task is easy rather than the router being perfect. SciFact&apos;s labels
-          ship with the dataset, and there the same router over-triggers: six
-          unnecessary fallbacks, one extra LLM call each. That is the real failure
-          mode, and only the second set could show it.
+          documents and the labels, and what is missing from them is an obvious
+          category, so 100% means the task is easy rather than the router being
+          perfect. SciFact&apos;s labels ship with the dataset, and there the same
+          router over-triggers: six unnecessary fallbacks, one extra LLM call
+          each. That is the real failure mode, and only the second set could show
+          it.
         </p>
       </section>
 
       {/* Live numbers for whichever corpus this process loaded. */}
       <div>
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Loaded corpus &mdash;{" "}
+          Loaded documents &mdash;{" "}
           <span className="font-mono normal-case">{stats.corpus}</span>
         </h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -176,10 +177,10 @@ export default function EvaluationView({ stats }) {
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
           What is running right now
         </h3>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="max-w-2xl">
           <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
             <div className="border-b border-ink-700 px-4 py-3">
-              <h4 className="text-sm font-semibold text-white">Pipeline</h4>
+              <h4 className="text-sm font-medium text-white">Pipeline</h4>
               <p className="mt-0.5 text-xs text-slate-500">
                 Everything except the LLM runs in this container
               </p>
@@ -197,30 +198,8 @@ export default function EvaluationView({ stats }) {
               tone={c.hybrid ? "good" : "off"}
             />
             <Row label="Chunks sent to the grader" value={c.top_k} />
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-850">
-            <div className="border-b border-ink-700 px-4 py-3">
-              <h4 className="text-sm font-semibold text-white">Boundaries</h4>
-              <p className="mt-0.5 text-xs text-slate-500">
-                What this build does not do, stated rather than hidden
-              </p>
-            </div>
-            <Row
-              label="Web search"
-              value={
-                c.search_provider === "duckduckgo"
-                  ? "duckduckgo - no API key needed"
-                  : c.search_provider
-              }
-            />
-            <Row label="Ingestion" value="build-time - no upload API" tone="off" />
-            <Row
-              label="Conversation memory"
-              value="none - each query is independent"
-              tone="off"
-            />
-            <Row label="Deployment" value="Cloud Run / asia-south1" />
+            <Row label="Web search" value={c.search_provider} />
+            <Row label="Deployment" value="Cloud Run · asia-south1" />
           </div>
         </div>
       </div>

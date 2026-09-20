@@ -15,7 +15,7 @@ How a merge behaves is decided per key by its **reducer**:
   graded "no"; keeping them in context would dilute the good context and bring
   back the hallucination risk the grading step exists to remove.
 
-  That makes this the highest-leverage line in the file: adding `operator.add`
+  That makes this the line to be careful with: adding `operator.add`
   here would reintroduce the bug without changing a single node.
 """
 

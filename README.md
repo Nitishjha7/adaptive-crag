@@ -2,197 +2,146 @@
 
 # Adaptive Corrective RAG
 
-**A RAG pipeline that grades its own retrieval before answering — and searches the web only when it decides the corpus falls short.**
+RAG that grades its own retrieval before answering, and searches the web only when the documents fall short.
 
 [![tests](https://github.com/Nitishjha7/adaptive-crag/actions/workflows/ci.yml/badge.svg)](https://github.com/Nitishjha7/adaptive-crag/actions/workflows/ci.yml)
-[![missed fallbacks](https://img.shields.io/badge/missed%20fallbacks-0%20on%20both%20corpora-3fb950)](#what-the-measurements-say)
+[![missed fallbacks](https://img.shields.io/badge/missed%20fallbacks-0-3fb950)](#what-the-numbers-say)
 [![SciFact recall@k](https://img.shields.io/badge/SciFact%20recall%40k-70%25-0d9488)](backend/eval/RESULTS.md)
 [![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-4f46e5)](backend/app/graph/build_graph.py)
-[![Groq](https://img.shields.io/badge/Groq-gpt--oss--120b-f97316)](backend/app/config.py)
 [![license](https://img.shields.io/badge/license-MIT-64748b)](LICENSE)
 
-**[Live demo](https://adaptive-crag-906520260355.asia-south1.run.app)** · Cloud Run, `asia-south1`
+**[Live demo](https://adaptive-crag-906520260355.asia-south1.run.app)**
 
 </div>
 
-Naive RAG trusts whatever the vector DB returns. CRAG adds a verification step: a
-grading node decides whether the retrieved chunks actually answer the question,
-and only pays for a web call when they don't.
-
-**The point of the project is not the loop — it is measuring whether the loop
-works.** Routing accuracy, retrieval recall and answer correctness are all
-measured against labelled sets, and the results that came back negative are
-published alongside the ones that didn't.
+![A question answered from the indexed documents, with its sources and the route the graph took](docs/images/chat.png)
 
 ---
 
-<p align="center">
-  <img src="docs/images/architecture.svg" alt="Architecture: a question is retrieved with hybrid search and reranking, graded by an LLM, then either answered locally or corrected through query rewriting and web search before generation and guardrails" width="100%">
-</p>
+## Why I built it
 
-<p align="center">
-  <sub>Indigo is the one node the <b>model</b> controls — everything downstream is a
-  deterministic edge reading its verdict. The correction path costs one extra LLM call,
-  and only runs when the grader says the corpus is not enough.</sub>
-</p>
+A vector database always returns something. Ask it a question it has no answer
+to and you still get the four nearest chunks back, because "nearest" is the only
+thing it knows — there is no score below which it says *I don't have this*.
 
----
+The model then writes a confident wrong answer from those chunks and cites them.
+The citations make it look more trustworthy, not less. That is what bothered me:
+not that RAG gets things wrong, but that it gets them wrong **with sources
+attached**.
 
-## What it looks like
-
-Every answer carries its own execution trace. Here the local route, with **web
-search shown as skipped** — the fallback is conditional, not the default. The LLM
-call count comes from the trace, and names the cost of the path not taken.
-
-![Chat with the execution trace expanded](docs/images/trace.png)
-
-The evaluation page leads with *who labelled the test set*, then two experiments
-with their real tables — including the one where reranking changed 27 of 28
-retrievals and moved zero routing decisions.
-
-![Evaluation page](docs/images/evaluation.png)
-
-<details>
-<summary>Documents and System Status</summary>
-
-![Documents page](docs/images/documents.png)
-![System status page](docs/images/system.png)
-
-</details>
+So this checks whether the retrieved context is good enough before it generates
+anything, and goes to the web when it is not.
 
 ---
 
-## What the measurements say
+## What it does
 
-Two corpora. `concepts` is 7 hand-written documents with a deliberate gap.
-`scifact` is BEIR SciFact — 500 abstracts whose relevance labels ship with the
-dataset, so they are not mine.
+Ask a question and it retrieves, grades what came back, and only then answers.
+On `no` it rewrites the query and searches the web instead. Drop in a PDF and it
+answers from that.
 
-| | concepts | SciFact |
-|---|---|---|
-| Routing accuracy | 20/20 | 22/28 (78.6%) |
-| **Missed fallbacks** (the expensive error) | **0** | **0** |
-| Retrieval recall@k | no ground truth | 70% |
-| Answer correctness † | no ground truth | 83.3% (90.9% given gold retrieved) |
-| LLM calls per query | local 3 · web 4 | same |
+The correction path is measured: **0 missed fallbacks** on both evaluation sets.
+That is the expensive error — answering locally when it should have gone to the
+web — and it never happened.
 
-† Measured on the **baseline** arm (vector-only retrieval); every other SciFact
-number is the shipped hybrid + rerank config. The treatment arm of that A/B hit
-Groq's daily token cap, so the two are not yet comparable on answer quality —
-see [what is not built](#what-is-not-built).
-
-Three findings that matter more than the scores:
-
-- **100% means the labelled task is easy, not that the router is perfect.** The
-  concepts gap is categorical by design, and I wrote both the corpus and the
-  labels. That is why SciFact exists.
-- **The grader made zero independent errors.** On SciFact every case whose gold
-  document was retrieved routed correctly (13/13) and every case that missed it
-  fell back (7/7). Every "routing failure" was a retrieval miss the grader caught.
-  The bottleneck is retrieval, not grading — and the same holds one stage down:
-  given the right document, the generator was right 10 times out of 11.
-- **Reranking changed nothing measurable, and that is written down.** Hybrid
-  search and cross-encoder reranking were A/B'd behind flags. On concepts, 27 of
-  28 questions retrieved *different* chunks and not one verdict moved. On SciFact
-  exactly one case changed. Latency could not be measured at all — the first
-  number looked convincing and turned out to be a throttling artifact, so no
-  latency figure is reported anywhere.
-
-Full analysis, including both negative results and what is still unproven:
-**[backend/eval/RESULTS.md](backend/eval/RESULTS.md)**.
+It is also tested against a benchmark, not only my own labels. On the
+hand-written set routing scores 100%; on SciFact, where the labels ship with the
+dataset, the same router scores 78.6% and over-triggers six times. The second
+number is the one worth trusting.
 
 ---
 
-## Run it
-
-Only `GROQ_API_KEY` is required — web search defaults to DuckDuckGo, no key.
+## Quick start
 
 ```bash
-cp .env.example .env       # fill in GROQ_API_KEY
+git clone https://github.com/Nitishjha7/adaptive-crag && cd adaptive-crag
+copy .env.example .env      # add GROQ_API_KEY
 docker compose up --build
 ```
 
-- Frontend → <http://localhost:3001>
-- API docs → <http://localhost:8001/docs>
+UI on `:3001`, API docs on `:8001/docs`. Tests need no API key: `.\dev.ps1 test`.
 
-Switch corpus without editing anything:
+---
 
-```bash
-CORPUS=scifact docker compose up -d --build   # BEIR SciFact, 1,717 chunks
-docker compose up -d                          # back to concepts
-```
+## What the numbers say
 
-The demo questions, the evaluation findings and the corpus notes all follow
-`CORPUS` — SciFact numbers under prose written about concepts would have the
-dashboard contradicting its own figures.
+| | concepts | SciFact |
+|---|---|---|
+| Who wrote the labels | the author | the dataset (`qrels`) |
+| Routing accuracy | 100% (20/20) | **78.6%** (22/28) |
+| Missed fallbacks | 0 | 0 |
+| Unnecessary fallbacks | 0 | **6** |
+| Retrieval recall@k | no ground truth | **70%** |
+| Groundedness | 90% | 92.9% |
 
-Backend-only dev loop (`.\dev.ps1 test`, `ingest`, `eval`, `ask`) is in
-[docs/SETUP.md](docs/SETUP.md).
+On `concepts` the author wrote both the documents and the labels, and what is
+missing from them is an obvious category — so 100% means the task is easy, not
+that the router is good. SciFact removes that bias, and there the router
+over-triggers: six unnecessary fallbacks, one extra LLM call each. **That is the
+real failure mode, and only the second set could show it.**
+
+Two experiments came back flat and are reported anyway: reranking changed
+retrieval on 27 of 28 questions without moving a single routing verdict, and the
+latency comparison turned out to be an artifact of test ordering, so no latency
+figure is quoted. Full analysis in [backend/eval/RESULTS.md](backend/eval/RESULTS.md).
 
 ---
 
 ## How it works
 
-1. **`retrieve`** — vector search + BM25 over ChromaDB, fused by RRF, reranked by
-   a local cross-encoder to the top-k chunks.
-2. **`grade_documents`** — an LLM binary grader: is this context sufficient,
-   `yes` or `no`?
-3. **`yes` →** straight to `generate`.
-4. **`no` →** `transform_query` rewrites into search keywords →
-   `web_search_fallback` replaces the rejected documents → `generate`.
-5. **`generate`** — answers strictly from the surviving context.
-6. **`validate_guardrails`** — independent groundedness check plus PII redaction.
+![The graph: retrieve, grade, and either generate or correct through query rewriting and web search](docs/images/architecture.svg)
 
-The corpus is whatever the container was started with, or a PDF the visitor
-uploads: `POST /api/upload` parses and indexes it into a session-scoped
-collection, and queries carrying `corpus=upload:<session>` retrieve from that
-instead. Same chunker, same embeddings, same graph.
+1. **Retrieve** — vector search and BM25 over Chroma, fused with Reciprocal Rank
+   Fusion, reranked by a local cross-encoder. They fail differently: vectors miss
+   exact tokens, BM25 misses paraphrases.
+2. **Grade** — a binary LLM verdict on whether the retrieved context is worth
+   answering from. Binary because a score needs a threshold, and a threshold is
+   another number with no data behind it.
+3. **Correct** — on `no`, the query is rewritten into search keywords and the web
+   replaces the rejected documents.
+4. **Generate** — answers strictly from the surviving context, with citations.
+5. **Validate** — independent groundedness check and regex PII redaction.
+
+Questions are answered from the built-in documents, or from a PDF uploaded at
+runtime — parsed, chunked and indexed into a session-scoped collection so one
+visitor's document never answers another's question.
 
 | Layer | Technology |
 |---|---|
-| Orchestration | LangGraph (StateGraph), conditional edges |
-| LLM / embeddings | Groq · FastEmbed (`bge-small-en-v1.5`, local ONNX) |
-| Retrieval | Chroma + BM25, RRF fusion, `ms-marco-MiniLM` cross-encoder |
-| Web fallback | DuckDuckGo (default) / Tavily (optional) |
-| Validation | LLM groundedness check + regex PII redaction |
-| API / UI | FastAPI · React + Vite + Tailwind · Docker Compose |
-| LLM gateway | Groq → Groq fallback chain (`with_fallbacks`) — same-provider, since this project has one key |
-| Observability | Per-query token/cost accounting, Prometheus `/metrics`, JSON stdout logs |
+| Orchestration | LangGraph `StateGraph`, conditional edges |
+| LLM | Groq `gpt-oss-120b`, `with_fallbacks` to `20b` |
+| Embeddings | FastEmbed `bge-small-en-v1.5`, local ONNX |
+| Retrieval | Chroma + BM25, RRF, `ms-marco-MiniLM` cross-encoder |
+| Web fallback | DuckDuckGo · Tavily optional |
+| Deploy | Cloud Run, single image serving API and SPA |
+
+![The evaluation page: the same router measured on two labelled sets](docs/images/evaluation.png)
 
 ---
 
-## Live, streaming, and observable
+## Choices I had to make
 
-Beyond the batch `POST /api/query`, the same graph is exposed three more ways:
+| Choice | Reason |
+|---|---|
+| **Binary grader**, not a 0–1 score | A score needs a threshold, and the threshold would be another number picked without data. Binary is also checkable against a label. |
+| Parse **`no` before `yes`** | An explanation can contain both words. The safe reading of a confused answer is `no` — one extra web call, not a hallucination. |
+| **Hybrid retrieval**, fused by rank | Vectors miss exact tokens, BM25 misses paraphrases. RRF (`k=60`) combines rankings, so the two never need comparable score scales. |
+| Fallback **replaces** documents | `documents` is the one state field with no reducer. Appending web results would leave rejected context in the prompt. |
+| Corpus in a **`ContextVar`** | Which index to read is a property of the request, not the process. Uploads reuse it — `upload:<session>` is just another corpus name. |
+| **Session-scoped uploads** | One shared index on a public demo means one visitor's PDF answers another's question. |
+| Determinism from the **prompt** | The grader once returned `yes` and `no` for identical input. `temperature=0` is no guarantee on a MoE model and Groq ignores `seed` — the fix was a criterion with one reading. |
 
-- **`POST /api/query/stream`** — Server-Sent Events. One `progress` event per
-  finished graph node, phrased around the routing decision itself
-  (`grade_documents: relevance=no (not relevant, falling back to web)`), then a
-  final `done` event with the exact payload `/api/query` returns. Verified live
-  against real Groq and real DuckDuckGo, one local-route and one web-fallback
-  query — see [backend/eval/RESULTS.md](backend/eval/RESULTS.md#call-counts-upgraded-to-real-tokens-and-dollars).
-- **`get_llm()` fallback chain** — this project already lived through a real
-  incident (Groq retired `llama-3.3-70b-versatile` mid-project, see
-  [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md)). Setting `LLM_FALLBACK_MODELS`
-  wires a `with_fallbacks()` chain so a dead or rate-limited primary fails over
-  to a second Groq model, with temperature preserved through the whole chain
-  (grading needs temp=0 determinism regardless of which model actually
-  answers). Empty by default — no fallback simulated unless configured.
-- **`/metrics`** (Prometheus) + JSON stdout logs — routing counts, groundedness
-  pass/fail, LLM calls/tokens/cost by model, and whether a fallback fired.
-  Every metric mirrors something `eval/RESULTS.md` already measures offline;
-  nothing generic was added.
-- **Per-query token and cost accounting** — the precise replacement for the
-  "3 calls vs 4 calls" proxy the eval fell back on after latency proved
-  unmeasurable. Both `/api/query` and `/api/query/stream` return `token_usage`
-  with real input/output tokens and USD cost per model.
-- **Cross-query memory (`app/memory/`)** — episodic and semantic, both real
-  vector similarity through the same FastEmbed/Chroma pair `retrieve` already
-  uses, in a separate collection so a stored episode can never leak into
-  retrieval results. Verified live: the same question rephrased a second
-  time surfaced the first attempt's groundedness precedent as `memory_note`
-  in the response, with no restart in between — see docs/CODE_NOTES.md for a
-  real Chroma cross-process caching bug this surfaced and how it was fixed.
+---
+
+## Deployment
+
+Deployed on **Google Cloud Run** — one container serving the API and the built
+SPA from a single origin, so there is no CORS to configure and one service to
+keep alive. Scales to zero when idle, and Cloud Build redeploys on every push to
+`main`. The embedding model, the cross-encoder and the index are baked into the
+image at build time, so the first request never waits on a download.
+
+Sizing and the failures it took are in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 
@@ -200,45 +149,21 @@ Beyond the batch `POST /api/query`, the same graph is exposed three more ways:
 
 | | |
 |---|---|
-| **[PROJECT_WALKTHROUGH.md](docs/PROJECT_WALKTHROUGH.md)** | **Start here.** How the pipeline works end to end, and how it was built |
+| **[PROJECT_WALKTHROUGH.md](docs/PROJECT_WALKTHROUGH.md)** | **Start here.** How a question flows through the graph |
 | [RESULTS.md](backend/eval/RESULTS.md) | Every measurement, including the negative ones |
 | [TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) · [CODE_NOTES.md](docs/CODE_NOTES.md) | Architecture, state schema, file-by-file notes |
-| [BUILD_PLAN.md](docs/BUILD_PLAN.md) | The order things were built in, and where the time actually went |
-| [ROADMAP.md](docs/ROADMAP.md) · [SETUP.md](docs/SETUP.md) | What was built when; environment setup |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploying to Cloud Run, and the memory measurements behind the sizing |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Cloud Run sizing, and the failures it took |
+| [ROADMAP.md](docs/ROADMAP.md) · [SETUP.md](docs/SETUP.md) | What was built when; local setup |
 
 ---
 
-## What is not built
-
-Stated rather than hidden — the System Status page says the same thing in the UI.
-
-- **Deployment — the image is built and verified, the Space is not created yet.**
-  `Dockerfile` at the repo root serves the API and the built SPA from one
-  process; it ingests the corpus at build time and asserts the index is
-  non-empty, because `vectorstore/` is gitignored and a fresh clone would
-  otherwise boot empty. Verified locally: both routes answer, `indexed_chunks: 22`.
-  Render was measured and ruled out — **698 MB peak against a 512 MB limit**, no
-  persistent disk, and it sleeps. Deployed on Cloud Run instead; the sizing and
-  the two failures it took are in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
-- **The answer-correctness A/B.** Only the baseline arm ran — the treatment arm
-  hit Groq's daily token cap. Whether reranking improves *answers* is still open.
-- **The full 5k SciFact corpus + 300-query set.** Needs ~8 GB to Docker; this
-  laptop gives 3.5. That run is what would settle the reranking question.
-- No context filter, no prompt-injection defence. Uploads are session-scoped and
-  live on the container filesystem, so they survive until the instance restarts. Each *query's own state* still runs
-  independently (`CRAGState` carries nothing between requests) — but
-  `app/memory/` now remembers *across* queries: episodic (has a similar
-  question been asked before, and did its answer pass groundedness),
-  semantic (a repeated failure pattern distilled into a fact). No long-term
-  memory here, and that is stated rather than invented — this project has no
-  client identity of any kind to scope one to. See
-  [docs/CODE_NOTES.md](docs/CODE_NOTES.md).
-
-129 tests, no API key needed: `.\dev.ps1 test`
+**133 tests**, no API key required. CI builds the index the same way the deploy
+image does, then boots that image and checks it serves.
 
 ---
 
-Part of an **agentic self-correcting systems** portfolio theme alongside a
-Self-Healing SQL Agent — same pattern (LLM + self-verification + autonomous
-correction) applied to retrieval relevance rather than SQL execution errors.
+<div align="center">
+
+MIT · [Nitish Jha](https://github.com/Nitishjha7)
+
+</div>

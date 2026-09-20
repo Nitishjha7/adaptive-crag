@@ -10,7 +10,7 @@
 function Stat({ value, label, sub, tone = "text-white" }) {
   return (
     <div className="rounded-lg border border-ink-700 bg-ink-900 px-3 py-3">
-      <div className={`text-xl font-semibold leading-none ${tone}`}>{value}</div>
+      <div className={`text-lg font-semibold leading-none tabular-nums ${tone}`}>{value}</div>
       <div className="mt-1.5 text-[11px] font-medium text-slate-300">{label}</div>
       {sub && <div className="mt-0.5 text-[10px] leading-snug text-slate-500">{sub}</div>}
     </div>
@@ -21,7 +21,7 @@ function Card({ title, right, children }) {
   return (
     <section className="rounded-xl border border-ink-700 bg-ink-850">
       <div className="flex items-center gap-2 border-b border-ink-700 px-4 py-3">
-        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        <h2 className="text-sm font-medium text-white">{title}</h2>
         {right && <div className="ml-auto">{right}</div>}
       </div>
       {children}
@@ -59,7 +59,7 @@ export default function ContextRail({ stats, latest, onOpenEval }) {
             sub="never answered from the wrong documents"
             tone="text-emerald-300"
           />
-          <Stat value={stats?.chunks ?? "—"} label="Indexed chunks" sub={stats?.corpus} />
+          <Stat value={stats?.chunks ?? "—"} label="Indexed chunks" sub="searchable text" />
           <Stat value={docs ?? "—"} label="Documents" sub="indexed" />
         </div>
 
@@ -84,7 +84,7 @@ export default function ContextRail({ stats, latest, onOpenEval }) {
                   : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
               }`}
             >
-              {latest.source_type === "web_search" ? "web" : "corpus"}
+              {latest.source_type === "web_search" ? "web" : "documents"}
             </span>
           }
         >

@@ -51,7 +51,7 @@ of manual: `get_llm()` wraps the primary client in `with_fallbacks()` so a dead 
 rate-limited model fails over live, and every one of the four call sites
 (`grade_documents`, `transform_query`, `generate`, `validators.check_groundedness`)
 keeps working through a plain `ChatPromptTemplate | get_llm(...)` chain without
-knowing whether it got a single client or a fallback chain — `RunnableWithFallbacks`
+knowing whether it got a single client or a fallback chain. `RunnableWithFallbacks`
 satisfies the same `Runnable.invoke()` interface.
 
 **Only Groq-to-Groq.** This account has one vendor's key, so the fallback list is
@@ -66,7 +66,7 @@ ran warmer would undermine the whole "deterministic grader" claim in
 
 **Live-replicated the actual incident**: pointing `LLM_MODEL` at the now-dead
 `llama-3.3-70b-versatile` with `LLM_FALLBACK_MODELS=openai/gpt-oss-120b` and running a
-real query completed successfully — `token_usage` on the response showed only the
+real query completed successfully. `token_usage` on the response showed only the
 fallback model recorded any calls, confirming the primary failed and the fallback
 answered transparently.
 
@@ -82,7 +82,7 @@ reads a handful of chunks and returns one word, `generate` reads the same chunks
 writes a whole answer.
 
 `get_llm()` is `@lru_cache`'d, so the four call sites share one or two actual
-`ChatGroq` instances, not one each — a plain module-level counter on the shared client
+`ChatGroq` instances, not one each. A plain module-level counter on the shared client
 would mix tokens from concurrent requests. `UsageTracker` lives behind a
 `contextvars.ContextVar` instead: `main.py` calls `new_tracker()` once per request, and
 the one `_TrackingCallback` instance bound onto every client (in `config._client`)
@@ -114,7 +114,7 @@ than the configured primary answer).
 taxonomy needs a ground-truth label for whether a question actually required `web`, and
 that label only exists in `eval/scenarios.json`, written by hand. A live request has no
 such label, so a live "missed fallback" counter would have to guess at the exact thing
-the eval exists to check — a guessed metric with a real-sounding name is worse than no
+the eval exists to check, and a guessed metric with a real-sounding name is worse than no
 metric. `crag_groundedness_total` is the live signal that correlates with it instead.
 
 `record_query(state, token_usage, elapsed_ms, primary_model=...)` is called once per
@@ -146,7 +146,7 @@ Phase 2 wiring test ran with `get_llm` replaced by a fake, with no Groq key at a
 and swapping a model happens in one place.
 
 **Why `@lru_cache`:** every node imports config. Without caching, each call would
-re-parse `.env` and load a fresh embedding model — slow and pointless.
+re-parse `.env` and load a fresh embedding model, which is slow and pointless.
 
 **Why `ChatGroq` / `FastEmbedEmbeddings` are imported inside the functions:** it keeps
 module import cheap. Running something like `python -m app --help` does not pull in
@@ -201,12 +201,12 @@ invoke, one complete trace.
 
 ## dev.ps1 (repo root)
 
-There is no Python installed on the machine this was built on — everything runs in
+There is no Python installed on the machine this was built on; everything runs in
 Docker. This helper wraps the long `docker run` incantation: `build` / `ingest
 [-Reset]` / `ask "..."` / `test` / `eval` / `serve [-Port N]` / `shell`.
 
 Source is **bind-mounted** (`app/`, `data/`, `eval/`, `ingest.py`), so an edit needs no
-rebuild — the image only supplies dependencies. `.env` is injected with `--env-file`
+rebuild; the image only supplies dependencies. `.env` is injected with `--env-file`
 rather than baked into the image.
 
 `docker compose up` runs the full stack; `dev.ps1` remains the backend-only loop,
@@ -234,14 +234,14 @@ which is faster to iterate in.
 | `test_memory.py` | Episodic recall by real vector similarity (a rephrasing matches, an unrelated question does not), semantic fact consolidation and recall, both against the real FastEmbed model in a temp Chroma directory — not a fake, since similarity search is exactly what is under test |
 
 **Why no real LLM calls in the tests:** these test **control flow**, not model quality.
-Real calls are slow, cost money, need a key and are non-deterministic — that is, flaky
+Real calls are slow, cost money, need a key and are non-deterministic, that is, flaky
 in CI. Giving the grader a scripted verdict is the thing under test: *"if the
 grader says 'no', does the graph take the right path?"* The grader's **accuracy** is a
 different question, and it belongs to the eval harness, not here.
 
 **The most important test:** `test_fallback_replaces_local_docs_instead_of_merging`. If
 rejected local documents survived alongside the web snippets, the point of CRAG
-would be gone — and that can break silently, so it is asserted.
+would be gone. That can break silently, so it is asserted.
 
 ---
 
@@ -281,7 +281,7 @@ pass groundedness (`guardrail_passed`, straight from `validate_guardrails`, not 
 separate judgement invented for this feature). Real vector similarity, not exact
 match: `record_episode_from_state` writes to a second Chroma collection
 (`crag_memory_episodes`), reusing the exact same `get_embeddings()` this project
-already loads for retrieval — no second model, no new dependency.
+already loads for retrieval: no second model, no new dependency.
 
 **semantic.py** — `consolidate_facts()` clusters *ungrounded* episodes by
 similarity (a plain greedy pass, not a real clustering library — this memory
@@ -302,20 +302,20 @@ verbatim.
 
 **A cross-process Chroma caching bug, found only by testing against a running
 container:** writing a fact via `POST /api/memory/consolidate` was invisible to
-the *same process's* own `recall_facts()` immediately afterward — a completely
+the *same process's* own `recall_facts()` immediately afterward, while a completely
 fresh Python process against the identical directory saw it right away. The
 cause: `chromadb.api.client.SharedSystemClient` caches a `PersistentClient`
 process-wide, keyed by persist path, regardless of how many "fresh" `Chroma(...)`
 objects a caller constructs. `consolidate_facts()` now calls
 `SharedSystemClient.clear_system_cache()` after a successful write. Every unit
-test passed throughout, because a test process is always fresh — this only shows
+test passed throughout, because a test process is always fresh. This only shows
 up against a long-running server, which is exactly why it was verified against
 `docker compose up`, not just `pytest`.
 
 **Why no long-term memory, unlike the sibling self-healing-sql-agent:** long-term
 memory needs a scope to persist preferences *for*. That project has `thread_id`;
-this one has nothing — `/api/query` takes a bare question, no cookie, no header.
-A `client_id` invented solely to unlock this feature would not be honest; the
+this one has nothing. `/api/query` takes a bare question, no cookie, no header.
+A `client_id` invented just to switch this on would not be honest; the
 limitation is stated in `docs/ROADMAP.md` instead.
 
 ---
@@ -341,7 +341,7 @@ logic means both can be tested independently. The function is trivial —
 the entire decision happens in `grade_documents`, and this only reads the result.
 
 **Why it defaults to `transform_query` rather than `generate`:** if `relevance_score`
-ends up empty for any reason, the safe direction is the correction path — pay for one
+ends up empty for any reason, the safe direction is the correction path: pay for one
 extra web call rather than answer from unverified context.
 
 **Design choice:** the fallback branch merges back into the same `generate` node rather
@@ -351,7 +351,7 @@ difference to it.
 ### `run_query_stream` — the same graph, one node at a time
 
 Built on `graph.stream(..., stream_mode="updates")` rather than a second, hand-written
-traversal, so it cannot drift from what `graph.invoke()` actually executes — the node
+traversal, so it cannot drift from what `graph.invoke()` actually executes. The node
 functions and edges above are the single source of truth for both. Yields
 `("progress", {node, label, elapsed_ms})` the instant each node finishes, then
 `("done", CRAGState)` with everything a non-streaming call would return.
@@ -366,7 +366,7 @@ web)`, not just `"grading documents"`.
 but the `{node_name: partial_state}` dict `stream(mode="updates")` yields only ever
 carries *that node's own* single new line, never the accumulated list. A naive
 `state.update(partial)` on the generator's local mirror of state silently overwrote
-`logs` with just the last node's line instead of the full trace — caught by
+`logs` with just the last node's line instead of the full trace. Caught by
 `test_stream_endpoint_matches_non_streaming_payload_shape` asserting the streamed
 `done` payload matches `/api/query` exactly. Fixed by popping `logs` out of `partial`
 and appending it by hand before merging the rest.
@@ -485,18 +485,18 @@ Two checks:
 
 **Why toxicity was left out:** the input is a controlled corpus plus search snippets,
 and an LLM "is this toxic" check without a proper classifier is theatre. Between naming
-a capability and not verifying it, and not naming it — the second is better.
+a capability and not verifying it, and not naming it, the second is better.
 
 ### Two decisions worth being able to defend
 
 **An ungrounded answer is flagged, not blocked.** A warning prefix is added; the answer
 is not hidden. In a demo, showing a hallucination *being caught* is more convincing
-than making it disappear — and for a user, "this might be wrong" beats a blank screen.
+than making it disappear, and for a user, "this might be wrong" beats a blank screen.
 **PII is different** — it is redacted, because flagging while displaying is still the
 leak.
 
 **The groundedness check fails open, not closed.** If the check itself crashes (network,
-rate limit), blocking the answer would be wrong — that answer was built from already
+rate limit), blocking the answer would be wrong, because that answer was built from already
 verified context. On an exception it assumes grounded and notes it in the log. Failing
 closed would let one flaky call turn the whole system into "I can't tell you anything".
 
@@ -512,7 +512,7 @@ problems, both written up in RESULTS.md:
 
 1. **No ground truth.** Nothing records which chunk was *correct*, so retrieval quality
    could not be measured at all. That is the main reason the hybrid + reranker A/B came
-   back flat — there was no metric available to move.
+   back flat: there was no metric available to move.
 2. **Single-author bias.** I wrote the documents and I wrote the eval labels. RESULTS.md
    says outright that the honest fix is someone else writing them.
 

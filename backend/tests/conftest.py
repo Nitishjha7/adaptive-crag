@@ -9,8 +9,29 @@ The grader's *accuracy* is a different question, and it belongs to the eval
 harness, not to these tests.
 """
 
+import os
+
 import pytest
 from langchain_core.runnables import RunnableLambda
+
+# The rate limiter is per-process and keys on the client address, so the whole
+# suite shares one bucket: the sixth test to post an upload would get a 429 for
+# reasons that have nothing to do with what it asserts. A dedicated test turns
+# it back on to check it works.
+os.environ.setdefault("DISABLE_RATE_LIMIT", "true")
+
+
+@pytest.fixture
+def client():
+    """The FastAPI app under TestClient, with the lifespan run so the graph is
+    compiled. Lives here rather than in test_api.py because several modules
+    need it."""
+    from fastapi.testclient import TestClient
+
+    import main
+
+    with TestClient(main.app) as c:
+        yield c
 
 
 class _Msg:

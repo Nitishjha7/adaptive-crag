@@ -1,16 +1,9 @@
-"""FastAPI layer — request validation and response shape."""
+"""FastAPI layer — request validation and response shape.
+
+The `client` fixture lives in conftest.py; test_corpus.py needs it too.
+"""
 
 import pytest
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def client():
-    import main
-
-    # TestClient runs the lifespan, so the graph gets compiled.
-    with TestClient(main.app) as c:
-        yield c
 
 
 def test_health_makes_no_llm_call(client):
@@ -230,3 +223,135 @@ class TestUploads:
         assert client.get("/api/documents?corpus=upload:pytestclear").json()["documents"]
         client.delete("/api/upload/pytestclear")
         assert client.get("/api/documents?corpus=upload:pytestclear").json()["documents"] == []
+
+    def test_an_oversized_file_is_refused_without_being_buffered(self, client):
+        """Too-large uploads must be rejected while the body is still arriving.
+
+        The endpoint used to `await file.read()` with no argument, so the whole
+        upload landed in memory and only then failed the 20 MB check inside
+        `extract_text`. A rejected request therefore cost exactly as much memory
+        as an accepted one: six concurrent 115 MB uploads took the container
+        from 560 MiB to 1.2 GiB while every one of them correctly returned 400.
+        The deployed instance has 1 GiB and a concurrency of 8.
+
+        413 rather than 400 is the assertion that pins the new path: the old
+        code could only produce 400, because the check lived in the parser.
+        """
+        from app.tools.uploads import MAX_UPLOAD_BYTES
+
+        oversized = b"x" * (MAX_UPLOAD_BYTES + 1024)
+        response = client.post(
+            "/api/upload",
+            data={"session": "pytestbig"},
+            files={"file": ("big.txt", oversized, "text/plain")},
+        )
+
+        assert response.status_code == 413
+        assert "larger than" in response.json()["detail"]
+        # Nothing may have been indexed from a refused upload.
+        assert client.get("/api/documents?corpus=upload:pytestbig").json()["documents"] == []
+
+
+class TestDocumentText:
+    """Reading one document back.
+
+    The grader's verdict is the project's central claim, and it is only
+    checkable by someone who can read what the grader read. These cover the
+    happy path for both sources and the traversal attempt, since the id comes
+    from the client.
+    """
+
+    def test_built_in_document_is_readable(self, client):
+        listing = client.get("/api/documents").json()["documents"]
+        first = listing[0]["id"]
+        r = client.get(f"/api/documents/{first}")
+        assert r.status_code == 200
+        assert len(r.json()["text"]) > 100
+
+    def test_a_missing_document_is_a_404(self, client):
+        assert client.get("/api/documents/nope.md").status_code == 404
+
+    def test_path_traversal_is_refused(self, client):
+        """`doc_id` reaches the filesystem, so '../' is the obvious attack."""
+        for attempt in ("../../etc/passwd", "..%2F..%2Fetc%2Fpasswd", "../ingest.py"):
+            r = client.get(f"/api/documents/{attempt}")
+            assert r.status_code == 404, f"{attempt} was not refused"
+
+    def test_an_uploaded_document_is_reassembled_from_its_chunks(self, client):
+        """Uploads exist only as chunks - there is no file to read - so the text
+        is rebuilt in chunk order."""
+        pdf = TestUploads()._pdf(pages=4, line="Zorblax needs seven nodes.")
+        client.post(
+            "/api/upload",
+            data={"session": "pytestread"},
+            files={"file": ("spec.pdf", pdf, "application/pdf")},
+        )
+        r = client.get("/api/documents/spec.pdf?corpus=upload:pytestread")
+        assert r.status_code == 200
+        assert "Zorblax" in r.json()["text"]
+        client.delete("/api/upload/pytestread")
+
+
+class TestRateLimiting:
+    """`/api/query` spends real money - 3 LLM calls, about $0.0007 a query - and
+    the deployed demo is public and unauthenticated. Without a cap, a loop costs
+    whatever someone feels like spending.
+
+    The limiter is disabled for the rest of the suite (conftest.py) because it
+    is per-process and keys on the client address, so every test would share one
+    bucket. These turn it back on explicitly.
+    """
+
+    def test_the_limiter_refuses_once_the_window_is_full(self, monkeypatch):
+        from app.rate_limit import RateLimiter
+
+        monkeypatch.delenv("DISABLE_RATE_LIMIT", raising=False)
+        limiter = RateLimiter(limit=3, window_seconds=60)
+
+        assert [limiter.allow("1.2.3.4") for _ in range(3)] == [True, True, True]
+        assert limiter.allow("1.2.3.4") is False
+        # A different caller has its own bucket.
+        assert limiter.allow("5.6.7.8") is True
+
+    def test_the_window_expires(self, monkeypatch):
+        import time as _time
+
+        from app.rate_limit import RateLimiter
+
+        monkeypatch.delenv("DISABLE_RATE_LIMIT", raising=False)
+        limiter = RateLimiter(limit=1, window_seconds=60)
+        assert limiter.allow("1.2.3.4") is True
+        assert limiter.allow("1.2.3.4") is False
+
+        # Move the clock forward rather than sleeping 60s.
+        fake_now = _time.monotonic() + 61
+        monkeypatch.setattr(_time, "monotonic", lambda: fake_now)
+        monkeypatch.setattr("app.rate_limit.time.monotonic", lambda: fake_now)
+        assert limiter.allow("1.2.3.4") is True
+
+    def test_the_endpoint_answers_429_with_retry_after(self, client, monkeypatch):
+        """End to end: the limit is enforced by the route, not just the class."""
+        import main
+
+        monkeypatch.delenv("DISABLE_RATE_LIMIT", raising=False)
+        monkeypatch.setattr(main, "_QUERY_LIMITER", main.RateLimiter(limit=1, window_seconds=60))
+
+        first = client.post("/api/query", json={"question": "anything at all"})
+        second = client.post("/api/query", json={"question": "anything at all"})
+
+        # The first may fail for lack of a real LLM; what matters is that it was
+        # not refused by the limiter.
+        assert first.status_code != 429
+        assert second.status_code == 429
+        assert second.headers.get("Retry-After")
+
+    def test_x_forwarded_for_identifies_the_caller(self):
+        """Cloud Run terminates TLS, so `request.client.host` is the load
+        balancer and every visitor would share one bucket."""
+        from unittest.mock import Mock
+
+        import main
+
+        request = Mock()
+        request.headers = {"x-forwarded-for": "203.0.113.5, 10.0.0.1"}
+        assert main._client_key(request) == "203.0.113.5"

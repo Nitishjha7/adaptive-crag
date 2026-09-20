@@ -119,3 +119,114 @@ def client():
 
     with TestClient(main.app) as c:
         yield c
+
+
+# --------------------------------------------------------------------------- #
+# Does it actually stream?
+# --------------------------------------------------------------------------- #
+#
+# Everything above asserts the event *sequence* and the final payload, and all
+# of it passed while the endpoint was not streaming at all: `event_source`
+# awaited the producer to completion before draining the queue, so every event
+# was emitted in one burst at the end. Measured against the running server,
+# `retrieve` reported elapsed_ms=2229 but reached the client at ~8.5s with
+# everything else.
+#
+# `TestClient` cannot catch that. It buffers the whole response body before
+# handing it back, so a burst at the end and a proper trickle look identical to
+# it - which is exactly why the bug survived a suite that already had five
+# streaming tests. This one runs a real uvicorn server in a thread and measures
+# when bytes actually arrive.
+
+
+def test_first_event_arrives_before_the_query_finishes():
+    """The first progress event must reach the client while the graph is still
+    running, not after it has finished.
+
+    A deliberately slow `generate` node widens the gap: with real streaming the
+    `retrieve` event lands almost immediately and `done` lands after the delay,
+    so first-event time is a small fraction of total time. With the producer
+    awaited to completion both land together and the ratio collapses to ~1.
+    """
+    import threading
+    import time
+
+    import httpx
+    import uvicorn
+
+    import app.guardrails.validators as validators
+    import app.nodes.generate as generate
+    import app.nodes.grade_documents as grade_documents
+    import app.nodes.transform_query as transform_query
+    import app.nodes.web_search_fallback as web_node
+    from langchain_core.runnables import RunnableLambda
+
+    from tests.conftest import _Msg
+
+    DELAY = 1.5
+
+    def _reply(text, delay=0.0):
+        def _call(_prompt):
+            if delay:
+                time.sleep(delay)
+            return _Msg(text)
+
+        return lambda temperature=0.0: RunnableLambda(_call)
+
+    # Patched on the module objects rather than with monkeypatch: the server
+    # runs in another thread in this same process, so plain attribute
+    # assignment reaches it. Restored in the finally block below.
+    originals = {
+        grade_documents: grade_documents.get_llm,
+        transform_query: transform_query.get_llm,
+        generate: generate.get_llm,
+        validators: validators.get_llm,
+    }
+    original_search = web_node.web_search
+
+    grade_documents.get_llm = _reply("yes")
+    transform_query.get_llm = _reply("rewritten")
+    generate.get_llm = _reply("an answer", delay=DELAY)
+    validators.get_llm = _reply("yes")
+    web_node.web_search = lambda query, max_results=4: ["snippet"]
+
+    from main import app as fastapi_app
+
+    config = uvicorn.Config(fastapi_app, host="127.0.0.1", port=8778, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        for _ in range(100):  # wait for the port to open
+            if server.started:
+                break
+            time.sleep(0.05)
+        assert server.started, "test server never started"
+
+        started = time.perf_counter()
+        first_event_at = None
+        with httpx.Client(timeout=60.0) as client:
+            with client.stream(
+                "POST",
+                "http://127.0.0.1:8778/api/query/stream",
+                json={"question": "Why does chunk overlap matter?"},
+            ) as response:
+                assert response.status_code == 200
+                for line in response.iter_lines():
+                    if line.startswith("data:") and first_event_at is None:
+                        first_event_at = time.perf_counter() - started
+                total = time.perf_counter() - started
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+        for module, fn in originals.items():
+            module.get_llm = fn
+        web_node.web_search = original_search
+
+    assert first_event_at is not None, "no data event was received"
+    # The slow node is 1.5s; the first event comes from `retrieve`, long before
+    # it. Buffering would put both at the same moment.
+    assert first_event_at < total - (DELAY / 2), (
+        f"first event arrived at {first_event_at:.2f}s of a {total:.2f}s "
+        "request - the response is buffered, not streamed"
+    )

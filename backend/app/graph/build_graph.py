@@ -8,7 +8,7 @@ r"""LangGraph StateGraph wiring.
              generate -> validate_guardrails -> END
 
 **Why a graph and not a chain:** the node that runs after `grade_documents` is
-not fixed at compile time — it is chosen at runtime by reading state. A linear
+not fixed at compile time; it is chosen at runtime by reading state. A linear
 chain cannot express that.
 """
 
@@ -32,10 +32,10 @@ def decide_to_generate(state: CRAGState) -> str:
 
     Deliberately trivial: the decision is made in `grade_documents`, and this
     only reads the result. Keeping routing and grading apart lets each be tested
-    on its own — the router's tests need no LLM at all.
+    on its own, so the router's tests need no LLM at all.
 
     Note what the default is. Only an exact "yes" generates; everything else —
-    "no", an empty string, a missing key — takes the correction path. If
+    "no", an empty string, a missing key, takes the correction path. If
     `relevance_score` is ever empty because of a bug, the safe direction is to
     go and check rather than to answer from unverified context.
     """
@@ -79,7 +79,7 @@ def build_crag_graph():
 # --------------------------------------------------------------------------- #
 
 # What each node update is worth telling a live caller, built from the state
-# it just wrote rather than a static label — this project's real story is the
+# it just wrote rather than a static label. This project's real story is the
 # corrective routing decision, so the progress event should say *what was
 # decided*, not just which node ran.
 def _describe_update(node_name: str, partial: dict) -> str:
@@ -114,14 +114,14 @@ def run_query_stream(question: str, graph=None, state: CRAGState | None = None):
     that lives one layer above it.
 
     A local hit finishes in 3 LLM calls; the correction path takes 4 plus a web
-    round trip — `graph.invoke` makes both look identical to a caller until the
+    round trip, because `graph.invoke` makes both look identical to a caller until the
     whole thing is done. This generator yields a `("progress", {...})` tuple the
     moment each node finishes, so the corrective routing decision (the thing
     this project is actually about) becomes visible as it happens, then a final
     `("done", CRAGState)` with everything a non-streaming call would return.
 
     Built on `graph.stream(..., stream_mode="updates")` rather than a second,
-    hand-written traversal — the node functions and edges in `build_crag_graph`
+    hand-written traversal, so the node functions and edges in `build_crag_graph`
     are the single source of truth for both paths, so this cannot drift from
     what a plain `.invoke()` actually executes.
 
@@ -135,7 +135,7 @@ def run_query_stream(question: str, graph=None, state: CRAGState | None = None):
     graph = graph or build_crag_graph()
 
     for update in graph.stream(state, stream_mode="updates"):
-        # `update` is `{node_name: partial_state}` — exactly one node per
+        # `update` is `{node_name: partial_state}`, exactly one node per
         # dict on this graph (no parallel branches), but iterate rather than
         # assume, in case the topology ever grows one.
         for node_name, partial in update.items():
@@ -145,7 +145,7 @@ def run_query_stream(question: str, graph=None, state: CRAGState | None = None):
             # here only ever carries *that node's* single new line, not the
             # accumulated list. Overwriting with `state.update(partial)`
             # would leave `state["logs"]` holding only the last node's line
-            # by the time this generator finishes — the bug caught by
+            # by the time this generator finishes. The bug caught by
             # `test_stream_endpoint_matches_non_streaming_payload_shape`.
             label = _describe_update(node_name, partial)
             # Pop before merging: `state.update` below would otherwise

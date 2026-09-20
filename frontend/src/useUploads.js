@@ -80,10 +80,17 @@ export default function useUploads() {
     [session],
   );
 
-  const clear = useCallback(async () => {
+  // Switching back to the built-in documents is not the same as throwing the
+  // uploaded ones away. An earlier version deleted them on the way past, so a
+  // button labelled "switch" silently destroyed the file - and there was no way
+  // back without uploading it again.
+  const [active, setActive] = useState(true);
+
+  const remove = useCallback(async () => {
     await fetch(`/api/upload/${session}`, { method: "DELETE" }).catch(() => {});
     setFiles([]);
     setError(null);
+    setActive(true);
   }, [session]);
 
   return {
@@ -92,8 +99,11 @@ export default function useUploads() {
     busy,
     error,
     upload,
-    clear,
-    // Only route to the upload collection once it has something in it.
-    corpus: files.length ? `upload:${session}` : "",
+    remove,
+    active,
+    setActive,
+    // Route to the uploaded documents only when there are some and they are
+    // switched on.
+    corpus: files.length && active ? `upload:${session}` : "",
   };
 }

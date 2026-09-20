@@ -1,10 +1,11 @@
 """Central configuration + factory functions.
 
-No business logic here — just loading settings and building configured client
+No business logic here, just loading settings and building configured client
 objects. Every node takes its LLM, embeddings and vector store from here, so
 swapping a model is a one-place change and mocking in tests is easy.
 """
 
+import re
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
@@ -36,7 +37,7 @@ class Settings(BaseSettings):
 
     The default is the two local dev origins, **not** `*`. The deploy image
     serves the built frontend from this same app, so in production there is no
-    cross-origin caller at all and this list stays unused — which is exactly
+    cross-origin caller at all and this list stays unused, which is exactly
     why the permissive default was worth removing rather than keeping "just in
     case". Set it only for a split deployment.
     """
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     # FastEmbed's default — small, ONNX, runs offline, no API key.
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
 
-    # A gateway needs somewhere to fail over *to*. Empty by default — a single
+    # A gateway needs somewhere to fail over *to*. Empty by default, since a single
     # model is the honest default for a project with one Groq key, and this
     # only turns on when a fallback list is actually configured. See
     # get_llm() for why this is Groq model ids, not other providers: this
@@ -93,7 +94,7 @@ class Settings(BaseSettings):
     # Mounted as a volume in Docker so the index survives container restarts.
     VECTORSTORE_DIR: str = str(BACKEND_DIR / "vectorstore")
     DATA_DIR: str = str(BACKEND_DIR / "data")
-    # Where the BEIR download is extracted. Gitignored — committing ~5k abstracts
+    # Where the BEIR download is extracted. Gitignored, since committing ~5k abstracts
     # makes no sense when it is a reproducible download.
     BEIR_DIR: str = str(BACKEND_DIR / "beir")
 
@@ -165,7 +166,7 @@ def get_llm(temperature: float = 0.0):
     whether it got a plain `ChatGroq` or a fallback chain.
 
     **Only one provider.** `LLM_FALLBACK_MODELS` is a list of Groq model ids,
-    not other vendors — this account has one Groq key, so a genuine
+    not other vendors. This account has one Groq key, so a genuine
     multi-provider gateway would need a second vendor's key this project does
     not have. Falling over to a second Groq model is real protection against
     a retired or rate-limited model id; it is not protection against Groq
@@ -185,7 +186,7 @@ def get_llm(temperature: float = 0.0):
 
     fallbacks = [_client(m, temperature, settings) for m in fallback_ids]
     # Temperature is passed to every client in the chain, primary and
-    # fallback alike — the grading/routing determinism this project relies on
+    # fallback alike. The grading/routing determinism this project relies on
     # (temp=0) holds regardless of which model in the chain actually answers.
     return primary.with_fallbacks(fallbacks)
 
@@ -217,6 +218,9 @@ def active_corpus() -> str:
     return _CURRENT_CORPUS.get() or get_settings().CORPUS
 
 
+_SAFE_CORPUS = re.compile(r"[a-zA-Z0-9._-]+")
+
+
 def collection_for(corpus: str) -> str:
     """One Chroma collection per corpus - see Settings.collection_name.
 
@@ -228,7 +232,15 @@ def collection_for(corpus: str) -> str:
         from app.tools.uploads import session_collection
 
         return session_collection(corpus.split(":", 1)[1])
-    return "crag_docs" if corpus == "concepts" else f"crag_{corpus}"
+    if corpus == "concepts":
+        return "crag_docs"
+    # The upload branch above sanitises through `session_collection`; this one
+    # used to interpolate the raw value, so a corpus of "../../etc" reached
+    # Chroma and came back as an unhandled exception (a 500 on `/api/query`).
+    # Chroma accepts [a-zA-Z0-9._-]; anything else is a client error.
+    if not _SAFE_CORPUS.fullmatch(corpus):
+        raise ValueError(f"invalid corpus name: {corpus!r}")
+    return f"crag_{corpus}"
 
 
 @lru_cache

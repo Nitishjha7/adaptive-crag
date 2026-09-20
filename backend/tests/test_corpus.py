@@ -72,7 +72,7 @@ class TestBeirSubset:
     def test_subset_keeps_gold_docs(self, fake_beir):
         ids = [d for d, _, _ in fake_beir.load_corpus("scifact", limit=3)]
 
-        assert "d8" in ids, "gold doc subset se gir gaya -- eval labels jhoothe ho jayenge"
+        assert "d8" in ids, "gold doc dropped from the subset - the eval labels would be lies"
         assert len(ids) == 3
 
     def test_subset_still_includes_filler(self, fake_beir):
@@ -91,3 +91,42 @@ class TestBeirSubset:
 
         assert qrels["q1"] == ["d8"], qrels
         assert "d9" not in qrels["q1"]
+
+
+class TestCorpusNameValidation:
+    """A corpus name reaches Chroma as a collection name.
+
+    `collection_for` used to interpolate the raw value into `f"crag_{corpus}"`,
+    so a request carrying `../../etc` produced a Chroma
+    `InvalidArgumentError` that nothing caught - a 500 on a request the client
+    got wrong. The upload branch never had this problem because it sanitises
+    through `session_collection`.
+    """
+
+    def test_a_valid_corpus_still_maps_to_its_collection(self):
+        from app.config import collection_for
+
+        assert collection_for("concepts") == "crag_docs"
+        assert collection_for("scifact") == "crag_scifact"
+
+    def test_a_path_like_corpus_is_refused(self):
+        import pytest
+
+        from app.config import collection_for
+
+        with pytest.raises(ValueError):
+            collection_for("../../etc")
+
+    def test_the_api_answers_400_not_500(self, client):
+        """The GET endpoints take `corpus` as a query parameter, so Pydantic's
+        pattern on `QueryIn` does not cover them. The ValueError handler does."""
+        response = client.get("/api/documents?corpus=../../etc")
+        assert response.status_code == 400
+
+    def test_the_query_body_rejects_it_as_a_validation_error(self, client):
+        """On `/api/query` the pattern on `QueryIn` catches it first, which is a
+        422 - the same class of answer, raised one layer earlier."""
+        response = client.post(
+            "/api/query", json={"question": "anything", "corpus": "../../etc"}
+        )
+        assert response.status_code == 422

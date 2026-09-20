@@ -21,7 +21,7 @@ that the answer is grounded in whatever context survived.
 
 Naive RAG has one assumption: whatever came back from the vector store is relevant.
 Similarity search always returns *k* results, even when the corpus contains nothing
-useful — and the low score never reaches the model. **Here, that assumption is a
+useful, and the low score never reaches the model. **Here, that assumption is a
 decision the system makes out loud, and can be measured.**
 
 ---
@@ -67,7 +67,7 @@ flowchart TD
 (Step 11) precisely because they could not be justified before the eval could measure them.
 
 **The orange diamond is the whole project.** Everything else is ordinary RAG. That one
-runtime decision — taken *before* any answer is generated — is what separates this from
+runtime decision, taken *before* any answer is generated, is what separates this from
 a pipeline that confidently answers from irrelevant chunks.
 
 **The red box is the decision people get wrong.** On fallback the local documents are
@@ -89,7 +89,7 @@ The important part is what is absent: no vendor pricing, no product
 names, no recent releases, no mention of MCP. Without a known gap the correction path
 can only be triggered by luck, and a demo that depends on luck is not a demo.
 
-The gap is *categorical* — concepts in, live facts out — and that choice comes back to
+The gap is *categorical*: concepts in, live facts out. That choice comes back to
 bite in Step 6.
 
 ### Step 2 — Config as factories, not imports
@@ -120,8 +120,8 @@ START → retrieve → grade_documents → (conditional) → generate → valida
                                    ↘ transform_query → web_search_fallback ↗
 ```
 
-`decide_to_generate` is trivial — it only reads `relevance_score`. All the
-judgement lives in `grade_documents`, so routing and grading can be tested separately.
+`decide_to_generate` is trivial. It only reads `relevance_score`, so all the
+judgement lives in `grade_documents` and routing and grading can be tested separately.
 
 Its default is `transform_query`, not `generate`: if the score is somehow blank, the safe
 direction is to pay for a web call, not to answer from unverified context.
@@ -137,7 +137,7 @@ A temperature-0 call with a prompt that says: answer with one word, do not expla
 `no`. The reasoning: in a confused output the safe default is a wasted web call, never a
 missed one. Eleven cases cover it.
 
-Temperature 0 is not about answer quality here — it is so the same question takes the
+Temperature 0 is not about answer quality here. It is so the same question takes the
 same route twice. A router that flips is impossible to demo and impossible to debug.
 
 ### Step 6 — Measuring it, which is where it got interesting
@@ -152,12 +152,12 @@ cases differ along an obvious axis. 100% means *the labelled task is easy*.
 Two things this step produced that matter more than the score:
 
 **The ordering bug.** The first run went 12 local cases, then 8 web. Groq's throttling
-ramps up over a run, so the web bucket absorbed all of it — and the resulting
+ramps up over a run, so the web bucket absorbed all of it. The resulting
 "local 13.7s vs web 18.5s" looked like a clean cost argument while measuring nothing but
 position. Cases are now interleaved.
 
 **Latency was abandoned as a metric.** Even interleaved, throttling swamps the route
-difference — one run measured the *local* route slower than the web route, which is
+difference. One run measured the *local* route slower than the web route, which is
 backwards. The cost argument now rests on **LLM calls per query (local 3.0 · web 4.0)**,
 which comes from graph structure, not from timing, and is identical on every run.
 
@@ -165,7 +165,7 @@ which comes from graph structure, not from timing, and is identical on every run
 
 The plan called for Guardrails AI. It was dropped: hub downloads and version pinning were
 going to be the largest time sink in the build, and what was actually needed was two
-things — is this answer supported by the context, and does it leak PII.
+things: is this answer supported by the context, and does it leak PII.
 
 The first is one temperature-0 call reusing the same `parse_verdict`. The second is four
 regexes, not an LLM, because PII detection should be deterministic.
@@ -183,19 +183,19 @@ Two behaviours worth defending:
 
 `POST /api/query` returns the answer plus `source_type`, `sources`, `relevance_score`,
 `transformed_query`, `logs`, `elapsed_ms`. The graph compiles once in `lifespan`, and
-`graph.invoke` runs in a threadpool — it is sync and blocking, and calling it directly in
+`graph.invoke` runs in a threadpool, because it is sync and blocking; calling it directly in
 an `async def` would stall the event loop.
 
 `/health` makes **no LLM call**: if it did, one rate-limit would mark the
 container unhealthy and Docker would restart it in a loop.
 
 The UI is a dashboard, not just a chat box: a nav rail switching between four full-width
-views — the conversation, the indexed documents, the evaluation numbers, and the live
+views: the conversation, the indexed documents, the evaluation numbers, and the live
 system config. Each answer carries its own execution trace inline, collapsed to one line:
 `retrieve / grade: no / rewrite / web search / generate / validate` with the LLM call
 count beside it. Ask two questions and both chains sit on screen together, which is the
 whole thesis in two lines.
-`GET /api/stats` feeds it — corpus counts from disk, chunk count from Chroma, routing
+`GET /api/stats` feeds it: corpus counts from disk, chunk count from Chroma, routing
 numbers read out of `eval/results.json`. Like `/health` it makes no LLM call, because the
 dashboard hits it on every page load.
 
@@ -209,7 +209,7 @@ Three consequences, and they are the interesting part:
   printing `10:24:03` next to each step would be fabrication. Total `elapsed_ms` is real
   and is shown.
 - **"Web Search (Skipped)" is still displayed.** On the local route that node never
-  ran — showing it greyed out is what makes the fallback visibly *conditional* rather than
+  ran. Showing it greyed out is what makes the fallback visibly *conditional* rather than
   a default, which is the whole thesis in one glance.
 
 The Evaluation tab prints the caveat directly under the numbers: 100% means the labelled
@@ -229,7 +229,7 @@ intentional: the inline copy is for the LLM, the list is for the UI.
 
 ### Step 10 — Making the eval able to fail
 
-The 20-case set could no longer improve — it was pinned at 100%. So a reranker or hybrid
+The 20-case set could no longer improve; it was pinned at 100%. So a reranker or hybrid
 search could be *added* but never *justified*.
 
 Eight **ambiguous** cases were added: questions where the corpus half-covers the topic and
@@ -237,7 +237,7 @@ two reasonable people would label differently. *"How does Self-RAG differ from C
 doc 05 mentions Self-RAG in exactly one clause.
 
 They are **not scored for correctness**, because an arguable label would make the headline
-number undefendable — the very reason they were excluded originally. They are scored for
+number undefendable, which is why they were excluded originally. They are scored for
 **stability**: run the same question three times and check the router picks the same side
 every time. Which side is a judgement call; flipping on identical input is not.
 
@@ -510,14 +510,14 @@ None of these were caught by tests, which is the point.
 and must be restricted to the frontend origin before it goes anywhere public.
 
 **Context filter.** Hybrid search and reranking landed in Step 11, but there is still no
-relevance threshold that drops weak chunks before they reach `generate` — the top 4 go
+relevance threshold that drops weak chunks before they reach `generate`. The top 4 go
 through regardless of how weak the fourth is.
 
 **Document parsing.** The corpus is Markdown. No PDF, DOCX or HTML extraction, which in a
 real system is where a surprising share of retrieval bugs originate.
 
 **Corpus maintenance.** Documents are ingested once. No incremental update, no delete,
-no re-index — a full re-ingest is the only path.
+no re-index. A full re-ingest is the only path.
 
 **Prompt-injection handling** on the web path.
 
@@ -537,7 +537,7 @@ in something the project already measured or already hit in production:
   hypothetical: the `llama-3.3-70b-versatile` 404 (§4.5 above) was a real incident
   fixed by hand at the time. Live-replicated it: pointed `LLM_MODEL` at that same dead
   id with a real second model configured as fallback, ran a real query, and it
-  completed correctly through the fallback — confirmed by `token_usage` showing only
+  completed correctly through the fallback, confirmed by `token_usage` showing only
   the fallback model recorded any calls.
 - **Per-query token/cost tracking** — the precise successor to the LLM-call-count proxy
   in §4 / `RESULTS.md`'s cost section. Real numbers from live Groq calls: local route
@@ -547,7 +547,7 @@ in something the project already measured or already hit in production:
   `RESULTS.md` already argues about.
 
 104 tests now pass (up from 75), all new tests using the same `fake_llm`/`fake_search`
-monkeypatch pattern as everything else — no real LLM calls inside the suite itself.
+monkeypatch pattern as everything else. No real LLM calls inside the suite itself.
 
 ---
 
@@ -556,7 +556,7 @@ monkeypatch pattern as everything else — no real LLM calls inside the suite it
 `app/memory/` — episodic and semantic, not the full three-part taxonomy the sibling
 Self-Healing SQL Agent has, and that omission is deliberate, not partial work: **no
 long-term memory**, because long-term memory needs a client identity to scope
-preferences to, and this project has none — `/api/query` takes a question and
+preferences to, and this project has none. `/api/query` takes a question and
 nothing else, no cookie, no header. Inventing a `client_id` purely to check that box
 would be a fake feature.
 
@@ -564,7 +564,7 @@ would be a fake feature.
 already loads a FastEmbed embedding model for retrieval (`app/config.py`'s
 `get_embeddings()`), so episodic memory's "has a similar question been asked before"
 reuses that exact model and a second Chroma collection (`crag_memory_episodes`) in
-the same persisted directory — kept separate from the retrieval corpus so a stored
+the same persisted directory, kept separate from the retrieval corpus so a stored
 episode can never leak into a retrieval result. This is the one sibling project
 where memory did *not* need a new dependency, a new provider key, or a design
 compromise (contrast with code-guardian, which has no embeddings API at all and had
@@ -576,17 +576,17 @@ by unit tests:** `POST /api/memory/consolidate` writes semantic facts, but the
 a fresh `python -c` process against the identical persisted directory saw them
 immediately, but the long-running server did not, until restarted. The cause:
 `chromadb`'s `PersistentClient` is cached process-wide by
-`chromadb.api.client.SharedSystemClient`, keyed by persist path — not something
+`chromadb.api.client.SharedSystemClient`, keyed by persist path. Not something
 this project opted into, and not documented anywhere obvious. Every unit test
 passed regardless, because each test process is fresh and never hits this path.
 Fixed by calling `SharedSystemClient.clear_system_cache()` after a successful
 consolidation, and reverified live: recorded three near-identical failing
 episodes, ran consolidation, and the same still-running process immediately
-answered a fourth, rephrased question with the new fact in `memory_note` — no
+answered a fourth, rephrased question with the new fact in `memory_note`, no
 restart needed.
 
 129 tests now pass (up from 104), the memory tests using the real embedding model
-rather than a fake — unlike `fake_llm`, a fake embedding would not exercise the
+rather than a fake. Unlike `fake_llm`, a fake embedding would not exercise the
 actual similarity search under test.
 
 ---
