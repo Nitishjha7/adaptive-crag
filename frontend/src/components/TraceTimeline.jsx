@@ -46,7 +46,7 @@ export function llmCalls(logs = []) {
 }
 
 /**
- * Ek line ka rasta: `retrieve -> grade: no -> rewrite -> web search -> generate`.
+ * The route on one line: `retrieve -> grade: no -> rewrite -> web search -> generate`.
  * The grade verdict appears inline, because that is the project's turning point.
  */
 export function chain(logs = []) {

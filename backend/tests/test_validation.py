@@ -1,4 +1,4 @@
-"""Output validation — groundedness flagging aur PII redaction."""
+"""Output validation — groundedness flagging and PII redaction."""
 
 import pytest
 

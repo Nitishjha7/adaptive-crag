@@ -1,4 +1,4 @@
-"""FastAPI layer — request validation aur response shape."""
+"""FastAPI layer — request validation and response shape."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -98,3 +98,30 @@ class TestMetrics:
         body = client.get("/metrics").text
         assert "crag_queries_total" in body
         assert "crag_llm_calls_total" in body
+
+
+def test_documents_reports_chunks_per_file(client):
+    """The Documents page is about retrieval, not the filesystem.
+
+    A name and a byte count say nothing a directory listing does not. The chunk
+    count is the unit the retriever actually scores, so it has to be per file
+    and it has to add up to what /health reports indexed.
+    """
+    r = client.get("/api/documents")
+    assert r.status_code == 200
+    docs = r.json()["documents"]
+    assert docs, "no documents returned — did ingest run?"
+
+    for d in docs:
+        assert d["chunks"] is not None, f"{d['id']} has no chunk count"
+        assert d["chunks"] > 0
+
+    total = sum(d["chunks"] for d in docs)
+    assert total == client.get("/health").json()["indexed_chunks"]
+
+
+def test_documents_makes_no_llm_call(client):
+    """Same rule as /health: a page that lists files must not cost a token."""
+    r = client.get("/api/documents")
+    assert r.status_code == 200
+    assert "corpus" in r.json()

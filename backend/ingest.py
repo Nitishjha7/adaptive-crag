@@ -89,7 +89,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--limit", type=int, default=0,
-        help="corpus subset: saare gold docs + filler, total N (0 = poora)",
+        help="corpus subset: all gold docs plus filler, total N (0 = everything)",
     )
     args = parser.parse_args()
 

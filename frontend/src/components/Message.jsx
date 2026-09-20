@@ -50,7 +50,7 @@ function SourceBadgeInline({ sourceType }) {
 }
 
 /**
- * Ek line ka rasta + kharcha, aur poora trace ek click door.
+ * One line for the route and its cost, with the full trace a click away.
  *
  * The cost line names both paths. "3 calls" on its own says
  * nothing; "3, and the fallback would cost 4" is the trade-off the whole case
