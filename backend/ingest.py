@@ -81,7 +81,7 @@ def split_documents(docs):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ingest local docs into Chroma")
     parser.add_argument(
-        "--reset", action="store_true", help="existing collection wipe karke rebuild"
+        "--reset", action="store_true", help="wipe the existing collection and rebuild it"
     )
     parser.add_argument(
         "--corpus", default="", choices=["", "concepts", "scifact"],

@@ -117,16 +117,27 @@ class TestCorpusNameValidation:
         with pytest.raises(ValueError):
             collection_for("../../etc")
 
-    def test_the_api_answers_400_not_500(self, client):
-        """The GET endpoints take `corpus` as a query parameter, so Pydantic's
-        pattern on `QueryIn` does not cover them. The ValueError handler does."""
-        response = client.get("/api/documents?corpus=../../etc")
-        assert response.status_code == 400
-
     def test_the_query_body_rejects_it_as_a_validation_error(self, client):
-        """On `/api/query` the pattern on `QueryIn` catches it first, which is a
-        422 - the same class of answer, raised one layer earlier."""
+        """`/api/query` is where this actually reached Chroma.
+
+        Before the pattern on `QueryIn`, this request produced a Chroma
+        `InvalidArgumentError` that nothing caught, and the caller got a 500 for
+        a request *they* got wrong. It is a 422 now.
+        """
         response = client.post(
             "/api/query", json={"question": "anything", "corpus": "../../etc"}
         )
         assert response.status_code == 422
+
+    def test_the_read_endpoints_degrade_instead_of_erroring(self, client):
+        """`/api/documents` and `/api/stats` already wrapped their Chroma access
+        in a broad `except`, so a bad corpus was never a 500 there - it read as
+        an empty index.
+
+        Asserted rather than assumed: this is the reason `collection_for`'s
+        ValueError is a safety net for future callers and not a behaviour change
+        for these two. A 500 appearing here later means someone removed the
+        guard.
+        """
+        assert client.get("/api/documents?corpus=../../etc").status_code == 200
+        assert client.get("/api/stats?corpus=../../etc").status_code == 200

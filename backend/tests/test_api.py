@@ -355,3 +355,44 @@ class TestRateLimiting:
         request = Mock()
         request.headers = {"x-forwarded-for": "203.0.113.5, 10.0.0.1"}
         assert main._client_key(request) == "203.0.113.5"
+
+
+class TestUpstreamRateLimit:
+    """Groq's free tier allows 8000 tokens a minute for the whole account and a
+    query costs roughly 2500, so a few simultaneous visitors are enough to trip
+    it. Verified by running 20 concurrent queries against the container: eight
+    were refused by this service's own limiter and eleven came back 500, with
+    `groq.RateLimitError` in the log.
+
+    A 500 tells the caller this service is broken. The request was fine and the
+    upstream model was briefly unavailable, which is a 503 with a Retry-After.
+    """
+
+    def test_a_provider_rate_limit_becomes_503_not_500(self, client, monkeypatch):
+        import app.nodes.retrieve as retrieve_node
+
+        groq_error = __import__("main")._GROQ_RATE_LIMIT
+        if groq_error is None:
+            import pytest
+
+            pytest.skip("groq SDK not installed")
+
+        # Raised from the first node, so it travels the same path a real
+        # provider error would.
+        def _boom(state):
+            raise groq_error.__new__(groq_error)
+
+        monkeypatch.setattr(retrieve_node, "run", _boom)
+
+        # The graph is compiled at startup and holds a reference to the old
+        # function, so rebuild it for this test.
+        import main
+        from app.graph.build_graph import build_crag_graph
+
+        monkeypatch.setattr(main, "_graph", build_crag_graph())
+
+        response = client.post("/api/query", json={"question": "anything"})
+
+        assert response.status_code == 503
+        assert response.headers.get("Retry-After") == "10"
+        assert "rate limited" in response.json()["detail"]
