@@ -17,11 +17,15 @@ GRADER_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "You are a grader assessing whether retrieved documents are relevant to a "
-            "user question.\n"
-            "Answer with a single word: 'yes' if the documents contain information that "
-            "helps answer the question, otherwise 'no'.\n"
-            "Do not explain. Do not add punctuation. Output only 'yes' or 'no'.",
+            "You are a grader deciding whether retrieved documents are worth "
+            "answering from.\n"
+            "Say 'yes' if they mention the subject of the question, even only "
+            "partially - a partial answer from the right source beats a web "
+            "search.\n"
+            "Say 'no' only if they are about an entirely different subject, or "
+            "if the question needs current facts - prices, releases, dates - "
+            "that static documents cannot hold.\n"
+            "Output only 'yes' or 'no'. No explanation, no punctuation.",
         ),
         ("human", "Question: {question}\n\nRetrieved documents:\n{documents}"),
     ]
@@ -57,8 +61,12 @@ def run(state: CRAGState) -> dict:
             "logs": ["grade_documents -> no (nothing was retrieved)"],
         }
 
-    # temperature 0: routing has to be deterministic. A query that sometimes goes
-    # local and sometimes web is impossible to debug and impossible to demo.
+    # temperature 0, but that is not a determinism guarantee: on a
+    # mixture-of-experts model the expert routing still varies, and this grader
+    # was observed returning yes and no for the same question and the same
+    # chunks. Groq ignores `seed`, so the defence is the prompt above - a
+    # criterion the model cannot read two ways is what makes the verdict stable,
+    # not the sampling parameters.
     chain = GRADER_PROMPT | get_llm(temperature=0.0)
     raw = chain.invoke(
         {
