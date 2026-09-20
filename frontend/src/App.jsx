@@ -400,7 +400,6 @@ export default function App() {
           stats={stats}
           latest={lastAnswer}
           onOpenEval={() => setView("eval")}
-          onOpenDocs={() => setView("documents")}
         />
       )}
     </div>

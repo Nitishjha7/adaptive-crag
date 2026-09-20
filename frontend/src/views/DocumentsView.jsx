@@ -102,8 +102,13 @@ export default function DocumentsView({ stats }) {
               </div>
               <div className="truncate font-mono text-xs text-slate-400">{d.id}</div>
             </div>
+            {d.chunks != null && (
+              <span className="shrink-0 rounded-md border border-ink-700 bg-ink-900 px-2 py-0.5 font-mono text-[11px] text-slate-400">
+                {d.chunks} chunk{d.chunks === 1 ? "" : "s"}
+              </span>
+            )}
             {formatBytes(d.bytes) && (
-              <span className="shrink-0 text-xs text-slate-400">
+              <span className="w-14 shrink-0 text-right text-xs text-slate-500">
                 {formatBytes(d.bytes)}
               </span>
             )}

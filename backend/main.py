@@ -394,11 +394,30 @@ async def documents():
         data_dir = Path(s.DATA_DIR)
         if not data_dir.exists():
             return {"corpus": s.CORPUS, "documents": []}
+
+        # How many chunks each file became. A file list alone says nothing a
+        # directory listing does not; the chunk count is what makes the page
+        # about retrieval - it is the unit the retriever actually scores.
+        counts: dict[str, int] = {}
+        try:
+            raw = get_vectorstore()._collection.get(include=["metadatas"])
+            for meta in raw.get("metadatas") or []:
+                src = (meta or {}).get("source")
+                if src:
+                    counts[src] = counts.get(src, 0) + 1
+        except Exception:  # noqa: BLE001 - the collection may not exist yet
+            counts = {}
+
         return {
             "corpus": s.CORPUS,
             "documents": sorted(
                 (
-                    {"id": p.name, "title": p.stem.replace("_", " "), "bytes": p.stat().st_size}
+                    {
+                        "id": p.name,
+                        "title": p.stem.replace("_", " "),
+                        "bytes": p.stat().st_size,
+                        "chunks": counts.get(p.name),
+                    }
                     for p in data_dir.iterdir()
                     if p.suffix.lower() in {".md", ".txt"} and p.name.lower() != "readme.md"
                 ),

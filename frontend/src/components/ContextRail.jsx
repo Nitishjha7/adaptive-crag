@@ -29,7 +29,7 @@ function Card({ title, right, children }) {
   )
 }
 
-export default function ContextRail({ stats, latest, onOpenEval, onOpenDocs }) {
+export default function ContextRail({ stats, latest, onOpenEval }) {
   const ev = stats?.evaluation
   const docs = stats?.documents ?? null
 
@@ -121,34 +121,6 @@ export default function ContextRail({ stats, latest, onOpenEval, onOpenDocs }) {
         </Card>
       )}
 
-      <Card
-        title="Corpus"
-        right={
-          <button
-            onClick={onOpenDocs}
-            className="text-[11px] text-slate-500 transition hover:text-slate-300"
-          >
-            all {docs ?? ""}
-          </button>
-        }
-      >
-        {stats?.document_list?.length ? (
-          <ul className="divide-y divide-ink-700/60">
-            {stats.document_list.slice(0, 5).map((d) => (
-              <li key={d.id} className="flex items-center gap-2.5 px-4 py-2.5">
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-slate-400">
-                  {d.id}
-                </span>
-                <span className="shrink-0 text-[10px] text-slate-600">
-                  {Math.round(d.bytes / 1024)} KB
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-3 text-xs text-slate-500">Loading…</p>
-        )}
-      </Card>
     </aside>
   )
 }
